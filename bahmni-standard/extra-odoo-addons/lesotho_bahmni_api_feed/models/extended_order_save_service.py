@@ -25,9 +25,30 @@ class ExtendedOrderSaveService(models.Model):
 
         # Add DEBUG logging to see what we're receiving
         _logger.info("=== DEBUG START ===")
-        _logger.info(f"Customer ID: {vals.get('customer_id')}")
-        _logger.info(f"Encounter ID: {vals.get('encounter_id')}")
-        _logger.info(f"Location Name: {vals.get('locationName')}")
+        _logger.info("Running from Lesotho Bahmni API Feed extended order save service")
+        # _logger.info(f"Customer ID: {vals.get('customer_id')}")
+        # _logger.info(f"Encounter ID: {vals.get('encounter_id')}")
+        # _logger.info(f"Location Name: {vals.get('locationName')}")
+        _logger.info("Lesotho Bahmni API Feed: Entering create_orders with payload: %s", vals)
+
+        # Pre-process REG vitals
+        reg_vitals_raw = vals.get('reg_vitals') or "{}"
+        try:
+            reg_vitals = json.loads(reg_vitals_raw) if isinstance(reg_vitals_raw, str) else (reg_vitals_raw or {})
+        except Exception:
+            reg_vitals = {}
+            _logger.warning("Could not parse reg_vitals: %s", reg_vitals_raw)
+
+        systolic = reg_vitals.get('systolic')
+        diastolic = reg_vitals.get('diastolic')
+        height = reg_vitals.get('height')
+        weight = reg_vitals.get('weight')
+        _logger.debug("REG vitals: %s", reg_vitals)
+
+        # You can stash them on vals for downstream use or write to a context key
+        vals = dict(vals, reg_vitals=reg_vitals,
+                    systolic=systolic, diastolic=diastolic,
+                    height=height, weight=weight)
 
         # Check orders data type
         orders_data = vals.get("orders")
@@ -62,7 +83,7 @@ class ExtendedOrderSaveService(models.Model):
             #    a. Find the created sale order and set encounter_uuid
             #    b. Add prescription data to order lines
 
-            self._update_sale_order_with_encounter_uuid(vals)
+            self._update_sale_order_with_encounter_uuid(vals) #this call also adds vitals
             self._add_prescription_data_to_order_lines(vals)
 
             _logger.info(
@@ -77,6 +98,20 @@ class ExtendedOrderSaveService(models.Model):
             )
 
         return result
+
+    @api.model
+    def _to_int(self, val):
+        try:
+            return int(float(val))
+        except (TypeError, ValueError):
+            return None
+
+    @api.model
+    def _to_float(self, val):
+        try:
+            return float(val)
+        except (TypeError, ValueError):
+            return None
 
     @api.model
     def _update_sale_order_with_encounter_uuid(self, vals):
@@ -157,6 +192,18 @@ class ExtendedOrderSaveService(models.Model):
                         f"Updated sale order {sale_order.name} with encounter_uuid: {encounter_uuid}"
                     )
                     updated_count += 1
+                    # Insert patient vitals on the partner (source of truth)
+                    vitals_vals = {
+                        'systolic': self._to_int(vals.get('systolic')),
+                        'diastolic': self._to_int(vals.get('diastolic')),
+                        'weight': self._to_float(vals.get('weight')),
+                        'height': self._to_float(vals.get('height')),
+                    }
+                    clean_vitals = {k: v for k, v in vitals_vals.items() if v is not None}
+                    if clean_vitals:
+                        customer.write(clean_vitals)
+                        _logger.info("Updated partner %s with vitals %s", customer_ref, clean_vitals)
+
                     break  # Found the right one, stop searching
 
         if updated_count == 0:
@@ -172,6 +219,7 @@ class ExtendedOrderSaveService(models.Model):
                 _logger.info(
                     f"Fallback: Updated most recent sale order {sale_orders[0].name} with encounter_uuid"
                 )
+
 
     @api.model
     def _get_orders_data(self, vals):
