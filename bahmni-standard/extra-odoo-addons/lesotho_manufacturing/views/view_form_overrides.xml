@@ -73,6 +73,27 @@
             </field>
         </record>
 
+        <odoo>
+            <template id="report_header_rename_lot_to_batch"
+                        inherit_id="stock.report_stock_body_print">
+                <xpath expr="//thead//tr[contains(@class,'o_report_header')]//th[normalize-space()='Lot/Serial #']"
+                    position="replace">
+                <th class="o_report_line_header">Batch Number</th>
+                </xpath>
+            </template>
+        </odoo>
+
+        <odoo>
+            <template id="report_header_rename_lot_to_batch"
+                        inherit_id="stock.report_stock_inventory">
+                <xpath expr="//thead//tr[contains(@class,'o_report_header')]//th[normalize-space()='Lot/Serial #']"
+                    position="replace">
+                <th class="o_report_line_header">Batch Number</th>
+                </xpath>
+            </template>
+        </odoo>
+
+
         <record id="mrp_production_form_view_prepacking_template" model="ir.ui.view">
             <field name="name">mrp.production.form.prepacking_template</field>
             <field name="model">mrp.production</field>
@@ -89,7 +110,7 @@
                     <attribute name="domain">[('product_id', 'in', bom_product_ids)]</attribute>
                 </xpath>
 
-                 <xpath expr="//button[@name='button_scrap']" position="attributes">
+                <xpath expr="//button[@name='button_scrap']" position="attributes">
                     <attribute name="string">Move to Unserviceable</attribute>
                 </xpath>
 
@@ -112,7 +133,39 @@
                 <xpath expr="//button[@name='action_generate_serial']" position="before">
                     <field name="bom_product_ids" invisible="1"/>
                 </xpath>
+
+                <!-- <xpath expr="//form/header//button[@name='button_mark_done']" position="attributes">
+                    <attribute name="string">Authorize</attribute>
+                </xpath> -->
+
+                <xpath expr="//field[@name='user_id']" position="attributes">
+                    <attribute name="readonly">1</attribute>
+                </xpath>
+
                 
+            </field>
+        </record>
+
+        <record id="mrp_production_form_rename_mark_done" model="ir.ui.view">
+            <field name="name">mrp.production.form.rename.mark.done</field>
+            <field name="model">mrp.production</field>
+            <field name="inherit_id" ref="mrp.mrp_production_form_view"/>
+            <!-- Apply late so other modules don't override you -->
+            <field name="priority">1000</field>
+
+            <field name="arch" type="xml">
+                <xpath expr="//form/header//button[@name='button_mark_done'][1]" position="attributes">
+                    <attribute name="string">Authorize</attribute>
+                </xpath>
+                <xpath expr="//form/header//button[@name='button_mark_done'][2]" position="attributes">
+                    <attribute name="string">Authorize</attribute>
+                </xpath>
+                <xpath expr="//form/header//button[@name='button_mark_done'][3]" position="attributes">
+                    <attribute name="string">Authorize</attribute>
+                </xpath>
+                <xpath expr="//form/header//button[@name='button_mark_done'][4]" position="attributes">
+                    <attribute name="string">Authorize</attribute>
+                </xpath>
             </field>
         </record>
 
