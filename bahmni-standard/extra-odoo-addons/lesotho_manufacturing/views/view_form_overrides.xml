@@ -190,6 +190,8 @@
             <field name="arch" type="xml">
                 <xpath expr="//field[@name='bom_line_ids']/tree//button[@name='action_see_attachments']"
                     position="replace"/>
+            </field>
+        </record>
 
         <record id="mrp_production_form_rename_mark_done" model="ir.ui.view">
             <field name="name">mrp.production.form.rename.mark.done</field>
