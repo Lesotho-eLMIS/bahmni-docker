@@ -14,10 +14,12 @@
         "stock",
     ],
     "data": [
+        "security/ir.model.access.csv",
         "views/view_overrides.xml",
         "views/product_template_views.xml",
         "views/stock_location_views.xml", 
         "views/login_template.xml",
+        "views/create_prepack_wizard.xml",
     ],
     'assets': {
         'web.assets_backend': [

@@ -9,3 +9,18 @@ class ProductTemplate(models.Model):
         index=True,
         copy=False,
     )
+
+    is_prepack = fields.Boolean(
+        string="Is Prepack?",
+        default=False
+    )
+
+    bulk_product_id = fields.Many2one(
+        'product.product',
+        string="Bulk Product",
+        domain="[('type', 'in', ['product', 'consu'])]",
+        help="The bulk product used to create this prepack"
+    )
+
+    def create_prepack_product(self):
+        pass
