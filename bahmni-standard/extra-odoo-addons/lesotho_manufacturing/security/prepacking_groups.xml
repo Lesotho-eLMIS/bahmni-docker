@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+  <data noupdate="1">
+    <!-- Prepacking User group -->
+    <record id="group_prepacking_user" model="res.groups">
+      <field name="name">Prepacking User</field>
+      <field name="category_id" ref="lesotho_manufacturing.module_category_prepacking"/>
+      <field name="implied_ids" eval="[(4, ref('base.group_user'))]"/>
+    </record>
+
+    <!-- Prepacking Admin group -->
+    <record id="group_prepacking_admin" model="res.groups">
+      <field name="name">Prepacking Administrator</field>
+      <field name="category_id" ref="lesotho_manufacturing.module_category_prepacking"/>
+      <field name="implied_ids" eval="[
+        (4, ref('lesotho_manufacturing.group_prepacking_user'))
+      ]"/>
+    </record>
+  </data>
+</odoo>

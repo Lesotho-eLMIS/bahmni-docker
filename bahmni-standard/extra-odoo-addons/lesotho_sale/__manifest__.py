@@ -8,13 +8,17 @@
     "license": "LGPL-3",
     "depends": [
         "base",
+        "stock",
         "sale",
-        "bahmni_sale",
+        "mrp",
     ],
     "data": [
         "views/menu_overrides.xml",
         "views/action_overrides.xml",
         "views/view_overrides.xml",
+        "security/dispensing_security.xml",
+        "security/dispensing_groups.xml",
+        "security/ir.model.access.csv",
     ],
     "installable": True,
     "application": False,

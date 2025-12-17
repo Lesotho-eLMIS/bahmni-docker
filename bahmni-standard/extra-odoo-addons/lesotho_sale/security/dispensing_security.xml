@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+    <!-- security/dispensing_security.xml -->
+    <data noupdate="1">
+    <!-- Application category for Dispensing roles -->
+        <record id="module_category_dispensing" model="ir.module.category">
+            <field name="name">Dispensing</field>
+            <field name="description">Dispensing Module Access</field>
+            <field name="sequence">10</field>
+        </record>
+    </data>
+</odoo>

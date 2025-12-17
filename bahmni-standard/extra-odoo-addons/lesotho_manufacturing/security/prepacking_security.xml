@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+    <!-- security/prepacking_security.xml -->
+    <data noupdate="1">
+    <!-- Application category for Prepacking roles -->
+        <record id="module_category_dispensing" model="ir.module.category">
+            <field name="name">Prepacking</field>
+            <field name="description">Prepacking Module Access</field>
+            <field name="sequence">10</field>
+        </record>
+    </data>
+</odoo>

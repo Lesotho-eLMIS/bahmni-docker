@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+  <data noupdate="1">
+    <!-- Dispensing User group -->
+    <record id="group_dispensing_user" model="res.groups">
+      <field name="name">Dispensing User</field>
+      <field name="category_id" ref="module_category_dispensing"/>
+      <!-- Implied basic user rights, if needed: for example, give internal user access -->
+      <field name="implied_ids" eval="[(4, ref('base.group_user'))]"/>
+    </record>
+    <!-- Dispensing Admin group -->
+    <record id="group_dispensing_admin" model="res.groups">
+      <field name="name">Dispensing Administrator</field>
+      <field name="category_id" ref="module_category_dispensing"/>
+      <!-- Imply that admins also have all Dispensing User rights: -->
+      <field name="implied_ids" eval="[(4, ref('lesotho_sale.group_dispensing_user'))]"/>
+    </record>
+  </data>
+</odoo>

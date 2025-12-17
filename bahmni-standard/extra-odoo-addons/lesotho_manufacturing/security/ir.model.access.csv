@@ -1,0 +1,3 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_prepack_user_mrp.production,Prepacking User access on mrp.production,mrp.production,lesotho_manufacturing.group_prepacking_user,1,0,0,0
+access_prepack_admin_mrp.production,Prepacking Admin access on mrp.production,mrp.production,lesotho_manufacturing.group_prepacking_admin,1,1,1,1
