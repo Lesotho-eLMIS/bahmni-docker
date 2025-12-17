@@ -6,9 +6,10 @@
         <record id="stock_scrap_form_view_unserviceable_location" model="ir.ui.view">
             <field name="name">stock.scrap.form.unserviceable_location</field>
             <field name="model">stock.scrap</field>
-            <field name="inherit_id" ref="stock.stock_scrap_form_view"/>
+            <field name="inherit_id" ref="stock.stock_scrap_form_view" />
             <field name="arch" type="xml">
-                <!-- Change header of scap_location_id (Scrap Location) field string to Unserviceable Location -->
+                <!-- Change header of scap_location_id (Scrap Location) field string to
+                Unserviceable Location -->
                 <xpath expr="//field[@name='scrap_location_id']" position="attributes">
                     <attribute name="string">Unserviceable Location</attribute>
                 </xpath>
@@ -28,7 +29,7 @@
         <record id="view_move_line_tree_lesotho_custom" model="ir.ui.view">
             <field name="name">stock.move.line.tree.lesotho_custom</field>
             <field name="model">stock.move.line</field>
-            <field name="inherit_id" ref="stock.view_move_line_tree"/>
+            <field name="inherit_id" ref="stock.view_move_line_tree" />
             <field name="arch" type="xml">
                 <!-- Change header of lot_id (Lot/Serial Number) field string to Batch/Serial Number -->
                 <xpath expr="//field[@name='lot_id']" position="attributes">
@@ -40,7 +41,7 @@
         <record id="mrp_unbuild_form_view_prepacking_template" model="ir.ui.view">
             <field name="name">mrp.unbuild.form.prepacking_template</field>
             <field name="model">mrp.unbuild</field>
-            <field name="inherit_id" ref="mrp.mrp_unbuild_form_view"/>
+            <field name="inherit_id" ref="mrp.mrp_unbuild_form_view" />
             <field name="arch" type="xml">
                 <!-- Change header of bom_id () string attribute to Prepacking Template -->
                 <xpath expr="//field[@name='bom_id']" position="attributes">
@@ -52,7 +53,7 @@
         <record id="mrp_unbuild_form_view_prepacking_order" model="ir.ui.view">
             <field name="name">mrp.unbuild.form.prepacking_order</field>
             <field name="model">mrp.unbuild</field>
-            <field name="inherit_id" ref="mrp.mrp_unbuild_form_view"/>
+            <field name="inherit_id" ref="mrp.mrp_unbuild_form_view" />
             <field name="arch" type="xml">
                 <!-- Change header of mo_id () string attribute to Prepacking order -->
                 <xpath expr="//field[@name='mo_id']" position="attributes">
@@ -64,7 +65,7 @@
         <record id="mrp_unbuild_form_view_batch" model="ir.ui.view">
             <field name="name">mrp.unbuild.form.batch</field>
             <field name="model">mrp.unbuild</field>
-            <field name="inherit_id" ref="mrp.mrp_unbuild_form_view"/>
+            <field name="inherit_id" ref="mrp.mrp_unbuild_form_view" />
             <field name="arch" type="xml">
                 <!-- Change lot_id () string attribute to Batch -->
                 <xpath expr="//field[@name='lot_id']" position="attributes">
@@ -75,20 +76,22 @@
 
         <odoo>
             <template id="report_header_rename_lot_to_batch"
-                        inherit_id="stock.report_stock_body_print">
-                <xpath expr="//thead//tr[contains(@class,'o_report_header')]//th[normalize-space()='Lot/Serial #']"
+                inherit_id="stock.report_stock_body_print">
+                <xpath
+                    expr="//thead//tr[contains(@class,'o_report_header')]//th[normalize-space()='Lot/Serial #']"
                     position="replace">
-                <th class="o_report_line_header">Batch Number</th>
+                    <th class="o_report_line_header">Batch Number</th>
                 </xpath>
             </template>
         </odoo>
 
         <odoo>
             <template id="report_header_rename_lot_to_batch"
-                        inherit_id="stock.report_stock_inventory">
-                <xpath expr="//thead//tr[contains(@class,'o_report_header')]//th[normalize-space()='Lot/Serial #']"
+                inherit_id="stock.report_stock_inventory">
+                <xpath
+                    expr="//thead//tr[contains(@class,'o_report_header')]//th[normalize-space()='Lot/Serial #']"
                     position="replace">
-                <th class="o_report_line_header">Batch Number</th>
+                    <th class="o_report_line_header">Batch Number</th>
                 </xpath>
             </template>
         </odoo>
@@ -97,7 +100,7 @@
         <record id="mrp_production_form_view_prepacking_template" model="ir.ui.view">
             <field name="name">mrp.production.form.prepacking_template</field>
             <field name="model">mrp.production</field>
-            <field name="inherit_id" ref="mrp.mrp_production_form_view"/>
+            <field name="inherit_id" ref="mrp.mrp_production_form_view" />
             <field name="arch" type="xml">
                 <!-- Change header of bom_id () string attribute to Prepacking Template -->
                 <xpath expr="//field[@name='bom_id']" position="attributes">
@@ -118,7 +121,8 @@
                     <attribute name="attrs">{'invisible': True}</attribute>
                 </xpath>
 
-                <xpath expr="//button[@name='action_view_stock_valuation_layers']" position="attributes">
+                <xpath expr="//button[@name='action_view_stock_valuation_layers']"
+                    position="attributes">
                     <attribute name="attrs">{'invisible': True}</attribute>
                 </xpath>
 
@@ -131,10 +135,11 @@
                 </xpath>
 
                 <xpath expr="//button[@name='action_generate_serial']" position="before">
-                    <field name="bom_product_ids" invisible="1"/>
+                    <field name="bom_product_ids" invisible="1" />
                 </xpath>
 
-                <!-- <xpath expr="//form/header//button[@name='button_mark_done']" position="attributes">
+                <!-- <xpath expr="//form/header//button[@name='button_mark_done']"
+                position="attributes">
                     <attribute name="string">Authorize</attribute>
                 </xpath> -->
 
@@ -142,17 +147,17 @@
                     <attribute name="readonly">1</attribute>
                 </xpath>
 
-                
+
             </field>
         </record>
 
         <record id="mrp_bom_form_hide_type" model="ir.ui.view">
             <field name="name">mrp.bom.form.hide.type</field>
             <field name="model">mrp.bom</field>
-            <field name="inherit_id" ref="mrp.mrp_bom_form_view"/>
+            <field name="inherit_id" ref="mrp.mrp_bom_form_view" />
             <field name="arch" type="xml">
 
-        <!-- Hide BoM Type (Kit vs Manufacture) -->
+                <!-- Hide BoM Type (Kit vs Manufacture) -->
                 <xpath expr="//field[@name='type']" position="attributes">
                     <attribute name="invisible">1</attribute>
                 </xpath>
@@ -162,55 +167,62 @@
         <record id="mrp_bom_form_hide_overview" model="ir.ui.view">
             <field name="name">mrp.bom.form.hide.overview</field>
             <field name="model">mrp.bom</field>
-            <field name="inherit_id" ref="mrp.mrp_bom_form_view"/>
+            <field name="inherit_id" ref="mrp.mrp_bom_form_view" />
             <field name="arch" type="xml">
                 <!-- Hide Overview stat button -->
-                <xpath expr="//div[@name='button_box']/button[@name='492']" position="attributes">
+                <xpath
+                    expr="//div[@name='button_box']/button[@type='action' and contains(@class, 'oe_stat_button')]"
+                    position="attributes">
                     <attribute name="invisible">1</attribute>
                 </xpath>
 
             </field>
         </record>
 
-         <record id="mrp_bom_form_hide_manual_consumption" model="ir.ui.view">
+        <record id="mrp_bom_form_hide_manual_consumption" model="ir.ui.view">
             <field name="name">mrp.bom.form.hide.manual.consumption</field>
             <field name="model">mrp.bom</field>
-            <field name="inherit_id" ref="mrp.mrp_bom_form_view"/>
+            <field name="inherit_id" ref="mrp.mrp_bom_form_view" />
             <field name="arch" type="xml">
                 <!-- Remove Manual Consumption from Components tree -->
                 <xpath expr="//field[@name='bom_line_ids']/tree/field[@name='manual_consumption']"
-                       position="replace"/>
+                    position="replace" />
             </field>
         </record>
 
         <record id="mrp_bom_form_hide_product_attachments_button" model="ir.ui.view">
             <field name="name">mrp.bom.form.hide.product.attachments.button</field>
             <field name="model">mrp.bom</field>
-            <field name="inherit_id" ref="mrp.mrp_bom_form_view"/>
+            <field name="inherit_id" ref="mrp.mrp_bom_form_view" />
             <field name="arch" type="xml">
-                <xpath expr="//field[@name='bom_line_ids']/tree//button[@name='action_see_attachments']"
-                    position="replace"/>
+                <xpath
+                    expr="//field[@name='bom_line_ids']/tree//button[@name='action_see_attachments']"
+                    position="replace" />
             </field>
         </record>
 
         <record id="mrp_production_form_rename_mark_done" model="ir.ui.view">
             <field name="name">mrp.production.form.rename.mark.done</field>
             <field name="model">mrp.production</field>
-            <field name="inherit_id" ref="mrp.mrp_production_form_view"/>
+            <field name="inherit_id" ref="mrp.mrp_production_form_view" />
             <!-- Apply late so other modules don't override you -->
             <field name="priority">1000</field>
 
             <field name="arch" type="xml">
-                <xpath expr="//form/header//button[@name='button_mark_done'][1]" position="attributes">
+                <xpath expr="//form/header//button[@name='button_mark_done'][1]"
+                    position="attributes">
                     <attribute name="string">Authorize</attribute>
                 </xpath>
-                <xpath expr="//form/header//button[@name='button_mark_done'][2]" position="attributes">
+                <xpath expr="//form/header//button[@name='button_mark_done'][2]"
+                    position="attributes">
                     <attribute name="string">Authorize</attribute>
                 </xpath>
-                <xpath expr="//form/header//button[@name='button_mark_done'][3]" position="attributes">
+                <xpath expr="//form/header//button[@name='button_mark_done'][3]"
+                    position="attributes">
                     <attribute name="string">Authorize</attribute>
                 </xpath>
-                <xpath expr="//form/header//button[@name='button_mark_done'][4]" position="attributes">
+                <xpath expr="//form/header//button[@name='button_mark_done'][4]"
+                    position="attributes">
                     <attribute name="string">Authorize</attribute>
                 </xpath>
             </field>
