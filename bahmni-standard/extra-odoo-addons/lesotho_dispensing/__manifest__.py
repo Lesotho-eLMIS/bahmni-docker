@@ -1,0 +1,20 @@
+{
+    "name": "Lesotho Dispensing",
+    "summary": "MOH Dispensing Customizations installation of all dependencies",
+    "version": "16.0.1.0.0",
+    "category": "Localization",
+    "author": "MOH Lesotho",
+    "website": "",
+    "license": "LGPL-3",
+    "depends": [
+        "lesotho_bahmni_api_feed",
+        "lesotho_base",
+        "lesotho_mail",
+        "lesotho_manufacturing",
+        "lesotho_prepack_dispense_quality_gate",
+        "lesotho_sale",
+        "lesotho_stock",
+    ],
+    "installable": True,
+    "application": False,
+}
