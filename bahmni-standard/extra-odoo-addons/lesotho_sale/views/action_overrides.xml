@@ -7,6 +7,7 @@
       model="ir.actions.act_window"
     >
             <field name="name">Prescriptions</field>
+            <field name="help" eval="False"/>
         </record>
         <record id="sale.action_orders" model="ir.actions.act_window">
             <field name="name">Served Prescriptions</field>
@@ -97,6 +98,28 @@
                 </search>
             </field>
         </record>
+        <record id="sale.action_quotations_with_onboarding" model="ir.actions.act_window">
+            <field name="help" type="html">
+                <p>No prescriptions yet.</p>
+                <p>Click on New to create a prescription.</p>
+            </field>
+        </record>
+        <!-- Remove To Invoice -->
+        <record id="sale.menu_sale_invoicing" model="ir.ui.menu">
+            <field name="active" eval="False"/>
+        </record>
+
+          <!-- Remove: Sales Teams -->
+        <record id="sale.report_sales_team" model="ir.ui.menu">
+            <field name="active" eval="False"/>
+        </record>
+        <record id="sale.sales_team_config" model="ir.ui.menu">
+            <field name="active" eval="False"/>
+        </record>
+        <record id="sale.menu_tag_config" model="ir.ui.menu">
+            <field name="active" eval="False"/>
+        </record>
+
 
         <!-- Action for dispensing view - NOW it can reference the views above -->
         <record id="action_view_dispensing_lines" model="ir.actions.act_window">

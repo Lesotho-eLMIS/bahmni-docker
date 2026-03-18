@@ -20,6 +20,35 @@
             </field>
         </record>
 
+         <record id="sale_order_tree_remove_onboarding" model="ir.ui.view">
+            <field name="name">sale.order.tree.remove.onboarding</field>
+            <field name="model">sale.order</field>
+            <field name="inherit_id" ref="sale.view_quotation_tree_with_onboarding"/>
+            <field name="arch" type="xml">
+
+                <!-- Remove onboarding banner -->
+                <xpath expr="//tree" position="attributes">
+                    <attribute name="banner_route"/>
+                </xpath>
+
+            </field>
+        </record>
+
+         <record id="sale_order_tree_remove_help" model="ir.ui.view">
+            <field name="name">sale.order.tree.remove.help</field> 
+            <field name="model">sale.order</field>
+            <field name="inherit_id" ref="sale.view_quotation_tree_with_onboarding"/>
+            <field name="arch" type="xml">
+
+                <!-- Remove help (this removes smiling doc + text) -->
+                <xpath expr="//tree" position="attributes">
+                    <attribute name="help"/>
+                </xpath>
+
+            </field>
+        </record>
+        
+
         <!-- Disable the onboarding panel by overriding it with empty content -->
         <!-- <template
       id="sale_quotation_onboarding_panel"

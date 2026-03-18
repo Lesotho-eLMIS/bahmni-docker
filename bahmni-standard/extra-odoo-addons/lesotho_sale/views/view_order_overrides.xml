@@ -33,7 +33,15 @@
             <xpath expr="//field[@name='shop_id']" position="attributes">
                 <attribute name="string">Dispensary</attribute>
             </xpath>
-            
+
+            <!-- Remove Pricelist -->
+            <!-- <xpath expr="//field[@name='pricelist_id']" position="replace"/> -->
+
+            <!-- Remove Payment Terms -->
+            <!-- <xpath expr="//field[@name='payment_term_id']" position="replace"/> -->
+
+            <!-- Remove Expiration Date -->
+            <!-- <xpath expr="//field[@name='validity_date']" position="replace"/> -->
 
             <!-- Show patient demographics alongside the customer -->
             <!-- <xpath expr="//field[@name='partner_id']" position="after">
