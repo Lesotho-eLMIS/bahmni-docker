@@ -4,6 +4,9 @@
       <record id="stock.menu_stock_scrap" model="ir.ui.menu">
           <field name="name">Move to Unserviceable</field>
       </record>
+      <record id="stock.menu_action_production_lot_form" model="ir.ui.menu">
+          <field name="name">Batch/Serial Numbers</field>
+      </record>
 
 
 
