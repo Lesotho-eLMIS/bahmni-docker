@@ -32,6 +32,10 @@ class ExtendedSaleOrder(models.Model):
         store=True,
         readonly=True,
     )
+    patient_age_display = fields.Char(
+        string="Age",
+        compute="_compute_patient_snapshot_display",
+    )
     partner_village = fields.Many2one(
         "village.village",
         related="partner_id.village_id",
@@ -69,6 +73,18 @@ class ExtendedSaleOrder(models.Model):
         store=True,
         readonly=True,
     )
+    weight_display = fields.Char(
+        string="Weight",
+        compute="_compute_patient_snapshot_display",
+    )
+    height_display = fields.Char(
+        string="Height",
+        compute="_compute_patient_snapshot_display",
+    )
+    bmi_display = fields.Char(
+        string="BMI",
+        compute="_compute_patient_snapshot_display",
+    )
 
     bmi = fields.Float(
         string="BMI (kg/m²)",
@@ -92,9 +108,27 @@ class ExtendedSaleOrder(models.Model):
             dia = int(order.diastolic or 0)
 
             if sys > 0 and dia > 0:
-                order.bp_display = f"{dia}/{sys}"
+                order.bp_display = f"{sys}/{dia} mmHg"
             else:
-                order.bp_display = 0.0
+                order.bp_display = False
+
+    @api.depends("patient_age", "height", "weight", "bmi")
+    def _compute_patient_snapshot_display(self):
+        for order in self:
+            order.patient_age_display = (
+                _("%s years") % int(order.patient_age)
+                if order.patient_age
+                else _("Not recorded")
+            )
+            order.weight_display = (
+                _("%.1f kg") % order.weight if order.weight else _("Not recorded")
+            )
+            order.height_display = (
+                _("%.0f cm") % order.height if order.height else _("Not recorded")
+            )
+            order.bmi_display = (
+                _("%.1f kg/m²") % order.bmi if order.bmi else _("Not recorded")
+            )
 
 
     @api.depends("height", "weight")
@@ -106,9 +140,9 @@ class ExtendedSaleOrder(models.Model):
                 if height_m > 0:
                     order.bmi = order.weight / (height_m ** 2)
                 else:
-                    order.bmi = 0.0
+                    order.bmi = False
             else:
-                order.bmi = 0.0
+                order.bmi = False
 
 
     @api.depends("order_line.dispensed")
@@ -200,7 +234,7 @@ class ExtendedSaleOrder(models.Model):
 
     location_name = fields.Char(
         string="Location",
-        help="Clinic/Location name from Bahmni (e.g., OPD-1, Ward-2)",
+        help="Clinic/Location name from eRegister (e.g., OPD-1, Ward-2)",
         index=True,
     )
 
@@ -212,7 +246,7 @@ class ExtendedSaleOrder(models.Model):
 
     # ============ PROVIDER INFORMATION ============
     provider_name = fields.Char(
-        string="Provider", help="Prescribing provider name", index=True
+        string="Provider", help="Prescribing Doctor/Nurse name", index=True
     )
 
     provider_uuid = fields.Char(

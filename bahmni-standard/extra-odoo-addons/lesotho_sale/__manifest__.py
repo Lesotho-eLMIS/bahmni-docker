@@ -14,6 +14,11 @@
         "stock",
         "mrp",
     ],
+    "assets": {
+        "web.assets_backend": [
+            "lesotho_sale/static/src/scss/dispensing_form.scss",
+        ],
+    },
     "data": [
         "security/ir.model.access.csv",
         "views/menu_overrides.xml",

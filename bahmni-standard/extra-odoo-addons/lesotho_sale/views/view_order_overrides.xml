@@ -10,21 +10,29 @@
             <!-- Rename Customer to Patient -->
             <xpath expr="//field[@name='partner_id']" position="attributes">
                 <attribute name="string">Patient</attribute>
+                <attribute name="invisible">1</attribute>
             </xpath>
 
             <!-- Rename partner fields to patient wording -->
             <xpath expr="//field[@name='partner_village']" position="attributes">
                 <attribute name="string">Patient Village</attribute>
+                <attribute name="invisible">1</attribute>
+            </xpath>
+
+            <xpath expr="//field[@name='care_setting']" position="attributes">
+                <attribute name="invisible">1</attribute>
             </xpath>
 
             <!-- Clinical ownership terminology -->
             <xpath expr="//field[@name='provider_name']" position="attributes">
                 <attribute name="string">Doctor/Nurse</attribute>
+                <attribute name="invisible">1</attribute>
             </xpath>
 
             <!-- Date and location wording -->
             <xpath expr="//field[@name='date_order']" position="attributes">
                 <attribute name="string">Prescription Date</attribute>
+                <attribute name="invisible">1</attribute>
             </xpath>
             <xpath expr="//group[@name='order_details']/div[@groups='base.group_no_one']/label[@for='date_order']" position="attributes">
                 <attribute name="string">Prescription Date</attribute>
@@ -32,37 +40,104 @@
 
             <xpath expr="//field[@name='shop_id']" position="attributes">
                 <attribute name="string">Dispensary</attribute>
-            </xpath>
-            
-
-            <!-- Show patient demographics alongside the customer -->
-            <!-- <xpath expr="//field[@name='partner_id']" position="after">
-                <field
-                  name="patient_sex"
-                  readonly="1"
-                  attrs="{'invisible': [('partner_id', '=', False)]}"
-                />
-                <field
-                  name="patient_age"
-                  readonly="1"
-                  attrs="{'invisible': [('partner_id', '=', False)]}"
-                />
-            </xpath> -->
-            <!-- Patient demographics + vitals (text-only, compact, hide when empty) -->
-            <xpath expr="//field[@name='partner_id']" position="after">
-                        <field name="patient_sex" string="Sex"/>
-                        <field name="patient_age" string="Age (yrs)"/>
-                        <!-- <field name="partner_village" string="Village"/> -->
-                        <field name="weight" string="Weight (kg)"/>
-                        <field name="height" string="Height (cm)"/>
-                        <field name="bmi" string="Body Mass Index (kg/m²)"/>
-                        <field name="bp_display" string="Blood pressure (mmHg)"/>
+                <attribute name="invisible">1</attribute>
             </xpath>
 
+            <xpath expr="//form" position="attributes">
+                <attribute name="class" add="o_bahmni_dispensing_form" separator=" " />
+            </xpath>
+
+            <xpath expr="//button[@name='action_quotation_send']" position="attributes">
+                <attribute name="invisible">1</attribute>
+            </xpath>
+
+            <xpath expr="//button[@name='action_confirm']" position="attributes">
+                <attribute name="string">Start Dispensing</attribute>
+            </xpath>
+
+            <xpath expr="//field[@name='order_line']" position="attributes">
+                <attribute name="class" add="o_bahmni_order_lines" separator=" " />
+                <attribute name="string">Prescribed Items</attribute>
+            </xpath>
+
+            <xpath expr="//field[@name='pricelist_id']" position="attributes">
+                <attribute name="invisible">1</attribute>
+            </xpath>
+
+            <xpath expr="//field[@name='payment_term_id']" position="attributes">
+                <attribute name="invisible">1</attribute>
+            </xpath>
+
+            <xpath expr="//field[@name='validity_date']" position="attributes">
+                <attribute name="invisible">1</attribute>
+            </xpath>
+
+            <xpath expr="//notebook" position="before">
+                <div class="o_bahmni_summary_strip">
+                    <div class="o_bahmni_summary_card o_bahmni_context_panel">
+                        <div class="o_bahmni_panel_title">Prescription Context</div>
+                        <group col="2">
+                            <field name="partner_id" string="Patient" />
+                            <field name="partner_village" string="Patient Village" readonly="1" />
+                            <field name="care_setting" />
+                            <field name="location_name" string="Location" readonly="1" />
+                            <field name="provider_name" string="Doctor/Nurse" readonly="1" />
+                            <field name="shop_id" string="Dispensary" />
+                            <field name="date_order" string="Prescription Date" />
+                        </group>
+                    </div>
+                    <div
+                        class="o_bahmni_summary_card o_bahmni_snapshot_panel"
+                        attrs="{'invisible': [('partner_id', '=', False)]}"
+                    >
+                        <div class="o_bahmni_panel_title">Patient Snapshot</div>
+                        <div class="o_bahmni_metric_grid">
+                            <div class="o_bahmni_metric">
+                                <span class="fa fa-venus-mars o_bahmni_metric_icon" />
+                                <span class="o_bahmni_metric_label">Sex</span>
+                                <field name="patient_sex" readonly="1" nolabel="1" />
+                            </div>
+                            <div class="o_bahmni_metric">
+                                <span class="fa fa-hourglass-half o_bahmni_metric_icon" />
+                                <span class="o_bahmni_metric_label">Age</span>
+                                <field name="patient_age_display" readonly="1" nolabel="1" />
+                            </div>
+                            <div class="o_bahmni_metric">
+                                <span class="fa fa-balance-scale o_bahmni_metric_icon" />
+                                <span class="o_bahmni_metric_label">Weight</span>
+                                <field name="weight_display" readonly="1" nolabel="1" />
+                            </div>
+                            <div class="o_bahmni_metric">
+                                <span class="fa fa-arrows-v o_bahmni_metric_icon" />
+                                <span class="o_bahmni_metric_label">Height</span>
+                                <field name="height_display" readonly="1" nolabel="1" />
+                            </div>
+                            <div class="o_bahmni_metric">
+                                <span class="fa fa-calculator o_bahmni_metric_icon" />
+                                <span class="o_bahmni_metric_label">BMI</span>
+                                <field name="bmi_display" readonly="1" nolabel="1" />
+                            </div>
+                            <div class="o_bahmni_metric">
+                                <span class="fa fa-heartbeat o_bahmni_metric_icon" />
+                                <span class="o_bahmni_metric_label">Blood Pressure</span>
+                                <field name="bp_display" readonly="1" nolabel="1" />
+                            </div>
+                        </div>
+                    </div>
+                    <group
+                        string="Clinical Notes"
+                        class="o_bahmni_summary_card o_bahmni_clinical_notes"
+                        attrs="{'invisible': ['&amp;', ('diagnosis', '=', False), ('clinical_notes', '=', False)]}"
+                    >
+                        <field name="diagnosis" readonly="1" placeholder="No diagnosis captured." />
+                        <field name="clinical_notes" readonly="1" placeholder="No clinical notes captured." />
+                    </group>
+                </div>
+            </xpath>
 
             <!-- Add Clinical Information tab -->
             <xpath expr="//notebook" position="inside">
-                <page string="Clinical Information" name="clinical_information">
+                <page string="Clinical Details" name="clinical_information">
                     <group>
                         <group string="Vitals">
                             <field name="weight" readonly="1"/>
@@ -320,6 +395,21 @@
             </xpath>
 
             <!-- Add prescription columns to order line tree view -->
+            <xpath expr="//field[@name='order_line']/tree" position="attributes">
+                <attribute name="decoration-success">dispensed</attribute>
+                <attribute name="decoration-danger">out_of_stock and not dispensed</attribute>
+                <attribute name="decoration-warning">is_pack_substituted and not dispensed</attribute>
+            </xpath>
+
+            <xpath expr="//field[@name='order_line']/tree/field[@name='product_uom_qty']" position="after">
+                <button
+                  name="action_open_pack_selection_wizard"
+                  string="Packs"
+                  type="object"
+                  attrs="{'invisible': [('can_suggest_pack', '=', False)]}"
+                />
+            </xpath>
+
             <xpath expr="//field[@name='order_line']/tree" position="inside">
                 <!-- Add prescription columns after product_id -->
                 <field name="can_suggest_pack" invisible="1" />
@@ -327,43 +417,43 @@
                   name="dose"
                   string="Dose"
                   attrs="{'invisible': [('display_type', '!=', False)]}"
-                  optional="show"
+                  optional="hide"
                 />
                 <field
                   name="dose_units"
                   string="Units"
                   attrs="{'invisible': [('display_type', '!=', False)]}"
-                  optional="show"
+                  optional="hide"
                 />
                 <field
                   name="frequency"
                   string="Frequency"
                   attrs="{'invisible': [('display_type', '!=', False)]}"
-                  optional="show"
+                  optional="hide"
                 />
                 <field
                   name="route"
                   string="Route"
                   attrs="{'invisible': [('display_type', '!=', False)]}"
-                  optional="show"
+                  optional="hide"
                 />
                 <field
                   name="duration"
                   string="Duration"
                   attrs="{'invisible': [('display_type', '!=', False)]}"
-                  optional="show"
+                  optional="hide"
                 />
                 <field
                   name="duration_units"
                   string="Dur. Units"
                   attrs="{'invisible': [('display_type', '!=', False)]}"
-                  optional="show"
+                  optional="hide"
                 />
                 <field
                   name="num_refills"
                   string="Refills"
                   attrs="{'invisible': [('display_type', '!=', False)]}"
-                  optional="show"
+                  optional="hide"
                 />
 
                 <!-- Add Bahmni columns -->
@@ -371,23 +461,24 @@
                   name="order_number"
                   string="Order #"
                   attrs="{'invisible': [('display_type', '!=', False)]}"
-                  optional="show"
+                  optional="hide"
                 />
                 <field
                   name="dispensed"
                   string="Dispensed"
                   attrs="{'invisible': [('display_type', '!=', False)]}"
                   optional="show"
+                  widget="boolean_toggle"
                 />
                 <field
                   name="prescribed_product_id"
                   string="Prescribed Product"
                   attrs="{'invisible': [('display_type', '!=', False)]}"
-                  optional="show"
+                  optional="hide"
                 />
                 <field
                   name="stock_on_hand"
-                  string="Stock On Hand"
+                  string="In Stock"
                   attrs="{'invisible': [('display_type', '!=', False)]}"
                   optional="show"
                 />
@@ -395,13 +486,14 @@
                   name="prescribed_qty_base_units"
                   string="Prescribed Qty"
                   attrs="{'invisible': [('display_type', '!=', False)]}"
-                  optional="show"
+                  optional="hide"
                 />
                 <field
                   name="is_pack_substituted"
                   string="Substituted"
                   attrs="{'invisible': [('display_type', '!=', False)]}"
                   optional="show"
+                  widget="boolean_toggle"
                 />
                 
                 <field
@@ -409,6 +501,7 @@
                   string="Out of Stock"
                   attrs="{'invisible': [('display_type', '!=', False)]}"
                   optional="show"
+                  widget="boolean_toggle"
                 />
 
                 <field
@@ -416,12 +509,6 @@
                   string="Prescription"
                   attrs="{'invisible': [('display_type', '!=', False)]}"
                   optional="show"
-                />
-                <button
-                  name="action_open_pack_selection_wizard"
-                  string="Suggest Packs"
-                  type="object"
-                  attrs="{'invisible': [('can_suggest_pack', '=', False)]}"
                 />
             </xpath>
 
