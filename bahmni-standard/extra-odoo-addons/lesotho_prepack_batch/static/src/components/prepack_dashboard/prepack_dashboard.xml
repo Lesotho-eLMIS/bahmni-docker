@@ -1,0 +1,194 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+    <t t-name="lesotho_prepack_batch.PrepackDashboard" owl="1">
+        <div class="o_prepack_dashboard">
+            <div class="container">
+                <div class="workflow-step-indicator">
+                    <div id="step1" t-attf-class="step {{ state.step === 1 ? 'active' : '' }}">BUILD PREPACK BATCH</div>
+                    <div id="step2" t-attf-class="step {{ state.step === 2 ? 'active' : '' }}">MULTI-TARGET CALCULATION</div>
+                    <div id="step3" t-attf-class="step {{ state.step === 3 ? 'active' : '' }}">AUTHORIZATION</div>
+                </div>
+
+                <!-- STEP 1: QUALITY CHECK -->
+                <div t-if="state.step === 1" id="view-quality-check">
+                    <h2>Build Prepacking Batch <span class="role-badge"><t t-esc="state.currentUser"/></span></h2>
+
+                    <div class="flex-layout">
+                        <div style="border: 1px solid #eee; padding: 20px; border-radius: 4px;">
+                            <div class="form-group">
+                                <label>Search / Select Product from Store</label>
+                                <select id="productSelector" t-on-change="onProductSelect">
+                                    <option value="" disabled="disabled" t-att-selected="!state.selectedProductKey">-- Select a Product --</option>
+                                    <t t-foreach="state.inventory" t-as="item" t-key="item.key">
+                                        <option t-att-value="item.key"><t t-esc="item.name"/> (<t t-esc="item.batch"/>)</option>
+                                    </t>
+                                </select>
+                            </div>
+
+                            <div t-if="state.selectedProduct" class="product-meta">
+                                <strong>Batch:</strong> <t t-esc="state.selectedProduct.batch"/> &nbsp;&nbsp;|&nbsp;&nbsp;
+                                <strong>Expiry:</strong> <t t-esc="state.selectedProduct.exp"/><br/>
+                                <strong>Bulk SOH Available:</strong> <t t-esc="state.selectedProduct.soh"/> <t t-esc="state.selectedProduct.uom"/>
+                            </div>
+
+                            <div t-attf-class="checklist {{ !state.selectedProduct ? 'disabled' : '' }}">
+                                <h4 style="margin-top: 0; color: #2c3e50;">Mandatory Quality Checklist</h4>
+                                <label><input type="checkbox" t-model="state.checks.chk1" t-on-change="validateChecklist"/> Product packaging is intact and undamaged.</label>
+                                <label><input type="checkbox" t-model="state.checks.chk2" t-on-change="validateChecklist"/> Expiry date is valid (> 6 months).</label>
+                                <label t-if="state.selectedProduct and state.selectedProduct.reqLiquidCheck" style="color: #d35400;">
+                                    <input type="checkbox" t-model="state.checks.chk3" t-on-change="validateChecklist"/>
+                                    <strong>Liquid/Ointment Check:</strong> No leaks, separation, or discoloration observed.
+                                </label>
+                            </div>
+
+                            <button class="btn btn-primary" t-att-disabled="!state.canAddToBatch" t-on-click="addToBatch">Add to Batch List &darr;</button>
+                        </div>
+                    </div>
+
+                    <div style="margin-top: 30px;">
+                        <h3>Batch List (Products Ready for Calculation)</h3>
+                        <table id="batchTable">
+                            <thead>
+                                <tr>
+                                    <th>Product Name</th>
+                                    <th>Batch / Expiry</th>
+                                    <th>Bulk SOH</th>
+                                    <th>Status</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr t-if="state.batchItems.length === 0">
+                                    <td colspan="5" style="text-align:center; color:#777;">No products added to the batch yet.</td>
+                                </tr>
+                                <t t-foreach="state.batchItems" t-as="item" t-key="item.key">
+                                    <tr>
+                                        <td><strong><t t-esc="item.name"/></strong></td>
+                                        <td><t t-esc="item.batch"/> / <t t-esc="item.exp"/></td>
+                                        <td><t t-esc="item.soh"/> <t t-esc="item.uom"/></td>
+                                        <td><span class="status-auth">CHECKS PASSED</span></td>
+                                        <td><button class="btn btn-danger btn-sm" t-on-click="() => this.removeFromBatch(item.key)">Remove</button></td>
+                                    </tr>
+                                </t>
+                            </tbody>
+                        </table>
+                        <div style="text-align: right;">
+                            <button class="btn btn-success" t-att-disabled="state.batchItems.length === 0" t-on-click="() => this.goToStep(2)">Proceed to Calculations &rarr;</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- STEP 2: CALCULATIONS -->
+                <div t-if="state.step === 2" id="view-create-prepack">
+                    <h2>Calculate Target Sizes <span class="role-badge"><t t-esc="state.currentUser"/></span></h2>
+                    <p style="color: #7f8c8d;">Define one or more prepack target sizes for each bulk commodity.</p>
+
+                    <div id="calcCardsContainer">
+                        <t t-foreach="state.batchItems" t-as="item" t-key="item.key">
+                            <div class="calc-card">
+                                <div class="calc-card-header">
+                                    <div>
+                                        <strong style="font-size:1.1rem; color:#2980b9;"><t t-esc="item.name"/></strong><br/>
+                                        <span style="font-size:0.85rem; color:#7f8c8d;">Batch: <t t-esc="item.batch"/> | Original Bulk SOH: <t t-esc="item.soh"/> <t t-esc="item.uom"/></span>
+                                    </div>
+                                    <button class="btn btn-primary btn-sm" t-on-click="() => this.addTarget(item)">+ Add Target Size</button>
+                                </div>
+                                <div class="calc-card-body">
+                                    <table>
+                                        <thead>
+                                            <tr>
+                                                <th width="35%">Prepack Size Target</th>
+                                                <th width="35%">Number of Prepacks</th>
+                                                <th width="20%">Subtotal Used</th>
+                                                <th width="10%"></th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <t t-foreach="item.targets" t-as="target" t-key="target_index">
+                                                <tr class="target-row">
+                                                    <td>
+                                                        <div class="input-group">
+                                                            <input type="number" min="0" t-model="target.size"/>
+                                                            <span class="addon"><t t-esc="item.uom"/></span>
+                                                        </div>
+                                                    </td>
+                                                    <td>
+                                                        <div class="input-group">
+                                                            <input type="number" min="0" t-model="target.qty"/>
+                                                            <span class="addon">packs</span>
+                                                        </div>
+                                                    </td>
+                                                    <td style="vertical-align: middle;"><strong><t t-esc="target.size * target.qty"/> <t t-esc="item.uom"/></strong></td>
+                                                    <td style="text-align: right; vertical-align: middle;">
+                                                        <button t-if="item.targets.length > 1" class="btn btn-danger btn-sm" t-on-click="() => this.removeTarget(item, target_index)">X</button>
+                                                    </td>
+                                                </tr>
+                                            </t>
+                                        </tbody>
+                                    </table>
+                                </div>
+                                <div class="calc-card-footer">
+                                    <span>Total Bulk Used: <strong><t t-esc="this.getTotalUsed(item)"/> <t t-esc="item.uom"/></strong></span> &nbsp;&nbsp;|&nbsp;&nbsp;
+                                    <span t-attf-class="{{ item.soh - this.getTotalUsed(item) &lt; 0 ? 'remaining-alert' : 'remaining-ok' }}">
+                                        Remaining Bulk: <t t-esc="item.soh - this.getTotalUsed(item)"/> <t t-esc="item.uom"/>
+                                    </span>
+                                </div>
+                            </div>
+                        </t>
+                    </div>
+
+                    <div style="margin-top: 25px; padding-top: 15px; border-top: 2px solid #eee; text-align: right;">
+                        <button class="btn btn-secondary" t-on-click="() => this.goToStep(1)">&larr; Back to Batch List</button>
+                        <button class="btn btn-success" t-on-click="submitBatch">Submit Batch for Authorization</button>
+                    </div>
+                </div>
+
+                <!-- STEP 3: AUTHORIZATION -->
+                <div t-if="state.step === 3" id="view-authorize">
+                    <h2>Authorize Prepack Document <span class="role-badge" style="background: #8e44ad;"><t t-esc="state.currentUser"/></span></h2>
+
+                    <div style="background: #fdfbfb; border: 1px solid #ccc; padding: 15px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center;">
+                        <div>
+                            <strong>Document Number:</strong> <span style="font-family: monospace; font-size: 1.1rem; font-weight: bold; background:#f1c40f; padding: 2px 6px; border-radius: 4px;"><t t-esc="state.batchName"/></span><br/>
+                            <strong>Submitted By:</strong> <t t-esc="state.currentUser"/>
+                        </div>
+                        <div>
+                            <button t-if="!state.isAuthorized" class="btn btn-success" t-on-click="authorizeBatch">Authorize Document</button>
+                            <button t-if="state.isAuthorized" class="btn btn-primary" t-on-click="() => alert('Printing Barcodes/Labels for all targets...')">Print All Labels</button>
+                        </div>
+                    </div>
+
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Product &amp; Batch</th>
+                                <th>Target Prepack Size</th>
+                                <th># of Prepacks Created</th>
+                                <th>Total Bulk Deducted</th>
+                                <th>Prepacked By</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <t t-foreach="state.batchItems" t-as="item" t-key="item.key">
+                                <t t-foreach="item.targets" t-as="target" t-key="target_index">
+                                    <tr t-if="target.size > 0 and target.qty > 0">
+                                        <td><strong><t t-esc="item.name"/></strong> <br/><small style="color:#777;">Batch: <t t-esc="item.batch"/></small></td>
+                                        <td><t t-esc="target.size"/> <t t-esc="item.uom"/></td>
+                                        <td><t t-esc="target.qty"/></td>
+                                        <td><t t-esc="target.size * target.qty"/> <t t-esc="item.uom"/></td>
+                                        <td><span style="background:#e8f4f8; padding: 2px 6px; border-radius: 4px; font-size: 0.85rem;"><t t-esc="state.currentUser"/></span></td>
+                                        <td>
+                                            <span t-if="!state.isAuthorized" class="status-pending">PENDING</span>
+                                            <span t-if="state.isAuthorized" class="status-auth">AUTHORIZED</span>
+                                        </td>
+                                    </tr>
+                                </t>
+                            </t>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </t>
+</templates>
