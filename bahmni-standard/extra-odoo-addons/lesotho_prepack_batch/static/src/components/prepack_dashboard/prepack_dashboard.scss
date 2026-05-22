@@ -7,6 +7,8 @@
     display: flex;
     flex-direction: column;
     padding: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
 
     .container {
         max-width: 100%;
@@ -15,7 +17,7 @@
         background: #fff;
         flex-grow: 1;
         box-shadow: none;
-        min-height: 100%;
+        min-height: min-content;
     }
 
     h2 {
@@ -154,9 +156,13 @@
         display: flex;
         justify-content: space-between;
         margin-bottom: 40px;
-        background: transparent;
-        padding: 0;
+        background: #fff;
+        padding: 10px 0;
         gap: 10px;
+        position: sticky;
+        top: -40px; /* Adjusting for container padding */
+        z-index: 100;
+        border-bottom: 1px solid #f4f7f6;
 
         .step {
             position: relative;
@@ -220,4 +226,12 @@
 
     .remaining-alert { color: #e74c3c; font-weight: bold; }
     .remaining-ok { color: #27ae60; font-weight: bold; }
+
+    .access-denied-view {
+        height: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background-color: #fff;
+    }
 }
