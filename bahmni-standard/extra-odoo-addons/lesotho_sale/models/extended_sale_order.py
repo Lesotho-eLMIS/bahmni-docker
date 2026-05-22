@@ -174,7 +174,7 @@ class ExtendedSaleOrder(models.Model):
             }
         )
         return action
-
+    
     def action_mark_all_dispensed(self):
         """Mark all lines in the order as dispensed"""
         self.ensure_one()

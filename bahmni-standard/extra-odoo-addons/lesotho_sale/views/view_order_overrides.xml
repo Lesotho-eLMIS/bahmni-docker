@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8" ?>
 <odoo>
+    <data>
     <!-- Inherit the sale order form view -->
     <record id="view_order_form_inherit" model="ir.ui.view">
         <field name="name">sale.order.form.inherit.bahmni</field>
@@ -369,7 +370,7 @@
                 <!-- Add Bahmni columns -->
                 <field
                   name="order_number"
-                  string="Order #"
+                  string="Prescription #"
                   attrs="{'invisible': [('display_type', '!=', False)]}"
                   optional="show"
                 />
@@ -424,6 +425,8 @@
                   attrs="{'invisible': [('can_suggest_pack', '=', False)]}"
                 />
             </xpath>
+
+            <xpath expr="//field[@name='order_line']/tree/field[@name='tax_id']" position="replace"/>
 
             <!-- Add dispensing button to header -->
             <xpath expr="//header" position="inside">
@@ -491,14 +494,33 @@
             <xpath expr="//field[@name='activity_ids']" position="attributes">
                 <attribute name="invisible">1</attribute>
             </xpath>
+            <xpath expr="//field[@name='partner_id']" position="after">
+                <field name="patient_sex"/>
+                <field name="patient_age"/>
+            </xpath>
+            <xpath expr="//field[@name='provider_name']" position="attributes">
+                <attribute name="string">Prescriber</attribute>
+            </xpath>
+            <xpath expr="//field[@name='care_setting']" position="attributes">
+                <attribute name="string">Care Setting</attribute>
+            </xpath>
             <xpath expr="//field[@name='amount_untaxed']" position="attributes">
                 <attribute name="invisible">1</attribute>
             </xpath>
+               <xpath expr="//field[@name='shop_id']" position="attributes">
+                   <attribute name="string">Dispensary</attribute>
+               </xpath>
             <xpath expr="//field[@name='amount_tax']" position="attributes">
                 <attribute name="invisible">1</attribute>
             </xpath>
             <xpath expr="//field[@name='amount_total']" position="attributes">
                 <attribute name="invisible">1</attribute>
+            </xpath>
+            <xpath expr="//field[@name='total_outstanding_balance']" position="attributes">
+                <attribute name="optional">show</attribute>
+            </xpath>
+            <xpath expr="//field[@name='disc_acc_id']" position="attributes">
+                <attribute name="optional">show</attribute>
             </xpath>
             <xpath expr="//field[@name='tag_ids']" position="attributes">
                 <attribute name="invisible">1</attribute>
@@ -523,14 +545,33 @@
             <xpath expr="//field[@name='activity_ids']" position="attributes">
                 <attribute name="invisible">1</attribute>
             </xpath>
+            <xpath expr="//field[@name='partner_id']" position="after">
+                <field name="patient_sex"/>
+                <field name="patient_age"/>
+            </xpath>
+            <xpath expr="//field[@name='provider_name']" position="attributes">
+                <attribute name="string">Prescriber</attribute>
+            </xpath>
+            <xpath expr="//field[@name='care_setting']" position="attributes">
+                <attribute name="string">Care Setting</attribute>
+            </xpath>
             <xpath expr="//field[@name='amount_untaxed']" position="attributes">
                 <attribute name="invisible">1</attribute>
             </xpath>
+               <xpath expr="//field[@name='shop_id']" position="attributes">
+                   <attribute name="string">Dispensary</attribute>
+               </xpath>
             <xpath expr="//field[@name='amount_tax']" position="attributes">
                 <attribute name="invisible">1</attribute>
             </xpath>
             <xpath expr="//field[@name='amount_total']" position="attributes">
                 <attribute name="invisible">1</attribute>
+            </xpath>
+            <xpath expr="//field[@name='total_outstanding_balance']" position="attributes">
+                <attribute name="optional">show</attribute>
+            </xpath>
+            <xpath expr="//field[@name='disc_acc_id']" position="attributes">
+                <attribute name="optional">show</attribute>
             </xpath>
             <xpath expr="//field[@name='invoice_status']" position="attributes">
                 <attribute name="invisible">1</attribute>
@@ -578,8 +619,7 @@
                                    <attribute name="invisible">1</attribute>
                                </xpath>
 
-
-
         </field>
     </record>
-    </odoo>
+    </data>
+</odoo>
