@@ -297,6 +297,14 @@ class BahmniPrepackBatch(models.Model):
             batch.state = "done"
         return True
 
+    @api.model
+    def check_prepack_permissions(self):
+        """Check if the current user has permissions to create or authorize prepacks."""
+        return {
+            "can_create": self.env.user.has_group("mrp.group_mrp_user"),
+            "can_authorize": self.env.user.has_group("mrp.group_mrp_manager"),
+        }
+
     @api.depends("line_ids", "line_ids.mrp_production_id")
     def _compute_counts(self):
         for batch in self:

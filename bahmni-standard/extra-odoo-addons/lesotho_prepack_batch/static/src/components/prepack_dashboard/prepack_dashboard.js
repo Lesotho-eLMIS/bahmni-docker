@@ -12,6 +12,7 @@ export class PrepackDashboard extends Component {
     this.state = useState({
       step: 1,
       currentUser: session.name,
+      permissions: { can_create: false, can_authorize: false },
       inventory: [],
       selectedProductKey: null,
       selectedProduct: null,
@@ -23,7 +24,13 @@ export class PrepackDashboard extends Component {
       isAuthorized: false,
     });
     onWillStart(async () => {
-      await this.loadInventory();
+      this.state.permissions = await this.orm.call("bahmni.prepack.batch", "check_prepack_permissions", []);
+      if (this.state.permissions.can_create) {
+        this.state.step = 1;
+        await this.loadInventory();
+      } else if (this.state.permissions.can_authorize) {
+        this.state.step = 3;
+      }
     });
   }
 
@@ -70,6 +77,10 @@ export class PrepackDashboard extends Component {
   }
 
   goToStep(step) {
+    if (step === 3 && !this.state.permissions.can_authorize) {
+      this.notification.add("You do not have permission to authorize prepacks.", { type: "danger" });
+      return;
+    }
     this.state.step = step;
   }
   addTarget(item) {
@@ -125,8 +136,11 @@ export class PrepackDashboard extends Component {
     this.state.isAuthorized = true;
     this.notification.add("Document Authorized successfully!", { type: "success" });
   }
-}
 
+  printLabels() {
+    this.notification.add("Printing Barcodes/Labels for all targets...", { type: "info" });
+  }
+}
 PrepackDashboard.template = "lesotho_prepack_batch.PrepackDashboard";
 
 registry.category("actions").add("prepack_dashboard_client_action", PrepackDashboard);

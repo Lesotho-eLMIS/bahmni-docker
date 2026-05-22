@@ -27,96 +27,36 @@
         align-items: center;
     }
 
+    /* Role Badge Polished */
     .role-badge {
         background: #e67e22;
         color: white;
-        padding: 4px 10px;
-        border-radius: 12px;
-        font-size: 0.8rem;
-    }
-
-    /* Table Styles */
-    table {
-        width: 100%;
-        border-collapse: collapse;
-        margin-bottom: 20px;
-    }
-
-    th,
-    td {
-        padding: 12px 15px;
-        border-bottom: 1px solid #eee;
-        text-align: left;
-    }
-
-    th {
-        background-color: #f8f9fa;
-        color: #495057;
+        padding: 6px 16px;
+        border-radius: 50px;
         font-size: 0.9rem;
-    }
-
-    .status-pending {
-        background: #fff3cd;
-        color: #856404;
-        padding: 4px 8px;
-        border-radius: 4px;
-        font-size: 0.8rem;
-        font-weight: bold;
-    }
-
-    .status-auth {
-        background: #d4edda;
-        color: #155724;
-        padding: 4px 8px;
-        border-radius: 4px;
-        font-size: 0.8rem;
-        font-weight: bold;
-    }
-
-    /* Form Styles */
-    .form-group {
-        margin-bottom: 15px;
-        display: flex;
-        flex-direction: column;
-
-        label {
-            font-weight: bold;
-            margin-bottom: 5px;
-            font-size: 0.9rem;
-        }
-
-        input,
-        select {
-            padding: 10px;
-            border: 1px solid #ccc;
-            border-radius: 4px;
-            font-size: 1rem;
-        }
-    }
-
-    .input-group {
-        display: flex;
+        font-weight: 600;
+        box-shadow: 0 2px 4px rgba(230, 126, 34, 0.2);
+        display: inline-flex;
         align-items: center;
-
-        input {
-            flex-grow: 1;
-            border-radius: 4px 0 0 4px;
-            width: 100px;
-        }
-
-        .addon {
-            background: #e9ecef;
-            padding: 10px 15px;
-            border: 1px solid #ccc;
-            border-left: none;
-            border-radius: 0 4px 4px 0;
-            font-weight: bold;
-            color: #555;
-            font-size: 0.85rem;
-        }
     }
 
-    /* Checklist Styles */
+    /* Color Utilities */
+    .bg-success-light { background-color: rgba(40, 167, 69, 0.1) !important; }
+    .bg-info-light { background-color: rgba(23, 162, 184, 0.1) !important; }
+    .bg-warning-light { background-color: rgba(255, 193, 7, 0.1) !important; }
+    .text-monospace { font-family: 'Courier New', Courier, monospace; }
+
+    /* Product Meta Polished */
+    .product-meta {
+        background: #f0f7fb;
+        border-left: 5px solid #2980b9;
+        padding: 15px;
+        border-radius: 4px;
+        margin-bottom: 20px;
+        transition: all 0.3s ease;
+    }
+
+    /* Checklist Polished */
     .checklist {
         background: #fdfbfb;
         border: 1px solid #e2e6e9;
@@ -128,21 +68,65 @@
         &.disabled {
             opacity: 0.5;
             pointer-events: none;
-            background: #f1f2f6;
+            background: #f8f9fa;
+            border-style: dashed;
+        }
+        .form-check-input:checked {
+            background-color: #28a745;
+            border-color: #28a745;
+        }
+    }
+
+    /* Animations */
+    @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(10px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+    .animate__animated {
+        animation-duration: 0.5s;
+        animation-fill-mode: both;
+    }
+    .animate__fadeIn { animation-name: fadeIn; }
+
+    /* Tables Polished */
+    .table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-bottom: 20px;
+
+        thead th {
+            font-weight: 600;
+            text-transform: uppercase;
+            font-size: 0.8rem;
+            letter-spacing: 0.5px;
+            background-color: #f8f9fa;
+            color: #495057;
+            padding: 12px 15px;
+            border-bottom: 1px solid #eee;
         }
 
-        label {
-            display: block;
-            margin-bottom: 10px;
-            font-weight: normal;
-            cursor: pointer;
-            font-size: 0.95rem;
+        td {
+            padding: 12px 15px;
+            border-bottom: 1px solid #eee;
+            text-align: left;
         }
+    }
 
-        input[type="checkbox"] {
-            transform: scale(1.2);
-            margin-right: 10px;
+    /* Inputs Polished */
+    .form-control, .form-select {
+        border-radius: 8px;
+        border: 2px solid #e9ecef;
+        padding: 12px 15px;
+        transition: all 0.2s ease;
+        &:focus {
+            border-color: #2980b9;
+            box-shadow: 0 0 0 0.25rem rgba(41, 128, 185, 0.1);
         }
+    }
+
+    .input-group-text {
+        border-radius: 8px;
+        border: 2px solid #e9ecef;
     }
 
     /* Buttons */
@@ -154,38 +138,17 @@
         font-size: 0.9rem;
         margin-right: 5px;
         transition: background 0.2s;
+
+        &:disabled {
+            background-color: #bdc3c7;
+            cursor: not-allowed;
+        }
     }
 
-    .btn-primary {
-        background-color: #3498db;
-        color: white;
-    }
-
-    .btn-success {
-        background-color: #27ae60;
-        color: white;
-    }
-
-    .btn-secondary {
-        background-color: #95a5a6;
-        color: white;
-    }
-
-    .btn-danger {
-        background-color: #e74c3c;
-        color: white;
-        padding: 6px 12px;
-    }
-
-    .btn-sm {
-        padding: 6px 12px;
-        font-size: 0.8rem;
-    }
-
-    .btn:disabled {
-        background-color: #bdc3c7;
-        cursor: not-allowed;
-    }
+    .btn-primary { background-color: #3498db; color: white; }
+    .btn-success { background-color: #27ae60; color: white; }
+    .btn-secondary { background-color: #95a5a6; color: white; }
+    .btn-danger { background-color: #e74c3c; color: white; }
 
     .workflow-step-indicator {
         display: flex;
@@ -208,6 +171,7 @@
             display: flex;
             align-items: center;
             justify-content: center;
+            cursor: pointer;
 
             &:first-child {
                 clip-path: polygon(calc(100% - 20px) 0%, 100% 50%, calc(100% - 20px) 100%, 0% 100%, 0% 50%, 0% 0%);
@@ -222,26 +186,6 @@
                 background: #2980b9;
                 color: #fff;
             }
-        }
-    }
-
-    .product-meta {
-        background: #e8f4f8;
-        padding: 15px;
-        border-radius: 4px;
-        margin-bottom: 20px;
-        border-left: 4px solid #3498db;
-    }
-
-    /* Layout for Step 1 */
-    .flex-layout {
-        display: flex;
-        gap: 20px;
-        flex-wrap: wrap;
-
-        & > div {
-            flex: 1;
-            min-width: 300px;
         }
     }
 
@@ -274,17 +218,6 @@
         }
     }
 
-    .remaining-alert {
-        color: #e74c3c;
-        font-weight: bold;
-    }
-
-    .remaining-ok {
-        color: #27ae60;
-        font-weight: bold;
-    }
-
-    .target-row {
-        background: #fdfdfd;
-    }
+    .remaining-alert { color: #e74c3c; font-weight: bold; }
+    .remaining-ok { color: #27ae60; font-weight: bold; }
 }
