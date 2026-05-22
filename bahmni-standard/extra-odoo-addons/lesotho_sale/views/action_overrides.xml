@@ -69,7 +69,7 @@
             string="Dispensed"
             widget="boolean_toggle"
           />
-                    <field name="order_number" string="Order #" />
+                    <field name="order_number" string="Prescription #" />
                 </tree>
             </field>
         </record>

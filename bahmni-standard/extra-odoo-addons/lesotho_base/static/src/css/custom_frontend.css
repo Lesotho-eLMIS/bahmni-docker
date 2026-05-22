@@ -6,7 +6,7 @@
 /* TOP TITLE PANEL */
 header#top::before,
 body > header::before {
-    content: "Lesotho eLMIS";
+    content: "Lesotho eLMIS - Dispensing";
     display: flex;
     align-items: center;
     justify-content: flex-start;
