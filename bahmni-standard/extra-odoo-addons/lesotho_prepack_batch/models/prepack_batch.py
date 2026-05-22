@@ -230,7 +230,12 @@ class BahmniPrepackBatch(models.Model):
         }
 
     def _get_or_create_prepack_product(self, bulk_product, size):
-        name = f"{bulk_product.name} - Pack of {int(size)}"
+        bulk_uom = bulk_product.uom_id.name
+        name = f"{bulk_product.name} - Pack of {int(size)} {bulk_uom}"
+
+        # Use discrete 'Units' UoM for the prepack itself
+        unit_uom = self.env.ref("uom.product_uom_unit")
+
         prepack_product = self.env["product.product"].search(
             [
                 ("name", "=", name),
@@ -249,6 +254,8 @@ class BahmniPrepackBatch(models.Model):
                     "dispensing_base_product_id": bulk_product.id,
                     "pack_unit_qty": size,
                     "dispensing_pack_enabled": True,
+                    "uom_id": unit_uom.id,
+                    "uom_po_id": unit_uom.id,
                     "standard_price": bulk_product.standard_price * size,
                     "list_price": bulk_product.list_price * size,
                 }
