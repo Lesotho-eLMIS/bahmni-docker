@@ -17,6 +17,7 @@
     "data": [
         "security/ir.model.access.csv",
         "views/menu_overrides.xml",
+        "views/navbar_shortcut_actions.xml",
         "views/action_overrides.xml",
         "wizard/dispensing_pack_selection_wizard.xml",
         "views/view_order_overrides.xml",

@@ -2,7 +2,7 @@
 <odoo>
     <data>
       <record id="mail.menu_root_discuss" model="ir.ui.menu">
-          <field name="name">Notifications</field>
+          <field name="name">Home</field>
       </record>
 
 

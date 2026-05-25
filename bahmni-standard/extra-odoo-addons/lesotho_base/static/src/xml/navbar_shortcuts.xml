@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<templates xml:space="preserve">
+  <t t-name="lesotho_base.NavBarShortcuts" t-inherit="web.NavBar" t-inherit-mode="extension" owl="1">
+    <xpath expr="//t[@t-call='web.NavBar.AppsMenu']" position="replace"/>
+    <xpath expr="//DropdownItem[@t-if='currentApp']" position="after">
+      <div class="lesotho_navbar_shortcuts" role="menu">
+        <button
+          type="button"
+          class="lesotho_navbar_shortcut"
+          role="menuitem"
+          t-on-click="() => this.openLesothoShortcut('lesotho_sale.action_products_quick')"
+        >
+          Products
+        </button>
+        <Dropdown
+          class="'lesotho_navbar_dropdown'"
+          togglerClass="'lesotho_navbar_shortcut lesotho_navbar_dropdown_toggle'"
+          menuClass="'lesotho_navbar_dropdown_menu'"
+          title="'Prepacking'"
+        >
+          <t t-set-slot="toggler">
+            <span>Prepacking</span>
+          </t>
+          <DropdownItem
+            class="'lesotho_navbar_dropdown_item'"
+            onSelected="() => this.openLesothoShortcut('lesotho_base.action_create_prepacks_placeholder')"
+          >
+            Create Prepacks
+          </DropdownItem>
+          <DropdownItem
+            class="'lesotho_navbar_dropdown_item'"
+            onSelected="() => this.openLesothoShortcut('lesotho_base.action_authorise_prepacks_placeholder')"
+          >
+            Authorise Prepacks
+          </DropdownItem>
+          <DropdownItem
+            class="'lesotho_navbar_dropdown_item'"
+            onSelected="() => this.openLesothoShortcut('lesotho_base.action_view_prepacks_placeholder')"
+          >
+            View Prepacks
+          </DropdownItem>
+        </Dropdown>
+        <button
+          type="button"
+          class="lesotho_navbar_shortcut"
+          role="menuitem"
+          t-on-click="() => this.openLesothoShortcut('account.res_partner_action_customer')"
+        >
+          Patients
+        </button>
+        <Dropdown
+          class="'lesotho_navbar_dropdown'"
+          togglerClass="'lesotho_navbar_shortcut lesotho_navbar_dropdown_toggle'"
+          menuClass="'lesotho_navbar_dropdown_menu'"
+          title="'Prescriptions'"
+        >
+          <t t-set-slot="toggler">
+            <span>Prescriptions</span>
+          </t>
+          <DropdownItem
+            class="'lesotho_navbar_dropdown_item'"
+            onSelected="() => this.openLesothoShortcut('sale.action_quotations_with_onboarding')"
+          >
+            New Prescriptions
+          </DropdownItem>
+          <DropdownItem
+            class="'lesotho_navbar_dropdown_item'"
+            onSelected="() => this.openLesothoShortcut('sale.action_orders')"
+          >
+            Served Prescriptions
+          </DropdownItem>
+        </Dropdown>
+      </div>
+    </xpath>
+    <xpath expr="//div[hasclass('o_menu_systray')]" position="before">
+      <t t-call="web.NavBar.AppsMenu">
+        <t t-set="apps" t-value="menuService.getApps()" />
+      </t>
+    </xpath>
+  </t>
+</templates>

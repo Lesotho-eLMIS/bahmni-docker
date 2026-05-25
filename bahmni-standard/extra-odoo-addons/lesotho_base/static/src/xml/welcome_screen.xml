@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<templates xml:space="preserve">
+  <t t-name="lesotho_base.ThreadViewWelcomeScreen" t-inherit="mail.ThreadView" t-inherit-mode="extension" owl="1">
+    <xpath expr="//div[hasclass('o_ThreadView_bottomPart')]" position="attributes">
+      <attribute name="t-att-class">
+        {
+          'border-start border-end': threadView.threadViewer.chatWindow,
+          'lesotho_inbox_bottom_part': threadView.thread === messaging.inbox.thread,
+        }
+      </attribute>
+    </xpath>
+    <xpath expr="//div[hasclass('o_ThreadView_bottomPart')]" position="after">
+      <div
+        t-if="threadView.thread === messaging.inbox.thread"
+        class="lesotho_welcome_screen"
+      >
+        <img
+          src="/lesotho_base/static/src/img/WelcomeScreen2.png"
+          alt="Welcome"
+          class="lesotho_welcome_screen_image"
+        />
+      </div>
+    </xpath>
+  </t>
+</templates>

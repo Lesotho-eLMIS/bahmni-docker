@@ -14,6 +14,7 @@
     ],
     "data": [
         "views/menu_overrides.xml",
+        "views/bot_overrides.xml",
     ],
     "installable": True,
     "application": False,

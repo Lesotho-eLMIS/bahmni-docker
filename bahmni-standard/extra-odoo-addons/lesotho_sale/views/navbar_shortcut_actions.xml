@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<odoo>
+  <data>
+    <!-- Reusable action for the custom blue-navbar Products shortcut. -->
+    <record id="action_products_quick" model="ir.actions.act_window">
+      <field name="name">Products</field>
+      <field name="res_model">product.product</field>
+      <field name="view_mode">tree,form</field>
+      <field name="target">current</field>
+    </record>
+  </data>
+</odoo>
