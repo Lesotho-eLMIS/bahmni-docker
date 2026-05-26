@@ -1,0 +1,299 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+    <t t-name="lesotho_prepack_batch.PrepackDashboard" owl="1">
+        <div class="o_prepack_dashboard">
+            <div class="container">
+                <!-- ACCESS DENIED -->
+                <div t-if="!state.permissions.can_create and !state.permissions.can_authorize" class="access-denied-view">
+                    <div class="text-center" style="margin-top: 100px;">
+                        <i class="fa fa-lock fa-5x text-muted mb-4"></i>
+                        <h1 class="text-danger">Access Denied</h1>
+                        <p class="lead">You do not have the required permissions to access the Prepacking Dashboard.</p>
+                        <p class="text-muted">Please contact your administrator if you believe this is an error.</p>
+                    </div>
+                </div>
+
+                <t t-else="">
+                    <div class="workflow-step-indicator">
+                        <div id="step1" t-if="state.permissions.can_create" t-attf-class="step {{ state.step === 1 ? 'active' : '' }}" t-on-click="() => this.goToStep(1)">BUILD PREPACK BATCH</div>
+                        <div id="step2" t-if="state.permissions.can_create" t-attf-class="step {{ state.step === 2 ? 'active' : '' }}" t-on-click="() => state.batchItems.length > 0 ? this.goToStep(2) : null">MULTI-TARGET CALCULATION</div>
+                        <div id="step3" t-if="state.permissions.can_authorize" t-attf-class="step {{ state.step === 3 ? 'active' : '' }}" t-on-click="() => this.goToStep(3)">AUTHORIZATION</div>
+                    </div>
+
+                    <!-- STEP 1: QUALITY CHECK -->
+                    <div t-if="state.step === 1" id="view-quality-check">
+                        <div class="d-flex justify-content-between align-items-center mb-4 border-bottom pb-2">
+                            <h2 class="m-0">Build Prepacking Batch</h2>
+                            <span class="role-badge"><i class="fa fa-user me-2"></i><t t-esc="state.currentUser"/></span>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-5">
+                                <div class="card shadow-sm mb-4">
+                                    <div class="card-body">
+                                        <div class="form-group mb-4">
+                                            <label class="form-label fw-bold">Select Product from Store</label>
+                                            <select class="form-select form-select-lg" t-on-change="(ev) => this.onProductSelect(ev)">
+                                                <option value="" disabled="disabled" t-att-selected="!state.selectedProductKey">-- Search / Select Product --</option>
+                                                <t t-foreach="state.inventory" t-as="item" t-key="item.key">
+                                                    <option t-att-value="item.key"><t t-esc="item.name"/> (<t t-esc="item.batch"/>)</option>
+                                                </t>
+                                            </select>
+                                        </div>
+
+                                        <div t-if="state.selectedProduct" class="product-meta p-3 rounded mb-4 animate__animated animate__fadeIn">
+                                            <div class="row">
+                                                <div class="col-6">
+                                                    <small class="text-muted text-uppercase d-block">Batch / Expiry</small>
+                                                    <strong><t t-esc="state.selectedProduct.batch"/> / <t t-esc="state.selectedProduct.exp"/></strong>
+                                                </div>
+                                                <div class="col-6">
+                                                    <small class="text-muted text-uppercase d-block">Available SOH</small>
+                                                    <strong class="text-primary"><t t-esc="state.selectedProduct.soh"/> <t t-esc="state.selectedProduct.uom"/></strong>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div t-attf-class="checklist p-3 border rounded mb-4 {{ !state.selectedProduct ? 'disabled text-muted' : 'bg-light' }}">
+                                            <h5 class="mb-3 text-dark fw-bold"><i class="fa fa-clipboard-check me-2 text-primary"></i>Quality Checklist</h5>
+                                            <div class="form-check mb-2">
+                                                <input class="form-check-input" type="checkbox" id="chk1" t-model="state.checks.chk1" t-on-change="() => this.validateChecklist()"/>
+                                                <label class="form-check-label" for="chk1">Product packaging is intact and undamaged.</label>
+                                            </div>
+                                            <div class="form-check mb-2">
+                                                <input class="form-check-input" type="checkbox" id="chk2" t-model="state.checks.chk2" t-on-change="() => this.validateChecklist()"/>
+                                                <label class="form-check-label" for="chk2">Expiry date is valid (> 6 months).</label>
+                                            </div>
+                                            <div t-if="state.selectedProduct and state.selectedProduct.reqLiquidCheck" class="form-check mb-2 text-warning">
+                                                <input class="form-check-input" type="checkbox" id="chk3" t-model="state.checks.chk3" t-on-change="() => this.validateChecklist()"/>
+                                                <label class="form-check-label fw-bold" for="chk3">No leaks, separation, or discoloration observed.</label>
+                                            </div>
+                                        </div>
+
+                                        <button class="btn btn-primary btn-lg w-100 py-3" t-att-disabled="!state.canAddToBatch" t-on-click="() => this.addToBatch()">
+                                            <i class="fa fa-plus-circle me-2"></i>Add to Batch List
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="col-md-7">
+                                <div class="card shadow-sm h-100">
+                                    <div class="card-header bg-white py-3">
+                                        <h5 class="m-0 fw-bold">Batch List <small class="text-muted fw-normal">(Ready for Calculation)</small></h5>
+                                    </div>
+                                    <div class="card-body p-0">
+                                        <table class="table table-hover align-middle mb-0">
+                                            <thead class="table-light">
+                                                <tr>
+                                                    <th class="ps-3">Product Name</th>
+                                                    <th>Batch / Expiry</th>
+                                                    <th>Bulk SOH</th>
+                                                    <th>Status</th>
+                                                    <th class="text-center">Action</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                <tr t-if="state.batchItems.length === 0">
+                                                    <td colspan="5" class="text-center py-5 text-muted">
+                                                        <i class="fa fa-folder-open fa-3x d-block mb-3 opacity-25"></i>
+                                                        No products added to the batch yet.
+                                                    </td>
+                                                </tr>
+                                                <t t-foreach="state.batchItems" t-as="item" t-key="item.key">
+                                                    <tr class="animate__animated animate__fadeIn">
+                                                        <td class="ps-3"><strong><t t-esc="item.name"/></strong></td>
+                                                        <td><span class="badge bg-light text-dark border"><t t-esc="item.batch"/></span> / <t t-esc="item.exp"/></td>
+                                                        <td><t t-esc="item.soh"/> <t t-esc="item.uom"/></td>
+                                                        <td><span class="badge bg-success-light text-success fw-bold p-2"><i class="fa fa-check-circle me-1"></i>VERIFIED</span></td>
+                                                        <td class="text-center">
+                                                            <button class="btn btn-outline-danger btn-sm rounded-pill" t-on-click="() => this.removeFromBatch(item.key)">
+                                                                <i class="fa fa-trash"></i>
+                                                            </button>
+                                                        </td>
+                                                    </tr>
+                                                </t>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                    <div class="card-footer bg-white text-end py-3">
+                                        <button class="btn btn-success btn-lg px-5 shadow-sm" t-att-disabled="state.batchItems.length === 0" t-on-click="() => this.goToStep(2)">
+                                            Proceed to Calculations<i class="fa fa-arrow-right ms-2"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- STEP 2: CALCULATIONS -->
+                    <div t-if="state.step === 2" id="view-create-prepack">
+                        <div class="d-flex justify-content-between align-items-center mb-4 border-bottom pb-2">
+                            <h2 class="m-0">Calculate Target Sizes</h2>
+                            <span class="role-badge"><i class="fa fa-user me-2"></i><t t-esc="state.currentUser"/></span>
+                        </div>
+                        <p class="lead text-muted mb-4">Define one or more prepack target sizes for each bulk commodity.</p>
+
+                        <div id="calcCardsContainer">
+                            <t t-foreach="state.batchItems" t-as="item" t-key="item.key">
+                                <div class="card shadow-sm mb-4 border-0 border-start border-4 border-primary">
+                                    <div class="card-header bg-white d-flex justify-content-between align-items-center py-3">
+                                        <div>
+                                            <h4 class="m-0 text-primary fw-bold"><t t-esc="item.name"/></h4>
+                                            <span class="text-muted">Batch: <t t-esc="item.batch"/> | Available: <strong><t t-esc="item.soh"/> <t t-esc="item.uom"/></strong></span>
+                                        </div>
+                                        <button class="btn btn-outline-primary fw-bold" t-on-click="() => this.addTarget(item)">
+                                            <i class="fa fa-plus me-1"></i>Add Target Size
+                                        </button>
+                                    </div>
+                                    <div class="card-body p-0">
+                                        <table class="table table-borderless mb-0">
+                                            <thead class="bg-light text-uppercase small fw-bold text-muted">
+                                                <tr>
+                                                    <th class="ps-4 py-3" width="30%">Target Size</th>
+                                                    <th class="py-3" width="30%">Number of Packs</th>
+                                                    <th class="py-3" width="30%">Bulk Units Required</th>
+                                                    <th class="pe-4 py-3 text-end" width="10%"></th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                <t t-foreach="item.targets" t-as="target" t-key="target_index">
+                                                    <tr class="align-middle border-bottom border-light">
+                                                        <td class="ps-4 py-3">
+                                                            <div class="input-group input-group-lg shadow-sm">
+                                                                <input type="number" class="form-control fw-bold border-end-0" min="0" t-model="target.size"/>
+                                                                <span class="input-group-text bg-white text-muted border-start-0 small"><t t-esc="item.uom"/></span>
+                                                            </div>
+                                                        </td>
+                                                        <td class="py-3">
+                                                            <div class="input-group input-group-lg shadow-sm">
+                                                                <input type="number" class="form-control fw-bold border-end-0" min="0" t-model="target.qty"/>
+                                                                <span class="input-group-text bg-white text-muted border-start-0 small">packs</span>
+                                                            </div>
+                                                        </td>
+                                                        <td class="py-3 fs-5">
+                                                            <span class="text-dark fw-bold"><t t-esc="target.size * target.qty"/></span> <small class="text-muted"><t t-esc="item.uom"/></small>
+                                                        </td>
+                                                        <td class="pe-4 py-3 text-end">
+                                                            <button t-if="item.targets.length > 1" class="btn btn-link text-danger p-0" t-on-click="() => this.removeTarget(item, target_index)">
+                                                                <i class="fa fa-times-circle fa-2x"></i>
+                                                            </button>
+                                                        </td>
+                                                    </tr>
+                                                </t>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                    <div class="card-footer bg-light border-0 py-3 px-4 d-flex justify-content-end align-items-center">
+                                        <div class="me-4 pe-4 border-end border-2 border-white text-end">
+                                            <small class="text-muted text-uppercase d-block">Total Used</small>
+                                            <h5 class="m-0 fw-bold"><t t-esc="this.getTotalUsed(item)"/> <t t-esc="item.uom"/></h5>
+                                        </div>
+                                        <div class="text-end">
+                                            <small class="text-muted text-uppercase d-block">Remaining Balance</small>
+                                            <h5 t-attf-class="m-0 fw-bold {{ item.soh - this.getTotalUsed(item) &lt; 0 ? 'text-danger animate__animated animate__shakeX' : 'text-success' }}">
+                                                <t t-esc="item.soh - this.getTotalUsed(item)"/> <t t-esc="item.uom"/>
+                                            </h5>
+                                        </div>
+                                    </div>
+                                </div>
+                            </t>
+                        </div>
+
+                        <div class="mt-5 pt-4 border-top text-end d-flex justify-content-between align-items-center mb-5">
+                            <button class="btn btn-outline-secondary btn-lg px-5 shadow-sm" t-on-click="() => this.goToStep(1)">
+                                <i class="fa fa-arrow-left me-2"></i>Back to Batch List
+                            </button>
+                            <button class="btn btn-success btn-lg px-5 shadow-sm py-3 fw-bold" t-on-click="() => this.submitBatch()">
+                                Submit Batch for Authorization<i class="fa fa-check-circle ms-2"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- STEP 3: AUTHORIZATION -->
+                    <div t-if="state.step === 3" id="view-authorize">
+                        <div class="d-flex justify-content-between align-items-center mb-4 border-bottom pb-2">
+                            <h2 class="m-0">Authorize Prepack Document</h2>
+                            <span class="role-badge" style="background: #8e44ad;"><i class="fa fa-user-shield me-2"></i><t t-esc="state.currentUser"/></span>
+                        </div>
+
+                        <div class="card shadow-sm mb-5 bg-light border-0">
+                            <div class="card-body p-4 d-flex justify-content-between align-items-center">
+                                <div class="d-flex align-items-center">
+                                    <div class="bg-warning-light p-3 rounded-circle me-4">
+                                        <i class="fa fa-file-invoice fa-3x text-warning"></i>
+                                    </div>
+                                    <div>
+                                        <h5 class="text-muted text-uppercase small mb-1">Document Reference</h5>
+                                        <h3 class="m-0 fw-bold text-monospace bg-white px-3 py-1 border rounded shadow-sm d-inline-block"><t t-esc="state.batchName || 'NEW BATCH'"/></h3>
+                                        <p class="mt-2 mb-0 text-muted">Submitted By: <strong><t t-esc="state.currentUser"/></strong></p>
+                                    </div>
+                                </div>
+                                <div class="text-end">
+                                    <t t-if="!state.isAuthorized">
+                                        <button class="btn btn-success btn-lg px-5 shadow py-3 fw-bold animate__animated animate__pulse animate__infinite" t-att-disabled="!state.batchId" t-on-click="() => this.authorizeBatch()">
+                                            <i class="fa fa-stamp me-2"></i>AUTHORIZE DOCUMENT
+                                        </button>
+                                    </t>
+                                    <t t-else="">
+                                        <button class="btn btn-primary btn-lg px-5 shadow-sm py-3 fw-bold me-2" t-on-click="() => this.printLabels()">
+                                            <i class="fa fa-barcode me-2"></i>PRINT ALL LABELS
+                                        </button>
+                                        <button class="btn btn-outline-success btn-lg px-4 border-2 fw-bold disabled">
+                                            <i class="fa fa-check-double me-2"></i>COMPLETED
+                                        </button>
+                                    </t>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="card shadow-sm">
+                            <div class="card-body p-0">
+                                <table class="table table-hover align-middle mb-0">
+                                    <thead class="table-light text-uppercase small fw-bold">
+                                        <tr>
+                                            <th class="ps-4 py-3">Product &amp; Batch</th>
+                                            <th class="py-3 text-center">Pack Size</th>
+                                            <th class="py-3 text-center">Quantity</th>
+                                            <th class="py-3 text-center">Bulk Usage</th>
+                                            <th class="py-3">Prepacked By</th>
+                                            <th class="pe-4 py-3 text-center">Status</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <t t-foreach="state.batchItems" t-as="item" t-key="item.key">
+                                            <t t-foreach="item.targets" t-as="target" t-key="target_index">
+                                                <tr t-if="target.size > 0 and target.qty > 0" class="animate__animated animate__fadeIn">
+                                                    <td class="ps-4 py-3">
+                                                        <div class="fw-bold text-primary fs-5"><t t-esc="item.name"/></div>
+                                                        <small class="text-muted fw-bold">LOT: <t t-esc="item.batch"/></small>
+                                                    </td>
+                                                    <td class="text-center py-3">
+                                                        <span class="fs-5 fw-bold"><t t-esc="target.size"/></span> <small class="text-muted"><t t-esc="item.uom"/></small>
+                                                    </td>
+                                                    <td class="text-center py-3">
+                                                        <span class="badge rounded-pill bg-info-light text-info fs-6 px-3 py-2 border border-info-light"><t t-esc="target.qty"/> packs</span>
+                                                    </td>
+                                                    <td class="text-center py-3">
+                                                        <span class="fw-bold"><t t-esc="target.size * target.qty"/></span> <small class="text-muted"><t t-esc="item.uom"/></small>
+                                                    </td>
+                                                    <td class="py-3 text-muted">
+                                                        <i class="fa fa-user-circle me-1"></i><t t-esc="state.currentUser"/>
+                                                    </td>
+                                                    <td class="pe-4 py-3 text-center">
+                                                        <span t-if="!state.isAuthorized" class="badge bg-warning text-dark px-3 py-2"><i class="fa fa-clock me-1"></i>PENDING</span>
+                                                        <span t-if="state.isAuthorized" class="badge bg-success text-white px-3 py-2 animate__animated animate__bounceIn"><i class="fa fa-check me-1"></i>AUTHORIZED</span>
+                                                    </td>
+                                                </tr>
+                                            </t>
+                                        </t>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </t>
+            </div>
+        </div>
+    </t>
+</templates>

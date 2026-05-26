@@ -1,5 +1,6 @@
-from odoo import api, fields, models, _
+from odoo import _, api, fields, models
 from odoo.exceptions import ValidationError
+
 
 class ProductTemplate(models.Model):
     _inherit = "product.template"
@@ -11,16 +12,13 @@ class ProductTemplate(models.Model):
         copy=False,
     )
 
-    is_prepack = fields.Boolean(
-        string="Is Prepack?",
-        default=False
-    )
+    is_prepack = fields.Boolean(string="Is Prepack?", default=False)
 
     bulk_product_id = fields.Many2one(
-        'product.product',
+        "product.product",
         string="Bulk Product",
         domain="[('type', 'in', ['product', 'consu'])]",
-        help="The bulk product used to create this prepack"
+        help="The bulk product used to create this prepack",
     )
 
     is_dispensing_pack = fields.Boolean(
@@ -78,11 +76,7 @@ class ProductTemplate(models.Model):
                 base_product = unique_products[0]
             if base_product and not product.dispensing_base_product_id:
                 product.dispensing_base_product_id = base_product
-            if (
-                base_product
-                and bom.product_qty
-                and not product.pack_unit_qty
-            ):
+            if base_product and bom.product_qty and not product.pack_unit_qty:
                 matching_lines = bom.bom_line_ids.filtered(
                     lambda line: line.product_id == base_product
                 )
@@ -111,6 +105,11 @@ class ProductTemplate(models.Model):
 class ProductProduct(models.Model):
     _inherit = "product.product"
 
+    is_prepack = fields.Boolean(
+        related="product_tmpl_id.is_prepack",
+        store=True,
+        readonly=False,
+    )
     is_dispensing_pack = fields.Boolean(
         related="product_tmpl_id.is_dispensing_pack",
         store=True,
