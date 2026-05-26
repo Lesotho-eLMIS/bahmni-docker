@@ -9,11 +9,15 @@ export class PrepackDashboard extends Component {
   setup() {
     this.orm = useService("orm");
     this.notification = useService("notification");
+    this.actionService = useService("action");
     this.state = useState({
       step: 1,
+      mode: "all", // "all", "create", "authorize"
       currentUser: session.name,
       permissions: { can_create: false, can_authorize: false },
       inventory: [],
+      pendingBatches: [],
+      historyBatches: [],
       selectedProductKey: null,
       selectedProduct: null,
       checks: { chk1: false, chk2: false, chk3: false },
@@ -25,11 +29,28 @@ export class PrepackDashboard extends Component {
     });
     onWillStart(async () => {
       this.state.permissions = await this.orm.call("bahmni.prepack.batch", "check_prepack_permissions", []);
-      if (this.state.permissions.can_create) {
-        this.state.step = 1;
-        await this.loadInventory();
-      } else if (this.state.permissions.can_authorize) {
+
+      const context = this.props.action.context || {};
+      this.state.mode = context.mode || "all";
+
+      if (this.state.mode === "authorize") {
         this.state.step = 3;
+        this.state.pendingBatches = await this.orm.call("bahmni.prepack.batch", "fetch_pending_batches", []);
+      } else if (this.state.mode === "history") {
+        this.state.step = 4; // History step
+        this.state.historyBatches = await this.orm.call("bahmni.prepack.batch", "fetch_batch_history", []);
+      } else {
+        if (this.state.permissions.can_create) {
+          this.state.step = 1;
+          await this.loadInventory();
+        } else if (this.state.permissions.can_authorize) {
+          this.state.step = 3;
+          this.state.pendingBatches = await this.orm.call("bahmni.prepack.batch", "fetch_pending_batches", []);
+        }
+      }
+
+      if (context.active_id) {
+        await this.selectBatch(context.active_id);
       }
     });
   }
@@ -37,6 +58,16 @@ export class PrepackDashboard extends Component {
   async loadInventory() {
     const inventory = await this.orm.call("bahmni.prepack.batch", "fetch_bulk_inventory", []);
     this.state.inventory = inventory;
+  }
+
+  async selectBatch(batchId) {
+    const details = await this.orm.call("bahmni.prepack.batch", "fetch_batch_details", [batchId]);
+    if (details) {
+      this.state.batchId = details.id;
+      this.state.batchName = details.name;
+      this.state.batchItems = details.items;
+      this.state.isAuthorized = details.isAuthorized;
+    }
   }
 
   onProductSelect(ev) {
@@ -126,15 +157,30 @@ export class PrepackDashboard extends Component {
 
     const result = await this.orm.call("bahmni.prepack.batch", "submit_prepack_batch", [payload]);
 
-    this.state.batchId = result.id;
-    this.state.batchName = result.name;
-    this.goToStep(3);
+    this.notification.add(`Batch ${result.name} submitted for authorization.`, { type: "success" });
+
+    if (this.state.mode === "create") {
+      // Switch to Authorize mode
+      await this.actionService.doAction("lesotho_base.action_authorise_prepacks_placeholder", {
+        clearBreadcrumbs: true,
+        additional_context: { active_id: result.id },
+      });
+    } else {
+      this.state.batchId = result.id;
+      this.state.batchName = result.name;
+      this.goToStep(3);
+    }
   }
 
   async authorizeBatch() {
     await this.orm.call("bahmni.prepack.batch", "action_authorize_batch", [[this.state.batchId]]);
     this.state.isAuthorized = true;
     this.notification.add("Document Authorized successfully!", { type: "success" });
+
+    // Refresh pending batches if in authorize mode
+    if (this.state.mode === "authorize") {
+      this.state.pendingBatches = await this.orm.call("bahmni.prepack.batch", "fetch_pending_batches", []);
+    }
   }
 
   printLabels() {

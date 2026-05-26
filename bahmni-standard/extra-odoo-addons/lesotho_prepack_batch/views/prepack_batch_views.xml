@@ -102,19 +102,32 @@
         </field>
     </record>
 
+    <record id="lesotho_base.action_create_prepacks_placeholder" model="ir.actions.client">
+        <field name="name">Create Prepacks</field>
+        <field name="tag">prepack_dashboard_client_action</field>
+        <field name="target">current</field>
+        <field name="context">{'mode': 'create'}</field>
+    </record>
+
+    <record id="lesotho_base.action_authorise_prepacks_placeholder" model="ir.actions.client">
+        <field name="name">Authorise Prepacks</field>
+        <field name="tag">prepack_dashboard_client_action</field>
+        <field name="target">current</field>
+        <field name="context">{'mode': 'authorize'}</field>
+    </record>
+
+    <record id="lesotho_base.action_view_prepacks_placeholder" model="ir.actions.client">
+        <field name="name">View Prepacks</field>
+        <field name="tag">prepack_dashboard_client_action</field>
+        <field name="target">current</field>
+        <field name="context">{'mode': 'history'}</field>
+    </record>
+
     <record id="action_prepack_dashboard_client_v3" model="ir.actions.client">
         <field name="name">Prepack Dashboard</field>
         <field name="tag">prepack_dashboard_client_action</field>
         <field name="target">current</field>
     </record>
-
-    <menuitem
-        id="menu_bahmni_prepack_dashboard"
-        name="Prepacking Dashboard"
-        parent="mrp.menu_mrp_root"
-        action="action_prepack_dashboard_client_v3"
-        sequence="15"
-    />
 
     <menuitem
         id="menu_bahmni_prepack_batch_history"

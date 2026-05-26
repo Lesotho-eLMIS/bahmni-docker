@@ -305,6 +305,96 @@ class BahmniPrepackBatch(models.Model):
         return True
 
     @api.model
+    def fetch_pending_batches(self):
+        """Fetch all batches in pending_auth state for the authorization UI."""
+        batches = self.search([("state", "=", "pending_auth")])
+        result = []
+        for batch in batches:
+            result.append(
+                {
+                    "id": batch.id,
+                    "name": batch.name,
+                    "date": batch.planned_date.strftime("%Y-%m-%d %H:%M"),
+                    "responsible": batch.responsible_id.name,
+                    "line_count": batch.line_count,
+                }
+            )
+        return result
+
+    @api.model
+    def fetch_batch_history(self):
+        """Fetch all batches for the history UI."""
+        batches = self.search([], order="planned_date desc, id desc", limit=100)
+        result = []
+        for batch in batches:
+            result.append(
+                {
+                    "id": batch.id,
+                    "name": batch.name,
+                    "date": batch.planned_date.strftime("%Y-%m-%d %H:%M"),
+                    "responsible": batch.responsible_id.name,
+                    "line_count": batch.line_count,
+                    "state": dict(self._fields["state"].selection).get(batch.state),
+                    "state_raw": batch.state,
+                }
+            )
+        return result
+
+    @api.model
+    def fetch_batch_details(self, batch_id):
+        """Fetch details for a specific batch to load into the dashboard."""
+        batch = self.browse(batch_id)
+        if not batch.exists():
+            return None
+
+        # Reconstruct the batchItems structure used in the frontend JS
+        grouped = {}
+        for line in batch.line_ids:
+            bulk_product = line.bulk_lot_id.product_id
+            lot = line.bulk_lot_id
+            key = f"{bulk_product.id}_{lot.id if lot else 0}"
+
+            if key not in grouped:
+                # Get current SOH for context
+                quant = self.env["stock.quant"].search(
+                    [
+                        ("product_id", "=", bulk_product.id),
+                        ("lot_id", "=", lot.id),
+                        ("location_id", "child_of", batch.location_src_id.id),
+                    ],
+                    limit=1,
+                )
+
+                grouped[key] = {
+                    "key": key,
+                    "id": bulk_product.id,
+                    "name": bulk_product.display_name,
+                    "batch": lot.name if lot else _("No Lot"),
+                    "lot_id": lot.id,
+                    "exp": lot.expiration_date.strftime("%Y-%m")
+                    if lot and lot.expiration_date
+                    else "N/A",
+                    "soh": quant.quantity if quant else 0,
+                    "uom": bulk_product.uom_id.name,
+                    "targets": [],
+                }
+
+            grouped[key]["targets"].append(
+                {
+                    "size": line.product_id.pack_unit_qty,
+                    "qty": line.package_qty,
+                }
+            )
+
+        return {
+            "id": batch.id,
+            "name": batch.name,
+            "items": list(grouped.values()),
+            "state": batch.state,
+            "isAuthorized": batch.state == "done",
+        }
+
+    @api.model
     def check_prepack_permissions(self):
         """Check if the current user has permissions to create or authorize prepacks."""
         return {
