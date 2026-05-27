@@ -26,6 +26,7 @@ export class PrepackDashboard extends Component {
       batchId: null,
       batchName: "",
       isAuthorized: false,
+      includePrepacks: false,
     });
     onWillStart(async () => {
       this.state.permissions = await this.orm.call("bahmni.prepack.batch", "check_prepack_permissions", []);
@@ -56,8 +57,14 @@ export class PrepackDashboard extends Component {
   }
 
   async loadInventory() {
-    const inventory = await this.orm.call("bahmni.prepack.batch", "fetch_bulk_inventory", []);
+    const inventory = await this.orm.call("bahmni.prepack.batch", "fetch_bulk_inventory", [], {
+      include_prepacks: this.state.includePrepacks,
+    });
     this.state.inventory = inventory;
+  }
+
+  async onIncludePrepacksToggle() {
+    await this.loadInventory();
   }
 
   async selectBatch(batchId) {

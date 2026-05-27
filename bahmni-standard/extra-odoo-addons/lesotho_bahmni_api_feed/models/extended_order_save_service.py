@@ -6,7 +6,7 @@ from odoo import api, models
 _logger = logging.getLogger(__name__)
 
 
-class ExtendedOrderSaveService(models.Model):
+class ExtendedOrderSaveService(models.AbstractModel):
     """
     Extends OrderSaveService to add prescription data to order lines
     """

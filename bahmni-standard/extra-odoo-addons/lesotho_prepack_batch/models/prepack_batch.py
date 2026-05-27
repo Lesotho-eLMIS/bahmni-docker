@@ -111,15 +111,14 @@ class BahmniPrepackBatch(models.Model):
         return False
 
     @api.model
-    def fetch_bulk_inventory(self):
+    def fetch_bulk_inventory(self, include_prepacks=False):
         """Fetch bulk products with stock on hand and lot details for the prepacking UI."""
         domain = [
             ("quantity", ">", 0),
             ("product_id.detailed_type", "=", "product"),
-            "|",
-            ("product_id.is_prepack", "=", False),
-            ("product_id.is_prepack", "=", False),
         ]
+        if not include_prepacks:
+            domain.append(("product_id.is_prepack", "=", False))
 
         location_src_id = self._default_location_src_id()
         if location_src_id:
