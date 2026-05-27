@@ -78,7 +78,7 @@
                                         </div>
 
                                         <button class="btn btn-primary btn-lg w-100 py-3" t-att-disabled="!state.canAddToBatch" t-on-click="() => this.addToBatch()">
-                                            <i class="fa fa-plus-circle me-2"></i>Add to Batch List
+                                            <i class="fa fa-plus-circle me-2"></i>Add to Prepacking List
                                         </button>
                                     </div>
                                 </div>
@@ -139,10 +139,10 @@
                     <!-- STEP 2: CALCULATIONS -->
                     <div t-if="state.step === 2" id="view-create-prepack">
                         <div class="d-flex justify-content-between align-items-center mb-4 border-bottom pb-2">
-                            <h2 class="m-0">Calculate Target Sizes</h2>
+                            <h2 class="m-0">Calculate Prepack Sizes</h2>
 
                         </div>
-                        <p class="lead text-muted mb-4">Define one or more prepack target sizes for each bulk commodity.</p>
+                        <p class="lead text-muted mb-4">Define one or more prepack sizes for each bulk commodity.</p>
 
                         <div id="calcCardsContainer">
                             <t t-foreach="state.batchItems" t-as="item" t-key="item.key">
@@ -153,15 +153,15 @@
                                             <span class="text-muted">Batch: <t t-esc="item.batch"/> | Available: <strong><t t-esc="item.soh"/> <t t-esc="item.uom"/></strong></span>
                                         </div>
                                         <button class="btn btn-outline-primary fw-bold" t-on-click="() => this.addTarget(item)">
-                                            <i class="fa fa-plus me-1"></i>Add Target Size
+                                            <i class="fa fa-plus me-1"></i>Add Prepack Size
                                         </button>
                                     </div>
                                     <div class="card-body p-0">
                                         <table class="table table-borderless mb-0">
                                             <thead class="bg-light text-uppercase small fw-bold text-muted">
                                                 <tr>
-                                                    <th class="ps-4 py-3" width="30%">Target Size</th>
-                                                    <th class="py-3" width="30%">Number of Packs</th>
+                                                    <th class="ps-4 py-3" width="30%">Prepack Size</th>
+                                                    <th class="py-3" width="30%">Number of Prepacks</th>
                                                     <th class="py-3" width="30%">Bulk Units Required</th>
                                                     <th class="pe-4 py-3 text-end" width="10%"></th>
                                                 </tr>
@@ -212,7 +212,7 @@
 
                         <div class="mt-5 pt-4 border-top text-end d-flex justify-content-between align-items-center mb-5">
                             <button class="btn btn-outline-secondary btn-lg px-5 shadow-sm" t-on-click="() => this.goToStep(1)">
-                                <i class="fa fa-arrow-left me-2"></i>Back to Batch List
+                                <i class="fa fa-arrow-left me-2"></i>Back to Prepacking List
                             </button>
                             <button class="btn btn-success btn-lg px-5 shadow-sm py-3 fw-bold" t-on-click="() => this.submitBatch()">
                                 Submit Batch for Authorization<i class="fa fa-check-circle ms-2"></i>
@@ -290,7 +290,7 @@
                                         </t>
                                         <t t-if="!state.isAuthorized">
                                             <button class="btn btn-success btn-lg px-5 shadow py-3 fw-bold animate__animated animate__pulse animate__infinite" t-att-disabled="!state.batchId" t-on-click="() => this.authorizeBatch()">
-                                                <i class="fa fa-stamp me-2"></i>AUTHORIZE                                            </button>
+                                                <i class="fa fa-stamp me-2"></i>AUTHORIZE ALL                                            </button>
                                         </t>
                                         <t t-else="">
                                             <button class="btn btn-primary btn-lg px-5 shadow-sm py-3 fw-bold me-2" t-on-click="() => this.printLabels()">

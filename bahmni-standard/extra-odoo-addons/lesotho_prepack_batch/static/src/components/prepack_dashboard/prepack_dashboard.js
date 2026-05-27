@@ -182,7 +182,7 @@ export class PrepackDashboard extends Component {
 
     if (!isValid) return;
     if (!hasTargets) {
-      this.notification.add("Please define at least one valid target size and quantity.", { type: "danger" });
+      this.notification.add("Please define at least one valid prepack size and quantity.", { type: "danger" });
       return;
     }
 

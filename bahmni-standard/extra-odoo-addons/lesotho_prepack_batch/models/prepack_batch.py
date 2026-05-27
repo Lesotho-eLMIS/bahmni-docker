@@ -536,7 +536,7 @@ class BahmniPrepackBatchLine(models.Model):
         store=True,
     )
     package_qty = fields.Integer(
-        string="Number of Packs",
+        string="Number of Prepacks",
         required=True,
         default=1,
     )
@@ -695,7 +695,9 @@ class BahmniPrepackBatchLine(models.Model):
     def _check_package_qty(self):
         for line in self:
             if line.package_qty <= 0:
-                raise ValidationError(_("Number of packs must be greater than zero."))
+                raise ValidationError(
+                    _("Number of prepacks must be greater than zero.")
+                )
 
     @api.constrains(
         "product_id", "bom_id", "bulk_lot_id", "batch_id.location_src_id", "package_qty"
