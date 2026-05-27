@@ -398,8 +398,10 @@ class BahmniPrepackBatch(models.Model):
 
             grouped[key]["targets"].append(
                 {
+                    "line_id": line.id,
                     "size": line.product_id.pack_unit_qty,
                     "qty": line.package_qty,
+                    "state": line.state,
                 }
             )
 
@@ -765,6 +767,14 @@ class BahmniPrepackBatchLine(models.Model):
                         "available": line.bulk_qty_available,
                     }
                 )
+
+    def action_authorize_line(self):
+        """Authorize a single prepack line."""
+        self._complete_manufacturing_order()
+        # If all lines are done, mark the batch as done
+        if all(line.state == "done" for line in self.batch_id.line_ids):
+            self.batch_id.state = "done"
+        return True
 
     def _get_finished_lot_name(self):
         self.ensure_one()

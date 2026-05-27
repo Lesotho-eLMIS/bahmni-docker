@@ -206,7 +206,23 @@ export class PrepackDashboard extends Component {
   async authorizeBatch() {
     await this.orm.call("bahmni.prepack.batch", "action_authorize_batch", [[this.state.batchId]]);
     this.state.isAuthorized = true;
-    this.notification.add("Document Authorized successfully!", { type: "success" });
+    this.notification.add("Batch Authorized successfully!", { type: "success" });
+
+    // Refresh batch details to update all lines
+    await this.selectBatch(this.state.batchId);
+
+    // Refresh pending batches if in authorize mode
+    if (this.state.mode === "authorize") {
+      this.state.pendingBatches = await this.orm.call("bahmni.prepack.batch", "fetch_pending_batches", []);
+    }
+  }
+
+  async authorizeLine(lineId) {
+    await this.orm.call("bahmni.prepack.batch.line", "action_authorize_line", [[lineId]]);
+    this.notification.add("Item Authorized successfully!", { type: "success" });
+
+    // Refresh batch details
+    await this.selectBatch(this.state.batchId);
 
     // Refresh pending batches if in authorize mode
     if (this.state.mode === "authorize") {
