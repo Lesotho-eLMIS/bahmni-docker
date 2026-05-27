@@ -1,3 +1,5 @@
+import json
+
 from odoo import _, api, fields, models
 from odoo.exceptions import UserError, ValidationError
 
@@ -67,6 +69,10 @@ class BahmniPrepackBatch(models.Model):
     )
     note = fields.Text()
     line_count = fields.Integer(compute="_compute_counts")
+    draft_data = fields.Text(
+        string="Draft Data",
+        help="JSON representation of the prepacking list for draft persistence.",
+    )
     mrp_production_ids = fields.Many2many(
         "mrp.production",
         compute="_compute_mrp_production_ids",
@@ -167,26 +173,46 @@ class BahmniPrepackBatch(models.Model):
         return inventory
 
     @api.model
+    def fetch_draft_batch(self):
+        """Fetch the current user's draft batch if one exists."""
+        batch = self.search(
+            [("state", "=", "draft"), ("responsible_id", "=", self.env.user.id)],
+            limit=1,
+        )
+        if batch and batch.draft_data:
+            return {
+                "id": batch.id,
+                "name": batch.name,
+                "items": json.loads(batch.draft_data),
+            }
+        return None
+
+    @api.model
+    def save_prepack_batch(self, payload):
+        """Save the current prepack list as a draft batch for the user."""
+        batch = self.search(
+            [("state", "=", "draft"), ("responsible_id", "=", self.env.user.id)],
+            limit=1,
+        )
+
+        if not batch:
+            batch = self.create({"state": "draft"})
+
+        batch.write({"draft_data": json.dumps(payload)})
+        return {"id": batch.id, "name": batch.name}
+
+    @api.model
     def submit_prepack_batch(self, payload):
-        """
-        Payload format:
-        [
-            {
-                "id": product_id,
-                "lot_id": lot_id,
-                "targets": [{"size": 10, "qty": 5}, ...]
-            },
-            ...
-        ]
-        """
+        """Submit the batch for authorization, generating MOs for all lines."""
         if not payload:
             raise UserError(_("No data submitted."))
 
-        batch = self.create(
-            {
-                "state": "pending_auth",
-            }
-        )
+        # Re-save to ensure we have the latest data before converting to lines
+        res = self.save_prepack_batch(payload)
+        batch = self.browse(res["id"])
+
+        # Clear existing lines to rebuild the list for submission
+        batch.line_ids.unlink()
 
         for item in payload:
             bulk_product = self.env["product.product"].browse(item["id"])
@@ -195,21 +221,16 @@ class BahmniPrepackBatch(models.Model):
             for target in item["targets"]:
                 size = float(target.get("size", 0))
                 qty = float(target.get("qty", 0))
-
                 if size <= 0 or qty <= 0:
                     continue
 
-                # 1. Find or create prepack product
                 prepack_product = self._get_or_create_prepack_product(
                     bulk_product, size
                 )
-
-                # 2. Find or create BoM
                 bom = self._get_or_create_prepack_bom(
                     prepack_product, bulk_product, size
                 )
 
-                # 3. Create batch line
                 line = self.env["bahmni.prepack.batch.line"].create(
                     {
                         "batch_id": batch.id,
@@ -219,14 +240,11 @@ class BahmniPrepackBatch(models.Model):
                         "package_qty": qty,
                     }
                 )
-
-                # 4. Generate MO
                 line._generate_manufacturing_order()
 
-        return {
-            "id": batch.id,
-            "name": batch.name,
-        }
+        batch.state = "pending_auth"
+        batch.draft_data = False  # Clear draft data after successful submission
+        return res
 
     def _get_or_create_prepack_product(self, bulk_product, size):
         bulk_uom = bulk_product.uom_id.name

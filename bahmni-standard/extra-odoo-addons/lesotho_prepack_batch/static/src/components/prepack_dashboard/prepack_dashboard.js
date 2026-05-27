@@ -44,6 +44,12 @@ export class PrepackDashboard extends Component {
         if (this.state.permissions.can_create) {
           this.state.step = 1;
           await this.loadInventory();
+
+          // Load draft if exists
+          const draft = await this.orm.call("bahmni.prepack.batch", "fetch_draft_batch", []);
+          if (draft) {
+            this.state.batchItems = draft.items;
+          }
         } else if (this.state.permissions.can_authorize) {
           this.state.step = 3;
           this.state.pendingBatches = await this.orm.call("bahmni.prepack.batch", "fetch_pending_batches", []);
@@ -77,6 +83,12 @@ export class PrepackDashboard extends Component {
     }
   }
 
+  async autoSave() {
+    if (this.state.mode === "create") {
+      await this.orm.call("bahmni.prepack.batch", "save_prepack_batch", [this.state.batchItems]);
+    }
+  }
+
   onProductSelect(ev) {
     const selectedKey = ev.target.value;
     this.state.selectedProductKey = selectedKey;
@@ -95,7 +107,7 @@ export class PrepackDashboard extends Component {
     this.state.canAddToBatch = chk1 && chk2 && (needsLiquid ? chk3 : true);
   }
 
-  addToBatch() {
+  async addToBatch() {
     if (this.state.batchItems.find(i => i.key === this.state.selectedProduct.key)) {
       this.notification.add("This product lot is already in your batch list.", { type: "danger" });
       return;
@@ -108,10 +120,13 @@ export class PrepackDashboard extends Component {
     this.state.selectedProduct = null;
     this.state.checks = { chk1: false, chk2: false, chk3: false };
     this.state.canAddToBatch = false;
+
+    await this.autoSave();
   }
 
-  removeFromBatch(key) {
+  async removeFromBatch(key) {
     this.state.batchItems = this.state.batchItems.filter(i => i.key !== key);
+    await this.autoSave();
   }
 
   goToStep(step) {
@@ -121,12 +136,14 @@ export class PrepackDashboard extends Component {
     }
     this.state.step = step;
   }
-  addTarget(item) {
+  async addTarget(item) {
     item.targets.push({ size: 0, qty: 0 });
+    await this.autoSave();
   }
 
-  removeTarget(item, index) {
+  async removeTarget(item, index) {
     item.targets.splice(index, 1);
+    await this.autoSave();
   }
 
   getTotalUsed(item) {

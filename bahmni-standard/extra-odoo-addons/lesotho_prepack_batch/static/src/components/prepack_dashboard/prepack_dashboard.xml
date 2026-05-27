@@ -168,13 +168,13 @@
                                                     <tr class="align-middle border-bottom border-light">
                                                         <td class="ps-4 py-3">
                                                             <div class="input-group input-group-lg shadow-sm">
-                                                                <input type="number" class="form-control fw-bold border-end-0" min="0" t-model="target.size"/>
+                                                                <input type="number" class="form-control fw-bold border-end-0" min="0" t-model="target.size" t-on-change="() => this.autoSave()"/>
                                                                 <span class="input-group-text bg-white text-muted border-start-0 small"><t t-esc="item.uom"/></span>
                                                             </div>
                                                         </td>
                                                         <td class="py-3">
                                                             <div class="input-group input-group-lg shadow-sm">
-                                                                <input type="number" class="form-control fw-bold border-end-0" min="0" t-model="target.qty"/>
+                                                                <input type="number" class="form-control fw-bold border-end-0" min="0" t-model="target.qty" t-on-change="() => this.autoSave()"/>
                                                                 <span class="input-group-text bg-white text-muted border-start-0 small">packs</span>
                                                             </div>
                                                         </td>
