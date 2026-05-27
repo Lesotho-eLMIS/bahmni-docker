@@ -25,7 +25,7 @@
                     <div t-if="state.step === 1" id="view-quality-check">
                         <div class="d-flex justify-content-between align-items-center mb-4 border-bottom pb-2">
                             <h2 class="m-0">Build Prepacking List</h2>
-                            <span class="role-badge"><i class="fa fa-user me-2"></i><t t-esc="state.currentUser"/></span>
+
                         </div>
 
                         <div class="row">
@@ -86,8 +86,11 @@
 
                             <div class="col-md-7">
                                 <div class="card shadow-sm h-100">
-                                    <div class="card-header bg-white py-3">
+                                    <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
                                         <h5 class="m-0 fw-bold">Prepacking List </h5>
+                                        <button t-if="state.batchItems.length > 0" class="btn btn-outline-danger btn-sm" t-on-click="() => this.clearBatch()">
+                                            <i class="fa fa-trash-alt me-1"></i>Clear All
+                                        </button>
                                     </div>
                                     <div class="card-body p-0">
                                         <table class="table table-hover align-middle mb-0">
@@ -137,7 +140,7 @@
                     <div t-if="state.step === 2" id="view-create-prepack">
                         <div class="d-flex justify-content-between align-items-center mb-4 border-bottom pb-2">
                             <h2 class="m-0">Calculate Target Sizes</h2>
-                            <span class="role-badge"><i class="fa fa-user me-2"></i><t t-esc="state.currentUser"/></span>
+
                         </div>
                         <p class="lead text-muted mb-4">Define one or more prepack target sizes for each bulk commodity.</p>
 
@@ -222,7 +225,7 @@
                         <t t-if="state.mode === 'authorize' and !state.batchId">
                             <div class="d-flex justify-content-between align-items-center mb-4 border-bottom pb-2">
                                 <h2 class="m-0">Pending Authorizations</h2>
-                                <span class="role-badge" style="background: #8e44ad;"><i class="fa fa-user-shield me-2"></i><t t-esc="state.currentUser"/></span>
+
                             </div>
 
                             <div class="card shadow-sm">
@@ -265,7 +268,7 @@
                         <t t-else="">
                             <div class="d-flex justify-content-between align-items-center mb-4 border-bottom pb-2">
                                 <h2 class="m-0">Authorize Prepack Document</h2>
-                                <span class="role-badge" style="background: #8e44ad;"><i class="fa fa-user-shield me-2"></i><t t-esc="state.currentUser"/></span>
+
                             </div>
 
                             <div class="card shadow-sm mb-5 bg-light border-0">
@@ -355,7 +358,7 @@
                         <t t-if="!state.batchId">
                             <div class="d-flex justify-content-between align-items-center mb-4 border-bottom pb-2">
                                 <h2 class="m-0">Prepacking History</h2>
-                                <span class="role-badge" style="background: #2c3e50;"><i class="fa fa-history me-2"></i><t t-esc="state.currentUser"/></span>
+
                             </div>
 
                             <div class="card shadow-sm">
@@ -403,7 +406,7 @@
                         <t t-else="">
                             <div class="d-flex justify-content-between align-items-center mb-4 border-bottom pb-2">
                                 <h2 class="m-0">Batch Details</h2>
-                                <span class="role-badge" style="background: #2c3e50;"><i class="fa fa-file-alt me-2"></i><t t-esc="state.currentUser"/></span>
+
                             </div>
 
                             <div class="card shadow-sm mb-5 bg-light border-0">

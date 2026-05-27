@@ -129,6 +129,13 @@ export class PrepackDashboard extends Component {
     await this.autoSave();
   }
 
+  async clearBatch() {
+    if (confirm("Are you sure you want to clear all items from the batch list?")) {
+      this.state.batchItems = [];
+      await this.autoSave();
+    }
+  }
+
   goToStep(step) {
     if (step === 3 && !this.state.permissions.can_authorize) {
       this.notification.add("You do not have permission to authorize prepacks.", { type: "danger" });
