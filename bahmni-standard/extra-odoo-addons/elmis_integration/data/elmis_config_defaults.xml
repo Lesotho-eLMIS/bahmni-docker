@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo noupdate="1">
+    <record id="ir_config_parameter_elmis_base_url" model="ir.config_parameter">
+        <field name="key">elmis_integration.base_url</field>
+        <field name="value">https://dev.elmis.gov.ls/api/</field>
+    </record>
+    <record id="ir_config_parameter_elmis_program_codes" model="ir.config_parameter">
+        <field name="key">elmis_integration.program_codes</field>
+        <field name="value">art,em,lab,ois</field>
+    </record>
+    <record id="ir_config_parameter_elmis_sync_cron_active" model="ir.config_parameter">
+        <field name="key">elmis_integration.sync_cron_active</field>
+        <field name="value">False</field>
+    </record>
+    <record id="ir_config_parameter_elmis_sync_interval_number" model="ir.config_parameter">
+        <field name="key">elmis_integration.sync_interval_number</field>
+        <field name="value">6</field>
+    </record>
+    <record id="ir_config_parameter_elmis_sync_interval_type" model="ir.config_parameter">
+        <field name="key">elmis_integration.sync_interval_type</field>
+        <field name="value">hours</field>
+    </record>
+</odoo>

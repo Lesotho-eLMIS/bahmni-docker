@@ -1,0 +1,115 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+    <record id="res_config_settings_view_form_elmis_integration" model="ir.ui.view">
+        <field name="name">res.config.settings.view.form.elmis.integration</field>
+        <field name="model">res.config.settings</field>
+        <field name="inherit_id" ref="base.res_config_settings_view_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//div[hasclass('settings')]" position="inside">
+                <div class="app_settings_block" data-string="eLMIS Integration" string="eLMIS Integration" data-key="elmis_integration">
+                    <h2>eLMIS Integration</h2>
+                    <div class="row mt16 o_settings_container">
+                        <div class="col-12 col-lg-6 o_setting_box">
+                            <div class="o_setting_left_pane"/>
+                            <div class="o_setting_right_pane">
+                                <label for="elmis_base_url"/>
+                                <div class="text-muted">
+                                    Base eLMIS API URL used by inventory sync.
+                                </div>
+                                <field name="elmis_base_url" placeholder="https://dev.elmis.gov.ls/api/"/>
+                            </div>
+                        </div>
+                        <div class="col-12 col-lg-6 o_setting_box">
+                            <div class="o_setting_left_pane"/>
+                            <div class="o_setting_right_pane">
+                                <label for="elmis_program_codes"/>
+                                <div class="text-muted">
+                                    Comma-separated program codes to include in facility inventory sync.
+                                </div>
+                                <field name="elmis_program_codes" placeholder="art,em,lab,ois"/>
+                            </div>
+                        </div>
+                        <div class="col-12 col-lg-6 o_setting_box">
+                            <div class="o_setting_left_pane"/>
+                            <div class="o_setting_right_pane">
+                                <label for="elmis_username"/>
+                                <div class="text-muted">
+                                    Facility-specific eLMIS service account used by this Odoo instance.
+                                </div>
+                                <field name="elmis_username"/>
+                            </div>
+                        </div>
+                        <div class="col-12 col-lg-6 o_setting_box">
+                            <div class="o_setting_left_pane"/>
+                            <div class="o_setting_right_pane">
+                                <label for="elmis_password"/>
+                                <div class="text-muted">
+                                    Password for the facility-specific eLMIS service account.
+                                </div>
+                                <field name="elmis_password" password="True"/>
+                            </div>
+                        </div>
+                        <div class="col-12 col-lg-6 o_setting_box">
+                            <div class="o_setting_left_pane"/>
+                            <div class="o_setting_right_pane">
+                                <label for="elmis_api_token"/>
+                                <div class="text-muted">
+                                    Optional token. If set, sync can use it instead of username/password.
+                                </div>
+                                <field name="elmis_api_token" password="True"/>
+                            </div>
+                        </div>
+                        <div class="col-12 col-lg-6 o_setting_box">
+                            <div class="o_setting_left_pane"/>
+                            <div class="o_setting_right_pane">
+                                <label for="elmis_mirror_location_id"/>
+                                <div class="text-muted">
+                                    Internal Odoo location that mirrors the eLMIS facility/service point stock.
+                                </div>
+                                <field name="elmis_mirror_location_id" options="{'no_create': True}"/>
+                            </div>
+                        </div>
+                        <div class="col-12 col-lg-6 o_setting_box">
+                            <div class="o_setting_left_pane"/>
+                            <div class="o_setting_right_pane">
+                                <span class="o_form_label">eLMIS Inventory</span>
+                                <div class="text-muted">
+                                    Test the eLMIS configuration, then fetch current stock for the mirror location and programs.
+                                </div>
+                                <button name="action_elmis_test_connection" type="object" string="Test Connection" class="btn-secondary me-2"/>
+                                <button name="action_elmis_sync_inventory" type="object" string="Sync Inventory Now" class="btn-primary"/>
+                            </div>
+                        </div>
+                        <div class="col-12 col-lg-6 o_setting_box">
+                            <div class="o_setting_left_pane">
+                                <field name="elmis_sync_cron_active"/>
+                            </div>
+                            <div class="o_setting_right_pane">
+                                <label for="elmis_sync_cron_active"/>
+                                <div class="text-muted">
+                                    Automatically sync the eLMIS mirror location on a repeating schedule.
+                                </div>
+                                <div class="row mt8">
+                                    <div class="col-4">
+                                        <field name="elmis_sync_interval_number"/>
+                                    </div>
+                                    <div class="col-8">
+                                        <field name="elmis_sync_interval_type"/>
+                                    </div>
+                                </div>
+                                <div class="mt8">
+                                    <label for="elmis_sync_nextcall" class="me-2"/>
+                                    <field name="elmis_sync_nextcall" readonly="1"/>
+                                </div>
+                                <div class="mt4">
+                                    <label for="elmis_sync_last_success_at" class="me-2"/>
+                                    <field name="elmis_sync_last_success_at" readonly="1"/>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </xpath>
+        </field>
+    </record>
+</odoo>
