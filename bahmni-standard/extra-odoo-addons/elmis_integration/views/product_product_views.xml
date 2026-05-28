@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+    <record id="view_product_product_form_elmis_integration" model="ir.ui.view">
+        <field name="name">product.product.form.elmis.integration</field>
+        <field name="model">product.product</field>
+        <field name="inherit_id" ref="product.product_normal_form_view"/>
+        <field name="arch" type="xml">
+            <xpath expr="//page[@name='general_information']" position="inside">
+                <group string="eLMIS Information">
+                    <group>
+                        <field name="is_elmis_product"/>
+                        <field name="elmis_orderable_id" attrs="{'required': [('is_elmis_product', '=', True)]}"/>
+                        <field name="elmis_product_code"/>
+                        <field name="elmis_generic_name"/>
+                        <field name="elmis_strength"/>
+                    </group>
+                    <group>
+                        <field name="elmis_dosage_form"/>
+                        <field name="elmis_pack_size"/>
+                        <field name="elmis_pack_size_unit"/>
+                        <field name="elmis_dispensable_unit"/>
+                        <field name="elmis_dispensable_unit_factor"/>
+                    </group>
+                </group>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="view_product_product_tree_elmis_integration" model="ir.ui.view">
+        <field name="name">product.product.tree.elmis.integration</field>
+        <field name="model">product.product</field>
+        <field name="inherit_id" ref="product.product_product_tree_view"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='default_code']" position="after">
+                <field name="is_elmis_product" optional="hide"/>
+                <field name="elmis_product_code" optional="show"/>
+                <field name="elmis_orderable_id" optional="hide"/>
+            </xpath>
+        </field>
+    </record>
+</odoo>
