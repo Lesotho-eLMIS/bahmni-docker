@@ -19,12 +19,13 @@ class ElmisInventorySync(models.Model):
 
     @api.model
     def sync_configured_facility_inventory(self):
+        self._ensure_outbox_drained_before_inventory_sync()
         params = self._get_elmis_config()
         locations = self._get_configured_mirror_locations()
         result = self._empty_sync_result()
 
         for location in locations:
-            location_result = self.sync_facility_inventory(
+            location_result = self.with_context(elmis_outbox_drained=True).sync_facility_inventory(
                 location.elmis_facility_code,
                 params["program_codes"],
             )
@@ -153,6 +154,7 @@ class ElmisInventorySync(models.Model):
             "nextcall_seconds": nextcall_seconds,
             "last_run": self._format_status_run(last_run),
             "last_success": self._format_status_run(last_success),
+            "outbox": self.env["elmis.outbox"].sudo().get_health_summary(),
         }
 
     @api.model
@@ -200,6 +202,7 @@ class ElmisInventorySync(models.Model):
 
     @api.model
     def sync_facility_inventory(self, facility_code, program_codes=None, item_limit=None):
+        self._ensure_outbox_drained_before_inventory_sync()
         params = self._get_elmis_config()
         program_codes = program_codes or params["program_codes"]
         if isinstance(program_codes, str):
@@ -236,7 +239,7 @@ class ElmisInventorySync(models.Model):
             if item_limit and len(items) >= item_limit:
                 break
 
-        return self.sync_inventory_snapshot(
+        return self.with_context(elmis_outbox_drained=True).sync_inventory_snapshot(
             {
                 "facilityCode": facility_code,
                 "facilityId": facility["id"],
@@ -246,6 +249,7 @@ class ElmisInventorySync(models.Model):
 
     @api.model
     def sync_inventory_snapshot(self, payload):
+        self._ensure_outbox_drained_before_inventory_sync()
         facility_code = payload.get("facilityDhis2Code") or payload.get("facilityCode")
         if not facility_code:
             raise UserError(_("Inventory snapshot is missing a facility code."))
@@ -275,6 +279,28 @@ class ElmisInventorySync(models.Model):
             if lot_created:
                 result["lots_created"] += 1
 
+        return result
+
+    @api.model
+    def _ensure_outbox_drained_before_inventory_sync(self):
+        if self.env.context.get("elmis_outbox_drained"):
+            return {
+                "selected": 0,
+                "processed": 0,
+                "delivered": 0,
+                "failed": 0,
+                "skipped": 0,
+            }
+
+        result = self.env["elmis.outbox"].sudo().drain_pending_to_elmis()
+        if result.get("failed"):
+            raise UserError(
+                _(
+                    "Cannot sync inventory from eLMIS because %(failed)s local eLMIS "
+                    "outbox event(s) failed to submit. Fix or retry the outbox first."
+                )
+                % {"failed": result["failed"]}
+            )
         return result
 
     @api.model

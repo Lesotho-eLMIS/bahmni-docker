@@ -124,6 +124,82 @@ class TestElmisInventorySync(TransactionCase):
 
         self.assertEqual(sum(quant.mapped("quantity")), 7.0)
 
+    def test_inventory_sync_drains_outbox_before_syncing_configured_locations(self):
+        params = self.env["ir.config_parameter"].sudo()
+        params.set_param("elmis_integration.base_url", "https://dev.elmis.gov.ls/api/")
+        params.set_param("elmis_integration.program_codes", "art")
+        params.set_param("elmis_integration.api_token", "test-token")
+        params.set_param("elmis_integration.mirror_location_ids", "")
+        params.set_param("elmis_integration.mirror_location_id", str(self.mirror_location.id))
+        calls = []
+
+        def fake_drain(outbox, limit=50):
+            calls.append("drain")
+            return {
+                "selected": 1,
+                "processed": 1,
+                "delivered": 1,
+                "failed": 0,
+                "skipped": 0,
+            }
+
+        def fake_sync_facility_inventory(service, facility_code, program_codes=None, item_limit=None):
+            calls.append("sync:%s" % facility_code)
+            return {
+                "facility_code": facility_code,
+                "location_id": self.mirror_location.id,
+                "items_processed": 1,
+                "products_created": 0,
+                "lots_created": 0,
+                "quants_updated": 0,
+            }
+
+        with patch.object(type(self.env["elmis.outbox"]), "drain_pending_to_elmis", fake_drain):
+            with patch.object(
+                type(self.sync_service),
+                "sync_facility_inventory",
+                fake_sync_facility_inventory,
+            ):
+                self.sync_service.sync_configured_facility_inventory()
+
+        self.assertEqual(calls, ["drain", "sync:A2681-cp"])
+
+    def test_failed_outbox_drain_prevents_inventory_snapshot_overwrite(self):
+        self.sync_service.with_context(elmis_outbox_drained=True).sync_inventory_snapshot(
+            self._snapshot(stock_on_hand=25)
+        )
+        product = self.env["product.product"].search(
+            [("elmis_product_code", "=", "TEST-DON-PAR004-TAB001-1000")]
+        )
+        lot = self.env["stock.lot"].search(
+            [
+                ("product_id", "=", product.id),
+                ("elmis_lot_number", "=", "TEST-LOT-2026-001"),
+            ]
+        )
+
+        def fake_drain(outbox, limit=50):
+            return {
+                "selected": 1,
+                "processed": 1,
+                "delivered": 0,
+                "failed": 1,
+                "skipped": 0,
+            }
+
+        with patch.object(type(self.env["elmis.outbox"]), "drain_pending_to_elmis", fake_drain):
+            with self.assertRaises(UserError):
+                self.sync_service.sync_inventory_snapshot(self._snapshot(stock_on_hand=7))
+
+        quant = self.env["stock.quant"].search(
+            [
+                ("product_id", "=", product.id),
+                ("location_id", "=", self.mirror_location.id),
+                ("lot_id", "=", lot.id),
+            ]
+        )
+        self.assertEqual(sum(quant.mapped("quantity")), 25.0)
+
     def test_sync_accumulates_programs_for_existing_product(self):
         payload = self._snapshot(stock_on_hand=25)
         payload["items"][0]["programCode"] = "art"
