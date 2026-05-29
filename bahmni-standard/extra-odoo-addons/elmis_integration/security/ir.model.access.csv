@@ -4,3 +4,5 @@ access_elmis_inventory_sync_run_manager,elmis.inventory.sync.run manager,model_e
 access_elmis_inventory_sync_wizard_manager,elmis.inventory.sync.wizard manager,model_elmis_inventory_sync_wizard,stock.group_stock_manager,1,1,1,0
 access_elmis_program_user,elmis.program user,model_elmis_program,stock.group_stock_user,1,0,0,0
 access_elmis_program_manager,elmis.program manager,model_elmis_program,stock.group_stock_manager,1,1,1,0
+access_elmis_outbox_user,elmis.outbox user,model_elmis_outbox,stock.group_stock_user,1,0,0,0
+access_elmis_outbox_manager,elmis.outbox manager,model_elmis_outbox,stock.group_stock_manager,1,1,1,0

@@ -21,6 +21,8 @@
         <field name="arch" type="xml">
             <xpath expr="//field[@name='product_id']" position="after">
                 <field name="elmis_program_ids" widget="many2many_tags" optional="hide"/>
+                <field name="elmis_inventory_program_id" optional="hide"/>
+                <field name="elmis_inventory_adjustment_reason" optional="show"/>
             </xpath>
         </field>
     </record>

@@ -1,0 +1,163 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+    <record id="elmis_outbox_view_tree" model="ir.ui.view">
+        <field name="name">elmis.outbox.view.tree</field>
+        <field name="model">elmis.outbox</field>
+        <field name="arch" type="xml">
+            <tree string="eLMIS Outbox" create="false" edit="false" delete="false">
+                <field name="created_at"/>
+                <field name="status"/>
+                <field name="transaction_type"/>
+                <field name="facility_code"/>
+                <field name="program_id"/>
+                <field name="elmis_orderable_id"/>
+                <field name="lot_id"/>
+                <field name="quantity"/>
+                <field name="adjustment_reason"/>
+                <field name="attempt_count"/>
+                <field name="sent_at"/>
+                <field name="delivered_at"/>
+            </tree>
+        </field>
+    </record>
+
+    <record id="elmis_outbox_view_form" model="ir.ui.view">
+        <field name="name">elmis.outbox.view.form</field>
+        <field name="model">elmis.outbox</field>
+        <field name="arch" type="xml">
+            <form string="eLMIS Outbox Event" create="false" edit="false" delete="false">
+                <header>
+                    <button
+                        name="action_submit_to_elmis"
+                        type="object"
+                        string="Submit to eLMIS"
+                        class="btn-primary"
+                        attrs="{'invisible': [('status', 'in', ['DELIVERED', 'DLQ'])]}"/>
+                    <button
+                        name="action_reset_to_pending"
+                        type="object"
+                        string="Reopen for Retry"
+                        class="btn-secondary"
+                        attrs="{'invisible': [('status', 'not in', ['FAILED', 'DLQ', 'SENT'])]}"/>
+                    <button
+                        name="action_mark_dlq"
+                        type="object"
+                        string="Move to DLQ"
+                        class="btn-secondary"
+                        attrs="{'invisible': [('status', 'not in', ['FAILED', 'PENDING', 'SENT'])]}"/>
+                    <field name="status" widget="statusbar" statusbar_visible="PENDING,SENT,DELIVERED,FAILED,DLQ"/>
+                </header>
+                <sheet>
+                    <group>
+                        <group>
+                            <field name="message_id"/>
+                            <field name="transaction_type"/>
+                            <field name="facility_code"/>
+                            <field name="program_id"/>
+                            <field name="adjustment_reason"/>
+                        </group>
+                        <group>
+                            <field name="elmis_orderable_id"/>
+                            <field name="lot_id"/>
+                            <field name="quantity"/>
+                            <field name="uom_id"/>
+                            <field name="transaction_date"/>
+                        </group>
+                    </group>
+                    <group string="Source">
+                        <field name="source_sale_order_line_id"/>
+                        <field name="source_stock_scrap_id"/>
+                        <field name="source_stock_move_id"/>
+                        <field name="prescription_ref"/>
+                    </group>
+                    <group string="Submission">
+                        <group>
+                            <field name="created_at"/>
+                            <field name="sent_at"/>
+                            <field name="delivered_at"/>
+                            <field name="attempt_count"/>
+                        </group>
+                        <group>
+                            <field name="error_message" nolabel="1"/>
+                        </group>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="elmis_outbox_view_search" model="ir.ui.view">
+        <field name="name">elmis.outbox.view.search</field>
+        <field name="model">elmis.outbox</field>
+        <field name="arch" type="xml">
+            <search string="eLMIS Outbox">
+                <field name="message_id"/>
+                <field name="facility_code"/>
+                <field name="prescription_ref"/>
+                <field name="elmis_orderable_id"/>
+                <filter name="pending" string="Pending" domain="[('status', '=', 'PENDING')]"/>
+                <filter name="failed" string="Failed" domain="[('status', '=', 'FAILED')]"/>
+                <filter name="delivered" string="Delivered" domain="[('status', '=', 'DELIVERED')]"/>
+                <separator/>
+                <filter name="retryable" string="Retryable" domain="[('status', 'in', ['PENDING', 'FAILED'])]"/>
+                <group expand="0" string="Group By">
+                    <filter name="group_status" string="Status" context="{'group_by': 'status'}"/>
+                    <filter name="group_type" string="Type" context="{'group_by': 'transaction_type'}"/>
+                    <filter name="group_facility" string="Facility" context="{'group_by': 'facility_code'}"/>
+                    <filter name="group_program" string="Program" context="{'group_by': 'program_id'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <record id="action_elmis_outbox" model="ir.actions.act_window">
+        <field name="name">eLMIS Outbox</field>
+        <field name="res_model">elmis.outbox</field>
+        <field name="view_mode">tree,form</field>
+        <field name="search_view_id" ref="elmis_outbox_view_search"/>
+        <field name="context">{'search_default_retryable': 1}</field>
+    </record>
+
+    <record id="action_elmis_outbox_drain_pending" model="ir.actions.server">
+        <field name="name">Submit Pending eLMIS Outbox</field>
+        <field name="model_id" ref="model_elmis_outbox"/>
+        <field name="binding_model_id" ref="model_elmis_outbox"/>
+        <field name="state">code</field>
+        <field name="code">action = model.action_drain_pending_to_elmis()</field>
+    </record>
+
+    <record id="action_elmis_outbox_retry_selected" model="ir.actions.server">
+        <field name="name">Retry Selected eLMIS Events</field>
+        <field name="model_id" ref="model_elmis_outbox"/>
+        <field name="binding_model_id" ref="model_elmis_outbox"/>
+        <field name="binding_view_types">list,form</field>
+        <field name="state">code</field>
+        <field name="code">action = records.action_submit_to_elmis()</field>
+    </record>
+
+    <record id="action_elmis_outbox_mark_dlq" model="ir.actions.server">
+        <field name="name">Move Selected eLMIS Events to DLQ</field>
+        <field name="model_id" ref="model_elmis_outbox"/>
+        <field name="binding_model_id" ref="model_elmis_outbox"/>
+        <field name="binding_view_types">list,form</field>
+        <field name="state">code</field>
+        <field name="code">action = records.action_mark_dlq()</field>
+    </record>
+
+    <record id="action_elmis_outbox_reset_pending" model="ir.actions.server">
+        <field name="name">Reopen Selected eLMIS Events for Retry</field>
+        <field name="model_id" ref="model_elmis_outbox"/>
+        <field name="binding_model_id" ref="model_elmis_outbox"/>
+        <field name="binding_view_types">list,form</field>
+        <field name="state">code</field>
+        <field name="code">action = records.action_reset_to_pending()</field>
+    </record>
+
+    <menuitem
+        id="menu_elmis_outbox"
+        name="eLMIS Outbox"
+        parent="stock.menu_stock_warehouse_mgmt"
+        action="action_elmis_outbox"
+        sequence="82"
+        groups="stock.group_stock_manager"/>
+</odoo>
