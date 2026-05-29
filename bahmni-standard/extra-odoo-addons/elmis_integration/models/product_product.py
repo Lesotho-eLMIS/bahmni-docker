@@ -22,6 +22,15 @@ class ProductProduct(models.Model):
         copy=False,
         help="OpenLMIS orderable product code.",
     )
+    elmis_program_ids = fields.Many2many(
+        "elmis.program",
+        "elmis_program_product_rel",
+        "product_id",
+        "program_id",
+        string="eLMIS Programs",
+        copy=False,
+        help="eLMIS programs where this product is stocked for the configured facility.",
+    )
     elmis_generic_name = fields.Char(
         string="eLMIS Generic Name",
         copy=False,

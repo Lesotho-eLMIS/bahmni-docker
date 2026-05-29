@@ -214,6 +214,7 @@ class ElmisInventorySync(models.Model):
                     token,
                     summaries,
                     orderables,
+                    program=program,
                     item_limit=self._remaining_item_limit(item_limit, items),
                 )
             )
@@ -389,6 +390,7 @@ class ElmisInventorySync(models.Model):
         token,
         summaries,
         orderables,
+        program=None,
         item_limit=None,
     ):
         entries = []
@@ -423,7 +425,14 @@ class ElmisInventorySync(models.Model):
         for orderable_id, entry in entries:
             orderable = orderables.get(orderable_id)
             if orderable:
-                items.append(self._normalize_stock_card_entry(orderable_id, orderable, entry))
+                items.append(
+                    self._normalize_stock_card_entry(
+                        orderable_id,
+                        orderable,
+                        entry,
+                        program=program,
+                    )
+                )
         return items
 
     @api.model
@@ -477,7 +486,7 @@ class ElmisInventorySync(models.Model):
             yield values[start:start + size]
 
     @api.model
-    def _normalize_stock_card_entry(self, orderable_id, orderable, entry):
+    def _normalize_stock_card_entry(self, orderable_id, orderable, entry, program=None):
         dispensable = orderable.get("dispensable") or {}
         extra_data = orderable.get("extraData") or {}
         identifiers = orderable.get("identifiers") or {}
@@ -496,6 +505,9 @@ class ElmisInventorySync(models.Model):
             "lot": entry.get("lotCode"),
             "expirationDate": entry.get("lotExpirationDate"),
             "stockOnHand": entry.get("stockOnHand") or 0,
+            "programCode": (program or {}).get("code"),
+            "programName": (program or {}).get("name"),
+            "elmisProgramId": (program or {}).get("id"),
         }
 
     @api.model
@@ -599,6 +611,7 @@ class ElmisInventorySync(models.Model):
 
     @api.model
     def _update_product_from_item(self, product, item):
+        program_commands = self._get_program_commands_from_item(item)
         vals = {
             "is_elmis_product": True,
             "elmis_orderable_id": item.get("elmisOrderableId") or item.get("orderableId"),
@@ -616,7 +629,47 @@ class ElmisInventorySync(models.Model):
             "elmis_dispensable_unit": item.get("dispensableUnit"),
             "elmis_dispensable_unit_factor": item.get("dispensableUnitFactor"),
         }
+        if program_commands:
+            vals["elmis_program_ids"] = program_commands
         product.write({key: value for key, value in vals.items() if value not in (None, "")})
+
+    @api.model
+    def _get_program_commands_from_item(self, item):
+        programs = []
+        program_codes = item.get("programCodes")
+        if isinstance(program_codes, str):
+            program_codes = self._split_program_codes(program_codes)
+        for code in program_codes or []:
+            programs.append(
+                {
+                    "code": code,
+                    "name": None,
+                    "id": None,
+                }
+            )
+
+        if item.get("programCode"):
+            programs.append(
+                {
+                    "code": item.get("programCode"),
+                    "name": item.get("programName"),
+                    "id": item.get("elmisProgramId") or item.get("programId"),
+                }
+            )
+
+        program_records = self.env["elmis.program"]
+        seen_codes = set()
+        for program in programs:
+            code = (program.get("code") or "").strip()
+            if not code or code in seen_codes:
+                continue
+            seen_codes.add(code)
+            program_records |= self.env["elmis.program"].get_or_create_from_elmis(
+                code,
+                name=program.get("name"),
+                elmis_program_id=program.get("id"),
+            )
+        return [(4, program.id) for program in program_records]
 
     @api.model
     def _normalize_dosage_form(self, dosage_form):

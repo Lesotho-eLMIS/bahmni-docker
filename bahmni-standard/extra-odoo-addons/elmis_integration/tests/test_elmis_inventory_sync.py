@@ -25,7 +25,7 @@ class TestElmisInventorySync(TransactionCase):
             "facilityDhis2Code": "A2681-cp",
             "items": [
                 {
-                    "productCode": "DON-PAR004-TAB001-1000",
+                    "productCode": "TEST-DON-PAR004-TAB001-1000",
                     "fullName": "Paracetamol 500Mg Tablets 1000",
                     "genericName": "Paracetamol",
                     "strength": "500Mg",
@@ -34,7 +34,9 @@ class TestElmisInventorySync(TransactionCase):
                     "packSizeUnit": "tablets",
                     "dispensableUnit": "each",
                     "dispensableUnitFactor": 1,
-                    "lot": "LOT-2026-001",
+                    "programCode": "art",
+                    "programName": "ART",
+                    "lot": "TEST-LOT-2026-001",
                     "expirationDate": "2027-12-31",
                     "stockOnHand": stock_on_hand,
                 }
@@ -50,16 +52,17 @@ class TestElmisInventorySync(TransactionCase):
         self.assertEqual(result["quants_updated"], 1)
 
         product = self.env["product.product"].search(
-            [("elmis_product_code", "=", "DON-PAR004-TAB001-1000")]
+            [("elmis_product_code", "=", "TEST-DON-PAR004-TAB001-1000")]
         )
         self.assertEqual(len(product), 1)
         self.assertTrue(product.is_elmis_product)
+        self.assertEqual(product.elmis_program_ids.mapped("code"), ["art"])
         self.assertEqual(product.tracking, "lot")
 
         lot = self.env["stock.lot"].search(
             [
                 ("product_id", "=", product.id),
-                ("elmis_lot_number", "=", "LOT-2026-001"),
+                ("elmis_lot_number", "=", "TEST-LOT-2026-001"),
             ]
         )
         self.assertEqual(len(lot), 1)
@@ -67,34 +70,51 @@ class TestElmisInventorySync(TransactionCase):
         quant = self.env["stock.quant"].search(
             [
                 ("product_id", "=", product.id),
-                ("location_id", "=", self.mirror_location.id),
+                ("location_id", "=", result["location_id"]),
                 ("lot_id", "=", lot.id),
             ]
         )
         self.assertEqual(sum(quant.mapped("quantity")), 25.0)
+        self.assertEqual(quant.elmis_program_ids.mapped("code"), ["art"])
 
     def test_sync_sets_absolute_stock_on_hand(self):
         self.sync_service.sync_inventory_snapshot(self._snapshot(stock_on_hand=25))
-        self.sync_service.sync_inventory_snapshot(self._snapshot(stock_on_hand=7))
+        result = self.sync_service.sync_inventory_snapshot(self._snapshot(stock_on_hand=7))
 
         product = self.env["product.product"].search(
-            [("elmis_product_code", "=", "DON-PAR004-TAB001-1000")]
+            [("elmis_product_code", "=", "TEST-DON-PAR004-TAB001-1000")]
         )
         lot = self.env["stock.lot"].search(
             [
                 ("product_id", "=", product.id),
-                ("elmis_lot_number", "=", "LOT-2026-001"),
+                ("elmis_lot_number", "=", "TEST-LOT-2026-001"),
             ]
         )
         quant = self.env["stock.quant"].search(
             [
                 ("product_id", "=", product.id),
-                ("location_id", "=", self.mirror_location.id),
+                ("location_id", "=", result["location_id"]),
                 ("lot_id", "=", lot.id),
             ]
         )
 
         self.assertEqual(sum(quant.mapped("quantity")), 7.0)
+
+    def test_sync_accumulates_programs_for_existing_product(self):
+        payload = self._snapshot(stock_on_hand=25)
+        payload["items"][0]["programCode"] = "art"
+        self.sync_service.sync_inventory_snapshot(payload)
+
+        payload = self._snapshot(stock_on_hand=7)
+        payload["items"][0]["programCode"] = "em"
+        payload["items"][0]["programName"] = "EM"
+        self.sync_service.sync_inventory_snapshot(payload)
+
+        product = self.env["product.product"].search(
+            [("elmis_product_code", "=", "TEST-DON-PAR004-TAB001-1000")]
+        )
+
+        self.assertEqual(set(product.elmis_program_ids.mapped("code")), {"art", "em"})
 
     def test_sync_requires_configured_mirror_location(self):
         payload = self._snapshot()
@@ -138,7 +158,7 @@ class TestElmisInventorySync(TransactionCase):
                 return {"content": [{"id": "facility-id", "code": "A2681-cp"}]}
             if path == "programs":
                 self.assertEqual(query["code"], ["art"])
-                return [{"id": "program-id", "code": "art"}]
+                return [{"id": "program-id", "code": "art", "name": "ART"}]
             if path == "v2/stockCardSummariesResolv":
                 self.assertEqual(query["facilityId"], "facility-id")
                 self.assertEqual(query["programId"], "program-id")
@@ -189,6 +209,8 @@ class TestElmisInventorySync(TransactionCase):
         )
         self.assertEqual(len(product), 1)
         self.assertEqual(product.elmis_product_code, "ARV-TDF300-TAB")
+        self.assertEqual(product.elmis_program_ids.mapped("code"), ["art"])
+        self.assertEqual(product.elmis_program_ids.elmis_program_id, "program-id")
 
         lot = self.env["stock.lot"].search([("elmis_lot_id", "=", "lot-id")])
         self.assertEqual(len(lot), 1)

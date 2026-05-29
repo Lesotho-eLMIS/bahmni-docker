@@ -24,6 +24,7 @@ class TestElmisProductExtension(TransactionCase):
                 "is_elmis_product": True,
                 "elmis_orderable_id": orderable_id,
                 "elmis_product_code": product_code,
+                "elmis_program_ids": [(4, self.env.ref("elmis_integration.elmis_program_art").id)],
                 "elmis_generic_name": "Paracetamol",
                 "elmis_strength": "500Mg",
                 "elmis_dosage_form": "tablets",
@@ -48,6 +49,7 @@ class TestElmisProductExtension(TransactionCase):
             "11111111-1111-1111-1111-111111111111",
         )
         self.assertEqual(product.elmis_product_code, "DON-PAR004-TAB001-1000")
+        self.assertEqual(product.elmis_program_ids.mapped("code"), ["art"])
         self.assertEqual(product.elmis_pack_size, 1000)
 
     def test_elmis_orderable_id_is_unique(self):

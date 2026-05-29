@@ -11,6 +11,7 @@
                         <field name="is_elmis_product"/>
                         <field name="elmis_orderable_id" attrs="{'required': [('is_elmis_product', '=', True)]}"/>
                         <field name="elmis_product_code"/>
+                        <field name="elmis_program_ids" widget="many2many_tags"/>
                         <field name="elmis_generic_name"/>
                         <field name="elmis_strength"/>
                     </group>
@@ -34,7 +35,22 @@
             <xpath expr="//field[@name='default_code']" position="after">
                 <field name="is_elmis_product" optional="hide"/>
                 <field name="elmis_product_code" optional="show"/>
+                <field name="elmis_program_ids" widget="many2many_tags" optional="show"/>
                 <field name="elmis_orderable_id" optional="hide"/>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="view_product_product_search_elmis_integration" model="ir.ui.view">
+        <field name="name">product.product.search.elmis.integration</field>
+        <field name="model">product.product</field>
+        <field name="inherit_id" ref="product.product_search_form_view"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='product_tmpl_id']" position="after">
+                <field name="elmis_program_ids" string="eLMIS Program"/>
+            </xpath>
+            <xpath expr="//filter[@name='services']" position="after">
+                <filter name="elmis_products" string="eLMIS Products" domain="[('is_elmis_product', '=', True)]"/>
             </xpath>
         </field>
     </record>

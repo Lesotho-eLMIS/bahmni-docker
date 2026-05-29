@@ -20,4 +20,21 @@
         <field name="key">elmis_integration.sync_interval_type</field>
         <field name="value">hours</field>
     </record>
+
+    <record id="elmis_program_art" model="elmis.program">
+        <field name="code">art</field>
+        <field name="name">ART</field>
+    </record>
+    <record id="elmis_program_em" model="elmis.program">
+        <field name="code">em</field>
+        <field name="name">EM</field>
+    </record>
+    <record id="elmis_program_lab" model="elmis.program">
+        <field name="code">lab</field>
+        <field name="name">LAB</field>
+    </record>
+    <record id="elmis_program_ois" model="elmis.program">
+        <field name="code">ois</field>
+        <field name="name">OIS</field>
+    </record>
 </odoo>
