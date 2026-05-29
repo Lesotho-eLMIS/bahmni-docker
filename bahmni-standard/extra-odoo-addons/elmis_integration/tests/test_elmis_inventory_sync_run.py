@@ -120,3 +120,6 @@ class TestElmisInventorySyncRun(TransactionCase):
         self.assertEqual(status["interval_type"], "hours")
         self.assertEqual(status["last_success"]["items_processed"], 4)
         self.assertEqual(status["last_run"]["status"], "success")
+        self.assertIn("outbox", status)
+        self.assertIn("pending", status["outbox"])
+        self.assertIn("failed", status["outbox"])

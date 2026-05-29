@@ -15,6 +15,7 @@ export class ElmisSyncStatus extends Component {
       nextcallSeconds: false,
       lastRun: false,
       lastSuccess: false,
+      outbox: false,
       intervalLabel: "",
       loading: true,
     });
@@ -37,6 +38,7 @@ export class ElmisSyncStatus extends Component {
       this.state.nextcallSeconds = status.nextcall_seconds;
       this.state.lastRun = status.last_run;
       this.state.lastSuccess = status.last_success;
+      this.state.outbox = status.outbox;
       this.state.intervalLabel = this.formatInterval(
         status.interval_number,
         status.interval_type
@@ -68,7 +70,15 @@ export class ElmisSyncStatus extends Component {
     await this.action.doAction("elmis_integration.action_elmis_inventory_sync_wizard");
   }
 
+  async openOutbox() {
+    this.state.open = false;
+    await this.action.doAction("elmis_integration.action_elmis_outbox");
+  }
+
   get statusClass() {
+    if (this.state.outbox && this.state.outbox.failed) {
+      return "o_elmis_sync_status_failed";
+    }
     if (!this.state.enabled) {
       return "o_elmis_sync_status_off";
     }
@@ -87,6 +97,12 @@ export class ElmisSyncStatus extends Component {
   get summaryLabel() {
     if (this.state.loading) {
       return "Loading";
+    }
+    if (this.state.outbox && this.state.outbox.failed) {
+      return `${this.state.outbox.failed} failed`;
+    }
+    if (this.state.outbox && this.state.outbox.pending) {
+      return `${this.state.outbox.pending} pending`;
     }
     if (!this.state.enabled) {
       return "Off";
@@ -112,6 +128,20 @@ export class ElmisSyncStatus extends Component {
       return "No completed run";
     }
     return this.formatDateTime(this.state.lastRun.finished_at);
+  }
+
+  get oldestRetryableLabel() {
+    if (!this.state.outbox || !this.state.outbox.oldest_retryable_age_seconds) {
+      return "None";
+    }
+    return this.formatDuration(this.state.outbox.oldest_retryable_age_seconds);
+  }
+
+  get lastDeliveredLabel() {
+    if (!this.state.outbox || !this.state.outbox.last_delivered_at) {
+      return "Never";
+    }
+    return this.formatDateTime(this.state.outbox.last_delivered_at);
   }
 
   formatInterval(number, type) {
