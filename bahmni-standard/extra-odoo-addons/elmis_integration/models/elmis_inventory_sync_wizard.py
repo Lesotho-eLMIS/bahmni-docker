@@ -8,10 +8,16 @@ class ElmisInventorySyncWizard(models.TransientModel):
 
     mirror_location_id = fields.Many2one(
         "stock.location",
-        string="eLMIS Mirror Location",
+        string="First eLMIS Mirror Location",
+        readonly=True,
+    )
+    mirror_location_ids = fields.Many2many(
+        "stock.location",
+        string="eLMIS Mirror Locations",
         readonly=True,
     )
     facility_code = fields.Char(readonly=True)
+    facility_codes = fields.Char(readonly=True)
     program_codes = fields.Char(readonly=True)
 
     def default_get(self, fields_list):
@@ -25,15 +31,24 @@ class ElmisInventorySyncWizard(models.TransientModel):
             values["program_codes"] = False
 
         try:
-            location = service._get_configured_mirror_location()
+            locations = service._get_configured_mirror_locations()
             values.update(
                 {
-                    "mirror_location_id": location.id,
-                    "facility_code": location.elmis_facility_code,
+                    "mirror_location_id": locations[:1].id,
+                    "mirror_location_ids": [(6, 0, locations.ids)],
+                    "facility_code": locations[:1].elmis_facility_code,
+                    "facility_codes": ", ".join(locations.mapped("elmis_facility_code")),
                 }
             )
         except UserError:
-            values.update({"mirror_location_id": False, "facility_code": False})
+            values.update(
+                {
+                    "mirror_location_id": False,
+                    "mirror_location_ids": [(6, 0, [])],
+                    "facility_code": False,
+                    "facility_codes": False,
+                }
+            )
 
         return values
 
@@ -41,7 +56,7 @@ class ElmisInventorySyncWizard(models.TransientModel):
         self.ensure_one()
         result, run = self.env["elmis.inventory.sync"].test_configured_connection_with_run()
         message = _(
-            "eLMIS connection successful. Facility: %(facility)s, programs: "
+            "eLMIS connection successful. Facilities: %(facility)s, programs: "
             "%(programs)s, active stock rows found: %(rows)s. Audit run: %(run)s."
         ) % {
             "facility": result["facility_code"],

@@ -16,6 +16,14 @@ class TestElmisConfigSettings(TransactionCase):
                 "elmis_facility_code": "A2681-cp",
             }
         )
+        cls.second_mirror_location = cls.env["stock.location"].create(
+            {
+                "name": "Dispensary B",
+                "usage": "internal",
+                "location_id": cls.env.ref("stock.stock_location_stock").id,
+                "elmis_facility_code": "D2167-B",
+            }
+        )
 
     def test_default_non_secret_config_parameters_are_available(self):
         params = self.env["ir.config_parameter"].sudo()
@@ -32,6 +40,9 @@ class TestElmisConfigSettings(TransactionCase):
                 "elmis_password": "test-password",
                 "elmis_api_token": "test-token",
                 "elmis_mirror_location_id": self.mirror_location.id,
+                "elmis_mirror_location_ids": [
+                    (6, 0, [self.mirror_location.id, self.second_mirror_location.id])
+                ],
             }
         )
 
@@ -44,6 +55,10 @@ class TestElmisConfigSettings(TransactionCase):
         self.assertEqual(
             params.get_param("elmis_integration.mirror_location_id"),
             str(self.mirror_location.id),
+        )
+        self.assertEqual(
+            params.get_param("elmis_integration.mirror_location_ids"),
+            "%s,%s" % (self.mirror_location.id, self.second_mirror_location.id),
         )
 
     def test_settings_can_configure_scheduled_sync_cron(self):
@@ -90,7 +105,7 @@ class TestElmisConfigSettings(TransactionCase):
             action = settings.action_elmis_test_connection()
 
         self.assertEqual(action["tag"], "display_notification")
-        self.assertIn("Facility: A2681-cp", action["params"]["message"])
+        self.assertIn("Facilities: A2681-cp", action["params"]["message"])
         self.assertIn("active stock rows found: 7", action["params"]["message"])
 
     def test_settings_sync_button_returns_notification(self):

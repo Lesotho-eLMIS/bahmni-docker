@@ -12,6 +12,10 @@
         <field name="key">elmis_integration.sync_cron_active</field>
         <field name="value">False</field>
     </record>
+    <record id="ir_config_parameter_elmis_mirror_location_ids" model="ir.config_parameter">
+        <field name="key">elmis_integration.mirror_location_ids</field>
+        <field name="value"/>
+    </record>
     <record id="ir_config_parameter_elmis_sync_interval_number" model="ir.config_parameter">
         <field name="key">elmis_integration.sync_interval_number</field>
         <field name="value">6</field>

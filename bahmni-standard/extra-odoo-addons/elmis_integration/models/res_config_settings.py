@@ -37,7 +37,7 @@ class ResConfigSettings(models.TransientModel):
     )
     elmis_mirror_location_id = fields.Many2one(
         "stock.location",
-        string="eLMIS Mirror Location",
+        string="Legacy eLMIS Mirror Location",
         config_parameter="elmis_integration.mirror_location_id",
         domain=[
             ("usage", "=", "internal"),
@@ -45,7 +45,19 @@ class ResConfigSettings(models.TransientModel):
             ("elmis_facility_code", "!=", False),
         ],
         help=(
-            "Internal Odoo stock location that mirrors the configured eLMIS "
+            "Legacy single-location setting. Use eLMIS Mirror Locations for new deployments."
+        ),
+    )
+    elmis_mirror_location_ids = fields.Many2many(
+        "stock.location",
+        string="eLMIS Mirror Locations",
+        domain=[
+            ("usage", "=", "internal"),
+            ("active", "=", True),
+            ("elmis_facility_code", "!=", False),
+        ],
+        help=(
+            "Internal Odoo stock locations that mirror configured eLMIS "
             "facility/service point inventory."
         ),
     )
@@ -82,7 +94,31 @@ class ResConfigSettings(models.TransientModel):
 
     def set_values(self):
         super().set_values()
+        self._set_elmis_mirror_location_ids()
         self._apply_elmis_sync_cron_settings()
+
+    def get_values(self):
+        values = super().get_values()
+        params = self.env["ir.config_parameter"].sudo()
+        location_ids = self.env["elmis.inventory.sync"]._split_location_ids(
+            params.get_param("elmis_integration.mirror_location_ids")
+        )
+        if not location_ids:
+            location_ids = self.env["elmis.inventory.sync"]._split_location_ids(
+                params.get_param("elmis_integration.mirror_location_id")
+            )
+        values["elmis_mirror_location_ids"] = [(6, 0, location_ids)]
+        return values
+
+    def _set_elmis_mirror_location_ids(self):
+        settings = self[-1] if self else self
+        location_ids = settings.elmis_mirror_location_ids.ids
+        if not location_ids and settings.elmis_mirror_location_id:
+            location_ids = [settings.elmis_mirror_location_id.id]
+        self.env["ir.config_parameter"].sudo().set_param(
+            "elmis_integration.mirror_location_ids",
+            ",".join(str(location_id) for location_id in location_ids),
+        )
 
     def _apply_elmis_sync_cron_settings(self):
         settings = self[-1] if self else self
@@ -129,7 +165,7 @@ class ResConfigSettings(models.TransientModel):
         self.execute()
         result, run = self.env["elmis.inventory.sync"].test_configured_connection_with_run()
         message = _(
-            "eLMIS connection successful. Facility: %(facility)s, programs: "
+            "eLMIS connection successful. Facilities: %(facility)s, programs: "
             "%(programs)s, active stock rows found: %(rows)s. Audit run: %(run)s."
         ) % {
             "facility": result["facility_code"],

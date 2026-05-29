@@ -18,6 +18,30 @@ class TestElmisInventorySync(TransactionCase):
                 "elmis_facility_code": "A2681-cp",
             }
         )
+        cls.location_d = cls.env["stock.location"].create(
+            {
+                "name": "D2167-D",
+                "usage": "internal",
+                "location_id": cls.stock_location.id,
+                "elmis_facility_code": "D2167-D",
+            }
+        )
+        cls.location_c = cls.env["stock.location"].create(
+            {
+                "name": "D2167-C",
+                "usage": "internal",
+                "location_id": cls.stock_location.id,
+                "elmis_facility_code": "D2167-C",
+            }
+        )
+        cls.location_b = cls.env["stock.location"].create(
+            {
+                "name": "D2167-B",
+                "usage": "internal",
+                "location_id": cls.stock_location.id,
+                "elmis_facility_code": "D2167-B",
+            }
+        )
         cls.sync_service = cls.env["elmis.inventory.sync"]
 
     def _snapshot(self, stock_on_hand=25):
@@ -282,6 +306,7 @@ class TestElmisInventorySync(TransactionCase):
         params.set_param("elmis_integration.base_url", "https://dev.elmis.gov.ls/api/")
         params.set_param("elmis_integration.program_codes", "art")
         params.set_param("elmis_integration.api_token", "test-token")
+        params.set_param("elmis_integration.mirror_location_ids", "")
         params.set_param("elmis_integration.mirror_location_id", str(self.mirror_location.id))
 
         def fake_get_json(service, base_url, path, token, query=None):
@@ -317,3 +342,44 @@ class TestElmisInventorySync(TransactionCase):
             [("elmis_orderable_id", "=", "orderable-id")]
         )
         self.assertFalse(product)
+
+    def test_configured_inventory_sync_fetches_multiple_mirror_locations(self):
+        params = self.env["ir.config_parameter"].sudo()
+        params.set_param("elmis_integration.base_url", "https://dev.elmis.gov.ls/api/")
+        params.set_param("elmis_integration.program_codes", "art")
+        params.set_param("elmis_integration.api_token", "test-token")
+        params.set_param(
+            "elmis_integration.mirror_location_ids",
+            "%s,%s,%s" % (self.location_d.id, self.location_c.id, self.location_b.id),
+        )
+
+        synced_facilities = []
+
+        def fake_sync_facility_inventory(service, facility_code, program_codes=None, item_limit=None):
+            synced_facilities.append(facility_code)
+            return {
+                "facility_code": facility_code,
+                "location_id": self.env["stock.location"].search(
+                    [("elmis_facility_code", "=", facility_code)],
+                    limit=1,
+                ).id,
+                "items_processed": 1,
+                "products_created": 1 if facility_code == "D2167-D" else 0,
+                "lots_created": 1,
+                "quants_updated": 1,
+            }
+
+        with patch.object(
+            type(self.sync_service),
+            "sync_facility_inventory",
+            fake_sync_facility_inventory,
+        ):
+            result = self.sync_service.sync_configured_facility_inventory()
+
+        self.assertEqual(synced_facilities, ["D2167-D", "D2167-C", "D2167-B"])
+        self.assertEqual(result["facility_code"], "D2167-D, D2167-C, D2167-B")
+        self.assertEqual(result["locations_synced"], 3)
+        self.assertEqual(result["items_processed"], 3)
+        self.assertEqual(result["products_created"], 1)
+        self.assertEqual(result["lots_created"], 3)
+        self.assertEqual(result["quants_updated"], 3)

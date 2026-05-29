@@ -7,8 +7,8 @@
             <form string="Trigger eLMIS Sync">
                 <sheet>
                     <group>
-                        <field name="mirror_location_id"/>
-                        <field name="facility_code"/>
+                        <field name="mirror_location_ids" widget="many2many_tags"/>
+                        <field name="facility_codes"/>
                         <field name="program_codes"/>
                     </group>
                 </sheet>

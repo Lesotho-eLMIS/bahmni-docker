@@ -16,17 +16,34 @@ class TestElmisInventorySyncWizard(TransactionCase):
                 "elmis_facility_code": "A2681-cp",
             }
         )
+        cls.second_mirror_location = cls.env["stock.location"].create(
+            {
+                "name": "Dispensary B",
+                "usage": "internal",
+                "location_id": cls.env.ref("stock.stock_location_stock").id,
+                "elmis_facility_code": "D2167-B",
+            }
+        )
         params = cls.env["ir.config_parameter"].sudo()
         params.set_param("elmis_integration.base_url", "https://dev.elmis.gov.ls/api/")
         params.set_param("elmis_integration.program_codes", "art,em")
         params.set_param("elmis_integration.api_token", "test-token")
         params.set_param("elmis_integration.mirror_location_id", str(cls.mirror_location.id))
+        params.set_param(
+            "elmis_integration.mirror_location_ids",
+            "%s,%s" % (cls.mirror_location.id, cls.second_mirror_location.id),
+        )
 
     def test_wizard_defaults_show_configured_scope(self):
         wizard = self.env["elmis.inventory.sync.wizard"].create({})
 
         self.assertEqual(wizard.mirror_location_id, self.mirror_location)
+        self.assertEqual(
+            set(wizard.mirror_location_ids.ids),
+            {self.mirror_location.id, self.second_mirror_location.id},
+        )
         self.assertEqual(wizard.facility_code, "A2681-cp")
+        self.assertEqual(wizard.facility_codes, "A2681-cp, D2167-B")
         self.assertEqual(wizard.program_codes, "art, em")
 
     def test_wizard_buttons_return_notifications(self):

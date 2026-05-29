@@ -62,11 +62,11 @@
                         <div class="col-12 col-lg-6 o_setting_box">
                             <div class="o_setting_left_pane"/>
                             <div class="o_setting_right_pane">
-                                <label for="elmis_mirror_location_id"/>
+                                <label for="elmis_mirror_location_ids"/>
                                 <div class="text-muted">
-                                    Internal Odoo location that mirrors the eLMIS facility/service point stock.
+                                    Internal Odoo locations that mirror eLMIS facility/service point stock.
                                 </div>
-                                <field name="elmis_mirror_location_id" options="{'no_create': True}"/>
+                                <field name="elmis_mirror_location_ids" widget="many2many_tags" options="{'no_create': True}"/>
                             </div>
                         </div>
                         <div class="col-12 col-lg-6 o_setting_box">
@@ -74,7 +74,7 @@
                             <div class="o_setting_right_pane">
                                 <span class="o_form_label">eLMIS Inventory</span>
                                 <div class="text-muted">
-                                    Test the eLMIS configuration, then fetch current stock for the mirror location and programs.
+                                    Test the eLMIS configuration, then fetch current stock for the mirror locations and programs.
                                 </div>
                                 <button name="action_elmis_test_connection" type="object" string="Test Connection" class="btn-secondary me-2"/>
                                 <button name="action_elmis_sync_inventory" type="object" string="Sync Inventory Now" class="btn-primary"/>
@@ -87,7 +87,7 @@
                             <div class="o_setting_right_pane">
                                 <label for="elmis_sync_cron_active"/>
                                 <div class="text-muted">
-                                    Automatically sync the eLMIS mirror location on a repeating schedule.
+                                    Automatically sync the eLMIS mirror locations on a repeating schedule.
                                 </div>
                                 <div class="row mt8">
                                     <div class="col-4">

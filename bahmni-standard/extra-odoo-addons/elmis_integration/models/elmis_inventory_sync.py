@@ -20,9 +20,20 @@ class ElmisInventorySync(models.Model):
     @api.model
     def sync_configured_facility_inventory(self):
         params = self._get_elmis_config()
-        location = self._get_configured_mirror_location()
+        locations = self._get_configured_mirror_locations()
+        result = self._empty_sync_result()
 
-        return self.sync_facility_inventory(location.elmis_facility_code, params["program_codes"])
+        for location in locations:
+            location_result = self.sync_facility_inventory(
+                location.elmis_facility_code,
+                params["program_codes"],
+            )
+            self._merge_sync_result(result, location_result)
+
+        result["facility_code"] = ", ".join(locations.mapped("elmis_facility_code"))
+        result["location_ids"] = locations.ids
+        result["locations_synced"] = len(locations)
+        return result
 
     @api.model
     def sync_configured_facility_inventory_with_run(self):
@@ -49,35 +60,39 @@ class ElmisInventorySync(models.Model):
     @api.model
     def test_configured_connection(self):
         params = self._get_elmis_config()
-        location = self._get_configured_mirror_location()
+        locations = self._get_configured_mirror_locations()
         token = params["api_token"] or self._get_elmis_access_token(params)
-        facility = self._get_elmis_facility_by_code(
-            params["base_url"],
-            token,
-            location.elmis_facility_code,
-        )
         programs = self._get_elmis_programs_by_code(
             params["base_url"],
             token,
             params["program_codes"],
         )
         stock_entries_found = 0
+        facility_ids = []
 
-        for program in programs:
-            summaries = self._get_elmis_stock_card_summaries(
+        for location in locations:
+            facility = self._get_elmis_facility_by_code(
                 params["base_url"],
                 token,
-                facility["id"],
-                program["id"],
+                location.elmis_facility_code,
             )
-            stock_entries_found += self._count_active_stock_entries(summaries)
+            facility_ids.append(facility["id"])
+            for program in programs:
+                summaries = self._get_elmis_stock_card_summaries(
+                    params["base_url"],
+                    token,
+                    facility["id"],
+                    program["id"],
+                )
+                stock_entries_found += self._count_active_stock_entries(summaries)
 
         return {
-            "facility_code": location.elmis_facility_code,
-            "facility_id": facility["id"],
+            "facility_code": ", ".join(locations.mapped("elmis_facility_code")),
+            "facility_id": ", ".join(facility_ids),
             "program_codes": [program["code"] for program in programs],
             "programs_resolved": len(programs),
             "stock_entries_found": stock_entries_found,
+            "locations_checked": len(locations),
         }
 
     @api.model
@@ -103,11 +118,11 @@ class ElmisInventorySync(models.Model):
             pass
 
         try:
-            location = self._get_configured_mirror_location()
+            locations = self._get_configured_mirror_locations()
             values.update(
                 {
-                    "location_id": location.id,
-                    "facility_code": location.elmis_facility_code,
+                    "location_id": locations[:1].id,
+                    "facility_code": ", ".join(locations.mapped("elmis_facility_code")),
                 }
             )
         except UserError:
@@ -292,30 +307,78 @@ class ElmisInventorySync(models.Model):
 
     @api.model
     def _get_configured_mirror_location(self):
-        location_id = (
-            self.env["ir.config_parameter"]
-            .sudo()
-            .get_param("elmis_integration.mirror_location_id")
-        )
-        location = self.env["stock.location"]
-        if location_id:
-            location = location.browse(int(location_id)).exists()
+        locations = self._get_configured_mirror_locations()
+        return locations[:1]
 
-        if not location:
-            raise UserError(_("Select an eLMIS mirror location in Settings first."))
-        if location.usage != "internal" or not location.active:
-            raise UserError(_("The configured eLMIS mirror location must be an active internal location."))
-        if not location.elmis_facility_code:
+    @api.model
+    def _get_configured_mirror_locations(self):
+        params = self.env["ir.config_parameter"].sudo()
+        location_ids = self._split_location_ids(
+            params.get_param("elmis_integration.mirror_location_ids")
+        )
+        if not location_ids:
+            legacy_location_id = params.get_param("elmis_integration.mirror_location_id")
+            location_ids = self._split_location_ids(legacy_location_id)
+
+        locations = self.env["stock.location"]
+        if location_ids:
+            locations = locations.browse(location_ids).exists()
+
+        if not locations:
+            raise UserError(_("Select at least one eLMIS mirror location in Settings first."))
+        invalid_locations = locations.filtered(
+            lambda location: location.usage != "internal" or not location.active
+        )
+        if invalid_locations:
+            raise UserError(_("Configured eLMIS mirror locations must be active internal locations."))
+        missing_codes = locations.filtered(lambda location: not location.elmis_facility_code)
+        if missing_codes:
             raise UserError(
-                _("The configured eLMIS mirror location must have an eLMIS facility/service point code.")
+                _("Configured eLMIS mirror locations must have eLMIS facility/service point codes.")
             )
-        return location
+        return locations
 
     @api.model
     def _split_program_codes(self, program_codes):
         if not program_codes:
             return []
         return [code.strip() for code in program_codes.split(",") if code.strip()]
+
+    @api.model
+    def _split_location_ids(self, location_ids):
+        if not location_ids:
+            return []
+        if isinstance(location_ids, int):
+            return [location_ids]
+        return [
+            int(location_id)
+            for location_id in str(location_ids).split(",")
+            if location_id.strip()
+        ]
+
+    @api.model
+    def _empty_sync_result(self):
+        return {
+            "facility_code": False,
+            "location_id": False,
+            "items_processed": 0,
+            "products_created": 0,
+            "lots_created": 0,
+            "quants_updated": 0,
+        }
+
+    @api.model
+    def _merge_sync_result(self, result, next_result):
+        if not result.get("location_id"):
+            result["location_id"] = next_result.get("location_id")
+        for key in (
+            "items_processed",
+            "products_created",
+            "lots_created",
+            "quants_updated",
+        ):
+            result[key] += next_result.get(key, 0)
+        return result
 
     @api.model
     def _get_elmis_access_token(self, params):
