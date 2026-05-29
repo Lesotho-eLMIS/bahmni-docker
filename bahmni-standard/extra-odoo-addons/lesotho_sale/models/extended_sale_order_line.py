@@ -97,6 +97,35 @@ class ExtendedSaleOrderLine(models.Model):
         default=False,
     )
 
+    barcode_scan = fields.Char(
+        string="Barcode",
+        copy=False,
+        help="Scan a product barcode to populate the dispensed product, quantity and batch.",
+    )
+
+    dispensing_batch_number = fields.Char(
+        string="Batch Number",
+        copy=False,
+        help="Batch/lot selected for this dispensed product.",
+    )
+
+    served_internally = fields.Boolean(
+        string="Served Internally",
+        default=False,
+        copy=False,
+    )
+
+    additional_instructions = fields.Text(
+        string="Additional Instructions",
+        help="Dispensing notes to print with this medication.",
+    )
+
+    is_existing_prescription = fields.Boolean(
+        string="Existing Prescription",
+        compute="_compute_is_existing_prescription",
+        store=True,
+    )
+
     prescribed_product_id = fields.Many2one(
         "product.product",
         string="Prescribed Product",
@@ -200,6 +229,13 @@ class ExtendedSaleOrderLine(models.Model):
         store=True,
         help="Short summary of prescription details",
     )
+
+    @api.depends("external_order_uuid", "order_number")
+    def _compute_is_existing_prescription(self):
+        for line in self:
+            line.is_existing_prescription = bool(
+                line.external_order_uuid or line.order_number
+            )
 
     @api.model_create_multi
     def create(self, vals_list):
@@ -344,6 +380,95 @@ class ExtendedSaleOrderLine(models.Model):
                 line.out_of_stock = line.product_id.qty_available < line.product_uom_qty
             else:
                 line.out_of_stock = False
+
+    @api.onchange("barcode_scan")
+    def _onchange_barcode_scan(self):
+        Product = self.env["product.product"]
+        for line in self:
+            barcode = (line.barcode_scan or "").strip()
+            if not barcode:
+                continue
+            product = Product.search([("barcode", "=", barcode)], limit=1)
+            if not product:
+                product = Product.search([("default_code", "=", barcode)], limit=1)
+            if not product:
+                return {
+                    "warning": {
+                        "title": _("Barcode Not Found"),
+                        "message": _("No product was found for barcode %s.") % barcode,
+                    }
+                }
+
+            qty = product.pack_unit_qty if product.is_dispensing_pack and product.pack_unit_qty else 1.0
+            line.product_id = product
+            line.product_uom = product.uom_id
+            line.product_uom_qty = qty
+            line.served_internally = True
+
+            lot = line._get_fefo_available_lot(product, qty)
+            line.dispensing_batch_number = lot.name if lot else False
+
+    def action_apply_barcode_scan(self, barcode):
+        self.ensure_one()
+        barcode = (barcode or "").strip()
+        if not barcode:
+            return False
+
+        product = self.env["product.product"].search([("barcode", "=", barcode)], limit=1)
+        if not product:
+            product = self.env["product.product"].search([("default_code", "=", barcode)], limit=1)
+        if not product:
+            raise UserError(_("No product was found for barcode %s.") % barcode)
+
+        qty = (
+            product.pack_unit_qty
+            if product.is_dispensing_pack and product.pack_unit_qty
+            else 1.0
+        )
+        lot = self._get_fefo_available_lot(product, qty)
+        self.with_context(skip_prescription_init=True).write(
+            {
+                "barcode_scan": barcode,
+                "product_id": product.id,
+                "product_uom": product.uom_id.id,
+                "product_uom_qty": qty,
+                "served_internally": True,
+                "dispensing_batch_number": lot.name if lot else False,
+            }
+        )
+        return self.order_id._serialize_dispensing_line(self)
+
+    def _get_fefo_available_lot(self, product, required_qty=1.0):
+        self.ensure_one()
+        quant_domain = [
+            ("product_id", "=", product.id),
+            ("location_id.usage", "=", "internal"),
+            ("lot_id", "!=", False),
+        ]
+        warehouse = self.order_id.warehouse_id
+        if warehouse and warehouse.lot_stock_id:
+            quant_domain.append(("location_id", "child_of", warehouse.lot_stock_id.id))
+
+        candidates = []
+        for quant in self.env["stock.quant"].search(quant_domain):
+            available_qty = quant.quantity - quant.reserved_quantity
+            if float_compare(
+                available_qty,
+                required_qty,
+                precision_rounding=product.uom_id.rounding or 0.0001,
+            ) < 0:
+                continue
+            candidates.append(
+                (
+                    self._get_lot_expiry_key(quant.lot_id),
+                    quant.lot_id.name or "",
+                    quant.lot_id,
+                )
+            )
+        if not candidates:
+            return self.env["stock.lot"]
+        candidates.sort(key=lambda item: (item[0], item[1]))
+        return candidates[0][2]
 
     @api.depends(
         "display_type",
@@ -696,8 +821,17 @@ class ExtendedSaleOrderLine(models.Model):
             if not lot or not line.product_id or lot.product_id != line.product_id:
                 continue
             vals = line._prepare_batch_sync_vals(lot)
+            vals["dispensing_batch_number"] = lot.name
             if vals:
                 line.with_context(skip_prescription_init=True).write(vals)
+
+    def unlink(self):
+        protected = self.filtered("is_existing_prescription")
+        if protected:
+            raise UserError(
+                _("Pre-existing prescription panels cannot be removed. Only products added in this screen can be closed.")
+            )
+        return super().unlink()
 
     def _build_pack_candidate(self, pack_product):
         self.ensure_one()

@@ -5,7 +5,7 @@
 
 /* TOP TITLE PANEL */
 .o_web_client::before {
-  content: "Lesotho eLMIS - Dispensing";
+  content: "Lesotho Dispensing";
   display: flex;
   align-items: center;
   justify-content: flex-start;

@@ -84,6 +84,30 @@ class ResPartner(models.Model):
         help="Number of active (non-voided) allergies",
     )
 
+    def name_search(self, name="", args=None, operator="ilike", limit=100):
+        if not self.env.context.get("show_patient_prescription_details"):
+            return super().name_search(name=name, args=args, operator=operator, limit=limit)
+
+        args = args or []
+        partners = self.search(
+            ["|", ("name", operator, name), ("ref", operator, name)] + args,
+            limit=limit,
+        )
+        result = []
+        for partner in partners:
+            details = []
+            if partner.sex:
+                details.append(dict(partner._fields["sex"].selection).get(partner.sex, partner.sex))
+            if partner.age:
+                details.append(f"{partner.age} yrs")
+            if partner.village_id:
+                details.append(partner.village_id.display_name)
+            display_name = partner.name
+            if details:
+                display_name = f"{display_name} ({', '.join(details)})"
+            result.append((partner.id, display_name))
+        return result
+
     # ============ COMPUTE METHODS ============
     @api.depends("allergy_ids")
     def _compute_has_allergies(self):

@@ -20,11 +20,20 @@
         "views/navbar_shortcut_actions.xml",
         "views/action_overrides.xml",
         "wizard/dispensing_pack_selection_wizard.xml",
+        "report/dispensed_prescription_report.xml",
+        "views/prescription_dispense_action.xml",
         "views/view_order_overrides.xml",
         # "views/view_overrides.xml",
         # "data/migration_script.py",
         "views/view_overrides.xml",
     ],
+    "assets": {
+        "web.assets_backend": [
+            "lesotho_sale/static/src/components/prescription_dispense/prescription_dispense.js",
+            "lesotho_sale/static/src/components/prescription_dispense/prescription_dispense.xml",
+            "lesotho_sale/static/src/components/prescription_dispense/prescription_dispense.scss",
+        ],
+    },
     "installable": True,
     "application": False,
 }

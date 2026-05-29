@@ -11,6 +11,7 @@
             <!-- Rename Customer to Patient -->
             <xpath expr="//field[@name='partner_id']" position="attributes">
                 <attribute name="string">Patient</attribute>
+                <attribute name="context">{'show_patient_prescription_details': True}</attribute>
             </xpath>
 
             <!-- Rename partner fields to patient wording -->
@@ -180,6 +181,23 @@
 
                     <group string="Pack Substitution">
                         <field
+                            name="barcode_scan"
+                            attrs="{'invisible': [('display_type', '!=', False)]}"
+                        />
+                        <field
+                            name="dispensing_batch_number"
+                            attrs="{'invisible': [('display_type', '!=', False)]}"
+                        />
+                        <field
+                            name="served_internally"
+                            attrs="{'invisible': [('display_type', '!=', False)]}"
+                        />
+                        <field
+                            name="out_of_stock"
+                            readonly="1"
+                            attrs="{'invisible': [('display_type', '!=', False)]}"
+                        />
+                        <field
                             name="can_suggest_pack"
                             invisible="1"
                             attrs="{'invisible': [('display_type', '!=', False)]}"
@@ -221,6 +239,11 @@
                     <!-- Administration Instructions -->
                     <field
             name="administration_instructions"
+            attrs="{'invisible': [('display_type', '!=', False)]}"
+            colspan="4"
+          />
+                    <field
+            name="additional_instructions"
             attrs="{'invisible': [('display_type', '!=', False)]}"
             colspan="4"
           />
@@ -430,6 +453,14 @@
 
             <!-- Add dispensing button to header -->
             <xpath expr="//header" position="inside">
+                <button
+                  name="action_open_prescription_dispense_page"
+                  type="object"
+                  string="Dispense Prescription"
+                  class="oe_highlight lesotho_serve_button"
+                  icon="fa-medkit"
+                  attrs="{'invisible': [('state', 'in', ['cancel'])]}"
+                />
                 <button
                   name="action_view_dispensing_lines"
                   type="object"
