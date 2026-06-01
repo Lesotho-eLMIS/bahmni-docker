@@ -111,7 +111,7 @@ class ExtendedSaleOrderLine(models.Model):
 
     served_internally = fields.Boolean(
         string="Served Internally",
-        default=False,
+        default=True,
         copy=False,
     )
 

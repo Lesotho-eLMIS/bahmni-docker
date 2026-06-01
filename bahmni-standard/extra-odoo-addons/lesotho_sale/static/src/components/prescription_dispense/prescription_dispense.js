@@ -15,7 +15,10 @@ export class PrescriptionDispense extends Component {
             orderId: this.props.action.context.active_id,
             order: {},
             lines: [],
+            activeLineId: false,
+            directionOptions: {},
             explanationConfirmed: false,
+            reviewExpanded: true,
         });
 
         onMounted(async () => {
@@ -32,8 +35,77 @@ export class PrescriptionDispense extends Component {
         const data = await this.orm.call("sale.order", "fetch_prescription_dispensing", [[this.state.orderId]]);
         this.state.order = data;
         this.state.lines = data.lines;
+        this.state.activeLineId = data.lines.length ? data.lines[0].id : false;
+        this.state.directionOptions = data.direction_options || {};
         this.state.explanationConfirmed = data.medication_explanation_confirmed;
         this.state.loading = false;
+    }
+
+    selectLine(line) {
+        this.state.activeLineId = line.id;
+    }
+
+    isLineActive(line) {
+        return this.state.activeLineId === line.id;
+    }
+
+    isLineComplete(line) {
+        return [
+            line.dispensed_product,
+            line.quantity_dispensed,
+            line.batch_number,
+            line.barcode,
+            line.dose,
+            line.dose_unit,
+            line.frequency,
+            line.route,
+            line.duration,
+            line.duration_units,
+            line.instructions,
+            line.additional_instructions,
+        ].every((value) => value !== false && value !== null && value !== undefined && value !== "");
+    }
+
+    getLineStatus(line) {
+        if (!line.served_internally) {
+            return "Serve externally";
+        }
+        if (!this.isLineComplete(line)) {
+            return "Pending";
+        }
+        const prescribed = Number(line.quantity_prescribed || 0);
+        const dispensed = Number(line.quantity_dispensed || 0);
+        if (dispensed <= 0) {
+            return "Pending";
+        }
+        if (Math.abs(prescribed - dispensed) < 0.0001) {
+            return "Fully served";
+        }
+        if (dispensed > 0 && dispensed < prescribed) {
+            return "Partially served";
+        }
+        return "Check quantity";
+    }
+
+    getLineStatusClass(line) {
+        const status = this.getLineStatus(line);
+        if (status === "Fully served") {
+            return "o_lesotho_tab_status served";
+        }
+        if (status === "Partially served") {
+            return "o_lesotho_tab_status partial";
+        }
+        if (status === "Serve externally") {
+            return "o_lesotho_tab_status external";
+        }
+        if (status === "Check quantity") {
+            return "o_lesotho_tab_status warning";
+        }
+        return "o_lesotho_tab_status pending";
+    }
+
+    toggleReview() {
+        this.state.reviewExpanded = !this.state.reviewExpanded;
     }
 
     focusBarcode(index) {
@@ -50,6 +122,7 @@ export class PrescriptionDispense extends Component {
     async addProduct() {
         const line = await this.orm.call("sale.order", "add_prescription_dispensing_line", [[this.state.orderId]]);
         this.state.lines.push(line);
+        this.state.activeLineId = line.id;
         this.focusBarcode(this.state.lines.length - 1);
     }
 
@@ -87,7 +160,11 @@ export class PrescriptionDispense extends Component {
                 [[line.id], line.barcode]
             );
             Object.assign(line, updated);
-            this.focusBarcode(index + 1);
+            const nextLine = this.state.lines[index + 1];
+            if (nextLine) {
+                this.state.activeLineId = nextLine.id;
+            }
+            this.focusBarcode(0);
         } catch (error) {
             this.notification.add(error.message || "Barcode could not be applied.", { type: "danger" });
         }
