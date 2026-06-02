@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+    <record id="view_elmis_program_tree" model="ir.ui.view">
+        <field name="name">elmis.program.tree</field>
+        <field name="model">elmis.program</field>
+        <field name="arch" type="xml">
+            <tree>
+                <field name="code"/>
+                <field name="name"/>
+                <field name="elmis_program_id" optional="hide"/>
+                <field name="active" optional="hide"/>
+            </tree>
+        </field>
+    </record>
+
+    <record id="view_elmis_program_form" model="ir.ui.view">
+        <field name="name">elmis.program.form</field>
+        <field name="model">elmis.program</field>
+        <field name="arch" type="xml">
+            <form>
+                <sheet>
+                    <group>
+                        <field name="code"/>
+                        <field name="name"/>
+                        <field name="elmis_program_id"/>
+                        <field name="active"/>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="view_elmis_program_search" model="ir.ui.view">
+        <field name="name">elmis.program.search</field>
+        <field name="model">elmis.program</field>
+        <field name="arch" type="xml">
+            <search>
+                <field name="code"/>
+                <field name="name"/>
+                <filter name="active" string="Active" domain="[('active', '=', True)]"/>
+            </search>
+        </field>
+    </record>
+
+    <record id="action_elmis_programs" model="ir.actions.act_window">
+        <field name="name">eLMIS Programs</field>
+        <field name="res_model">elmis.program</field>
+        <field name="view_mode">tree,form</field>
+        <field name="search_view_id" ref="view_elmis_program_search"/>
+        <field name="context">{'search_default_active': 1}</field>
+    </record>
+
+    <menuitem
+        id="menu_elmis_programs"
+        name="eLMIS Programs"
+        parent="stock.menu_stock_config_settings"
+        action="action_elmis_programs"
+        sequence="95"
+    />
+</odoo>

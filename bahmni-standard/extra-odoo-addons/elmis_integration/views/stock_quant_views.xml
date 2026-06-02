@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+    <record id="view_stock_quant_search_elmis_integration" model="ir.ui.view">
+        <field name="name">stock.quant.search.elmis.integration</field>
+        <field name="model">stock.quant</field>
+        <field name="inherit_id" ref="stock.quant_search_view"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='product_id']" position="after">
+                <field name="elmis_program_ids" string="eLMIS Program"/>
+            </xpath>
+            <xpath expr="//filter[@name='on_hand']" position="after">
+                <filter name="elmis_stock" string="eLMIS Stock" domain="[('product_id.is_elmis_product', '=', True)]"/>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="view_stock_quant_tree_elmis_integration" model="ir.ui.view">
+        <field name="name">stock.quant.tree.elmis.integration</field>
+        <field name="model">stock.quant</field>
+        <field name="inherit_id" ref="stock.view_stock_quant_tree_editable"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='product_id']" position="after">
+                <field name="elmis_program_ids" widget="many2many_tags" optional="hide"/>
+                <field name="elmis_inventory_program_id" optional="hide"/>
+                <field name="elmis_inventory_adjustment_reason" optional="show"/>
+            </xpath>
+        </field>
+    </record>
+</odoo>

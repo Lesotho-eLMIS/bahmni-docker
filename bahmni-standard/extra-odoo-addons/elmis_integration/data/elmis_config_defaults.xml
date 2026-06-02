@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo noupdate="1">
+    <record id="ir_config_parameter_elmis_base_url" model="ir.config_parameter">
+        <field name="key">elmis_integration.base_url</field>
+        <field name="value">https://dev.elmis.gov.ls/api/</field>
+    </record>
+    <record id="ir_config_parameter_elmis_program_codes" model="ir.config_parameter">
+        <field name="key">elmis_integration.program_codes</field>
+        <field name="value">art,epi,fp,lab,medical_supplies,nutrition,ois,oral,tb,other,em</field>
+    </record>
+    <record id="ir_config_parameter_elmis_sync_cron_active" model="ir.config_parameter">
+        <field name="key">elmis_integration.sync_cron_active</field>
+        <field name="value">False</field>
+    </record>
+    <record id="ir_config_parameter_elmis_mirror_location_ids" model="ir.config_parameter">
+        <field name="key">elmis_integration.mirror_location_ids</field>
+        <field name="value"/>
+    </record>
+    <record id="ir_config_parameter_elmis_sync_interval_number" model="ir.config_parameter">
+        <field name="key">elmis_integration.sync_interval_number</field>
+        <field name="value">6</field>
+    </record>
+    <record id="ir_config_parameter_elmis_sync_interval_type" model="ir.config_parameter">
+        <field name="key">elmis_integration.sync_interval_type</field>
+        <field name="value">hours</field>
+    </record>
+
+    <record id="elmis_program_art" model="elmis.program">
+        <field name="code">art</field>
+        <field name="name">ART</field>
+        <field name="elmis_program_id">08628ebc-78e0-4cb4-aaca-640b44d0baeb</field>
+    </record>
+    <record id="elmis_program_epi" model="elmis.program">
+        <field name="code">epi</field>
+        <field name="name">EPI</field>
+        <field name="elmis_program_id">49f7571d-6381-4582-b598-d1abc4093b74</field>
+    </record>
+    <record id="elmis_program_fp" model="elmis.program">
+        <field name="code">fp</field>
+        <field name="name">Family Planning</field>
+        <field name="elmis_program_id">76efc190-00a7-4536-ab18-596248c1c789</field>
+    </record>
+    <record id="elmis_program_lab" model="elmis.program">
+        <field name="code">lab</field>
+        <field name="name">Laboratory</field>
+        <field name="elmis_program_id">bedde8bc-709a-426b-ae5a-89e23b3cb012</field>
+    </record>
+    <record id="elmis_program_medical_supplies" model="elmis.program">
+        <field name="code">medical_supplies</field>
+        <field name="name">Medical Supplies</field>
+        <field name="elmis_program_id">b5d3c3a0-ee8a-4131-af9a-c396d751d569</field>
+    </record>
+    <record id="elmis_program_nutrition" model="elmis.program">
+        <field name="code">nutrition</field>
+        <field name="name">Nutrition</field>
+        <field name="elmis_program_id">e3a6e598-1990-4af8-b00b-06954f721ca1</field>
+    </record>
+    <record id="elmis_program_ois" model="elmis.program">
+        <field name="code">ois</field>
+        <field name="name">Opportunistic Infections</field>
+        <field name="elmis_program_id">3a4ddbff-d597-4f44-a52a-beb4b9a201ff</field>
+    </record>
+    <record id="elmis_program_oral" model="elmis.program">
+        <field name="code">oral</field>
+        <field name="name">Oral Health</field>
+        <field name="elmis_program_id">af2ea04f-65b2-465c-a8ab-46d3c32138ff</field>
+    </record>
+    <record id="elmis_program_tb" model="elmis.program">
+        <field name="code">tb</field>
+        <field name="name">TB</field>
+        <field name="elmis_program_id">f2b193b4-2eb0-46ee-b1a3-bba5ce4fbedc</field>
+    </record>
+    <record id="elmis_program_other" model="elmis.program">
+        <field name="code">other</field>
+        <field name="name">Other</field>
+        <field name="elmis_program_id">c091d8dd-351c-4d54-9443-8b1bb5f4b935</field>
+    </record>
+    <record id="elmis_program_em" model="elmis.program">
+        <field name="code">em</field>
+        <field name="name">Essential Medicines</field>
+        <field name="elmis_program_id">c8bd4ec6-7994-4445-9259-f6c6b5d59d0c</field>
+    </record>
+</odoo>

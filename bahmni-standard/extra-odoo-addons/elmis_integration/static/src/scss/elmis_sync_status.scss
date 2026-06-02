@@ -1,0 +1,145 @@
+.o_main_navbar .o_elmis_sync_status {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  height: 100%;
+  margin-left: 8px;
+}
+
+.o_main_navbar .o_elmis_sync_status_button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 36px;
+  min-width: 150px;
+  padding: 0 12px;
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.12);
+  color: #ffffff;
+  font-size: 0.95rem;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.o_main_navbar .o_elmis_sync_status_dot {
+  width: 8px;
+  height: 8px;
+  flex: 0 0 8px;
+  border-radius: 50%;
+  background: #6b7280;
+}
+
+.o_main_navbar .o_elmis_sync_status_ok .o_elmis_sync_status_dot {
+  background: #15803d;
+}
+
+.o_main_navbar .o_elmis_sync_status_due .o_elmis_sync_status_dot {
+  background: #b45309;
+}
+
+.o_main_navbar .o_elmis_sync_status_failed .o_elmis_sync_status_dot {
+  background: #b91c1c;
+}
+
+.o_main_navbar .o_elmis_sync_status_countdown {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 52px;
+  height: 24px;
+  padding: 0 8px;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #111827;
+  font-size: 1rem;
+  font-weight: 800;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.o_main_navbar .o_elmis_sync_status_off .o_elmis_sync_status_countdown {
+  background: #f3f4f6;
+  color: #374151;
+}
+
+.o_main_navbar .o_elmis_sync_status_due .o_elmis_sync_status_countdown {
+  background: #fff7ed;
+  color: #9a3412;
+}
+
+.o_main_navbar .o_elmis_sync_status_failed .o_elmis_sync_status_countdown {
+  background: #fef2f2;
+  color: #991b1b;
+}
+
+.o_main_navbar .o_elmis_sync_status_menu {
+  position: absolute;
+  top: 38px;
+  right: 0;
+  z-index: 1060;
+  width: 320px;
+  padding: 14px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #111827;
+  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.18);
+}
+
+.o_elmis_sync_status_menu_header,
+.o_elmis_sync_status_row,
+.o_elmis_sync_status_actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.o_elmis_sync_status_menu_header {
+  padding-bottom: 10px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.o_elmis_sync_status_section {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid #e5e7eb;
+}
+
+.o_elmis_sync_status_section_header {
+  color: #374151;
+  font-size: 0.82rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.o_elmis_sync_status_row {
+  padding-top: 10px;
+  font-size: 0.88rem;
+}
+
+.o_elmis_sync_status_row span,
+.o_elmis_sync_status_menu_header span {
+  color: #6b7280;
+}
+
+.o_elmis_sync_status_row strong {
+  max-width: 190px;
+  text-align: right;
+}
+
+.o_elmis_sync_status_error {
+  margin-top: 10px;
+  padding: 8px;
+  border-radius: 6px;
+  background: #fef2f2;
+  color: #991b1b;
+  font-size: 0.84rem;
+}
+
+.o_elmis_sync_status_actions {
+  justify-content: flex-end;
+  padding-top: 12px;
+}

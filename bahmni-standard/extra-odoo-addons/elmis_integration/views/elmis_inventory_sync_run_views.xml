@@ -1,0 +1,103 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+    <record id="elmis_inventory_sync_run_view_tree" model="ir.ui.view">
+        <field name="name">elmis.inventory.sync.run.view.tree</field>
+        <field name="model">elmis.inventory.sync.run</field>
+        <field name="arch" type="xml">
+            <tree string="eLMIS Sync Runs" create="false" edit="false" delete="false">
+                <field name="started_at"/>
+                <field name="operation"/>
+                <field name="status"/>
+                <field name="facility_code"/>
+                <field name="program_codes"/>
+                <field name="stock_entries_found"/>
+                <field name="items_processed"/>
+                <field name="products_created"/>
+                <field name="lots_created"/>
+                <field name="quants_updated"/>
+                <field name="duration_seconds"/>
+            </tree>
+        </field>
+    </record>
+
+    <record id="elmis_inventory_sync_run_view_form" model="ir.ui.view">
+        <field name="name">elmis.inventory.sync.run.view.form</field>
+        <field name="model">elmis.inventory.sync.run</field>
+        <field name="arch" type="xml">
+            <form string="eLMIS Sync Run" create="false" edit="false" delete="false">
+                <sheet>
+                    <group>
+                        <group>
+                            <field name="name"/>
+                            <field name="operation"/>
+                            <field name="status"/>
+                            <field name="started_at"/>
+                            <field name="finished_at"/>
+                            <field name="duration_seconds"/>
+                        </group>
+                        <group>
+                            <field name="location_id"/>
+                            <field name="facility_code"/>
+                            <field name="facility_id"/>
+                            <field name="program_codes"/>
+                            <field name="programs_resolved"/>
+                        </group>
+                    </group>
+                    <group string="Counts">
+                        <group>
+                            <field name="stock_entries_found"/>
+                            <field name="items_processed"/>
+                            <field name="products_created"/>
+                        </group>
+                        <group>
+                            <field name="lots_created"/>
+                            <field name="quants_updated"/>
+                        </group>
+                    </group>
+                    <group string="Details">
+                        <field name="message" nolabel="1"/>
+                        <field name="error_message" nolabel="1"/>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="elmis_inventory_sync_run_view_search" model="ir.ui.view">
+        <field name="name">elmis.inventory.sync.run.view.search</field>
+        <field name="model">elmis.inventory.sync.run</field>
+        <field name="arch" type="xml">
+            <search string="eLMIS Sync Runs">
+                <field name="facility_code"/>
+                <field name="program_codes"/>
+                <filter name="running" string="Running" domain="[('status', '=', 'running')]"/>
+                <filter name="failed" string="Failed" domain="[('status', '=', 'failed')]"/>
+                <filter name="success" string="Success" domain="[('status', '=', 'success')]"/>
+                <separator/>
+                <filter name="test_connection" string="Connection Tests" domain="[('operation', '=', 'test_connection')]"/>
+                <filter name="inventory_sync" string="Inventory Syncs" domain="[('operation', '=', 'inventory_sync')]"/>
+                <group expand="0" string="Group By">
+                    <filter name="group_status" string="Status" context="{'group_by': 'status'}"/>
+                    <filter name="group_operation" string="Operation" context="{'group_by': 'operation'}"/>
+                    <filter name="group_facility" string="Facility" context="{'group_by': 'facility_code'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <record id="action_elmis_inventory_sync_run" model="ir.actions.act_window">
+        <field name="name">eLMIS Sync History</field>
+        <field name="res_model">elmis.inventory.sync.run</field>
+        <field name="view_mode">tree,form</field>
+        <field name="search_view_id" ref="elmis_inventory_sync_run_view_search"/>
+        <field name="context">{'search_default_group_status': 1}</field>
+    </record>
+
+    <menuitem
+        id="menu_elmis_inventory_sync_runs"
+        name="eLMIS Sync History"
+        parent="stock.menu_stock_warehouse_mgmt"
+        action="action_elmis_inventory_sync_run"
+        sequence="81"
+        groups="stock.group_stock_manager"/>
+</odoo>

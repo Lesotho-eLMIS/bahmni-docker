@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+  <t t-name="elmis_integration.SyncStatus" owl="1">
+    <div class="o_elmis_sync_status" t-att-class="statusClass">
+      <button
+        type="button"
+        class="o_elmis_sync_status_button"
+        title="eLMIS sync status"
+        t-on-click="toggle"
+      >
+        <span class="o_elmis_sync_status_dot"/>
+        <span class="o_elmis_sync_status_name">eLMIS</span>
+        <span class="o_elmis_sync_status_countdown" t-esc="summaryLabel"/>
+      </button>
+      <div t-if="state.open" class="o_elmis_sync_status_menu">
+        <div class="o_elmis_sync_status_menu_header">
+          <strong>eLMIS Sync</strong>
+          <span t-esc="state.enabled ? state.intervalLabel : 'Schedule off'"/>
+        </div>
+        <div class="o_elmis_sync_status_row">
+          <span>Last success</span>
+          <strong t-esc="lastSuccessLabel"/>
+        </div>
+        <div class="o_elmis_sync_status_row">
+          <span>Last run</span>
+          <strong t-esc="lastRunLabel"/>
+        </div>
+        <div t-if="state.outbox" class="o_elmis_sync_status_section">
+          <div class="o_elmis_sync_status_section_header">Outbox</div>
+          <div class="o_elmis_sync_status_row">
+            <span>Pending</span>
+            <strong t-esc="state.outbox.pending"/>
+          </div>
+          <div class="o_elmis_sync_status_row">
+            <span>Failed</span>
+            <strong t-esc="state.outbox.failed"/>
+          </div>
+          <div class="o_elmis_sync_status_row">
+            <span>Stuck sent</span>
+            <strong t-esc="state.outbox.stuck_sent"/>
+          </div>
+          <div class="o_elmis_sync_status_row">
+            <span>Oldest retryable</span>
+            <strong t-esc="oldestRetryableLabel"/>
+          </div>
+          <div class="o_elmis_sync_status_row">
+            <span>Oldest stuck sent</span>
+            <strong t-esc="oldestStuckSentLabel"/>
+          </div>
+          <div class="o_elmis_sync_status_row">
+            <span>Last delivered</span>
+            <strong t-esc="lastDeliveredLabel"/>
+          </div>
+        </div>
+        <div t-if="state.lastRun &amp;&amp; state.lastRun.status === 'failed'" class="o_elmis_sync_status_error">
+          <span t-esc="state.lastRun.error_message || 'The last sync failed.'"/>
+        </div>
+        <div t-if="state.outbox &amp;&amp; state.outbox.last_error" class="o_elmis_sync_status_error">
+          <span t-esc="state.outbox.last_error"/>
+        </div>
+        <div class="o_elmis_sync_status_actions">
+          <button type="button" class="btn btn-secondary" t-on-click="openHistory">
+            History
+          </button>
+          <button type="button" class="btn btn-secondary" t-on-click="openOutbox">
+            Outbox
+          </button>
+          <button type="button" class="btn btn-primary" t-on-click="openTrigger">
+            Sync
+          </button>
+        </div>
+      </div>
+    </div>
+  </t>
+</templates>
