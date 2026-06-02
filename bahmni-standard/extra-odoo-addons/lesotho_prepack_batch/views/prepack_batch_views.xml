@@ -21,7 +21,7 @@
         <field name="arch" type="xml">
             <form string="Prepack Batch">
                 <header>
-                    <button name="action_authorize_batch" string="Authorize Document" type="object" class="btn-primary" states="pending_auth" groups="mrp.group_mrp_manager"/>
+                    <button name="action_authorize_batch" string="Authorize" type="object" class="btn-primary" states="pending_auth" groups="mrp.group_mrp_manager"/>
                     <button name="action_cancel" string="Cancel" type="object" states="draft,pending_auth"/>
                     <field name="state" widget="statusbar" statusbar_visible="draft,pending_auth,done,cancel"/>
                 </header>

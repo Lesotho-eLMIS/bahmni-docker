@@ -1,3 +1,5 @@
+import json
+
 from odoo import _, api, fields, models
 from odoo.exceptions import UserError, ValidationError
 
@@ -67,6 +69,10 @@ class BahmniPrepackBatch(models.Model):
     )
     note = fields.Text()
     line_count = fields.Integer(compute="_compute_counts")
+    draft_data = fields.Text(
+        string="Draft Data",
+        help="JSON representation of the prepacking list for draft persistence.",
+    )
     mrp_production_ids = fields.Many2many(
         "mrp.production",
         compute="_compute_mrp_production_ids",
@@ -111,15 +117,14 @@ class BahmniPrepackBatch(models.Model):
         return False
 
     @api.model
-    def fetch_bulk_inventory(self):
+    def fetch_bulk_inventory(self, include_prepacks=False):
         """Fetch bulk products with stock on hand and lot details for the prepacking UI."""
         domain = [
             ("quantity", ">", 0),
             ("product_id.detailed_type", "=", "product"),
-            "|",
-            ("product_id.is_prepack", "=", False),
-            ("product_id.is_prepack", "=", False),
         ]
+        if not include_prepacks:
+            domain.append(("product_id.is_prepack", "=", False))
 
         location_src_id = self._default_location_src_id()
         if location_src_id:
@@ -168,26 +173,46 @@ class BahmniPrepackBatch(models.Model):
         return inventory
 
     @api.model
+    def fetch_draft_batch(self):
+        """Fetch the current user's draft batch if one exists."""
+        batch = self.search(
+            [("state", "=", "draft"), ("responsible_id", "=", self.env.user.id)],
+            limit=1,
+        )
+        if batch and batch.draft_data:
+            return {
+                "id": batch.id,
+                "name": batch.name,
+                "items": json.loads(batch.draft_data),
+            }
+        return None
+
+    @api.model
+    def save_prepack_batch(self, payload):
+        """Save the current prepack list as a draft batch for the user."""
+        batch = self.search(
+            [("state", "=", "draft"), ("responsible_id", "=", self.env.user.id)],
+            limit=1,
+        )
+
+        if not batch:
+            batch = self.create({"state": "draft"})
+
+        batch.write({"draft_data": json.dumps(payload)})
+        return {"id": batch.id, "name": batch.name}
+
+    @api.model
     def submit_prepack_batch(self, payload):
-        """
-        Payload format:
-        [
-            {
-                "id": product_id,
-                "lot_id": lot_id,
-                "targets": [{"size": 10, "qty": 5}, ...]
-            },
-            ...
-        ]
-        """
+        """Submit the batch for authorization, generating MOs for all lines."""
         if not payload:
             raise UserError(_("No data submitted."))
 
-        batch = self.create(
-            {
-                "state": "pending_auth",
-            }
-        )
+        # Re-save to ensure we have the latest data before converting to lines
+        res = self.save_prepack_batch(payload)
+        batch = self.browse(res["id"])
+
+        # Clear existing lines to rebuild the list for submission
+        batch.line_ids.unlink()
 
         for item in payload:
             bulk_product = self.env["product.product"].browse(item["id"])
@@ -196,21 +221,16 @@ class BahmniPrepackBatch(models.Model):
             for target in item["targets"]:
                 size = float(target.get("size", 0))
                 qty = float(target.get("qty", 0))
-
                 if size <= 0 or qty <= 0:
                     continue
 
-                # 1. Find or create prepack product
                 prepack_product = self._get_or_create_prepack_product(
                     bulk_product, size
                 )
-
-                # 2. Find or create BoM
                 bom = self._get_or_create_prepack_bom(
                     prepack_product, bulk_product, size
                 )
 
-                # 3. Create batch line
                 line = self.env["bahmni.prepack.batch.line"].create(
                     {
                         "batch_id": batch.id,
@@ -220,14 +240,11 @@ class BahmniPrepackBatch(models.Model):
                         "package_qty": qty,
                     }
                 )
-
-                # 4. Generate MO
                 line._generate_manufacturing_order()
 
-        return {
-            "id": batch.id,
-            "name": batch.name,
-        }
+        batch.state = "pending_auth"
+        batch.draft_data = False  # Clear draft data after successful submission
+        return res
 
     def _get_or_create_prepack_product(self, bulk_product, size):
         bulk_uom = bulk_product.uom_id.name
@@ -302,6 +319,40 @@ class BahmniPrepackBatch(models.Model):
             for line in batch.line_ids:
                 line._complete_manufacturing_order()
             batch.state = "done"
+        return True
+
+    def action_reject_batch(self, comment):
+        """Reject a pending authorization batch and send it back to the creator with a comment.
+
+        This will cancel any in-progress manufacturing orders for the batch (not done/cancelled),
+        post a message to the responsible user with the rejection comment and set the batch
+        back to draft so the creator can modify and resubmit.
+        """
+        for batch in self:
+            if batch.state != "pending_auth":
+                raise UserError(_("Only pending authorization batches can be rejected."))
+
+            # Cancel any running manufacturing orders created for this batch
+            for mo in batch.line_ids.mapped("mrp_production_id").filtered(
+                lambda m: m.state not in ("done", "cancel")
+            ):
+                try:
+                    mo.action_cancel()
+                except Exception:
+                    # Best effort: ignore cancellation errors and continue
+                    pass
+
+            # Post a message for the responsible user with the rejection comment
+            body = _("Prepack batch rejected by %s: \n\n%s") % (self.env.user.name, comment or "")
+            try:
+                batch.message_post(body=body, partner_ids=[batch.responsible_id.partner_id.id])
+            except Exception:
+                # If message posting fails, still proceed to set state
+                pass
+
+            # Save the comment to the note field and revert to draft
+            batch.note = (batch.note or "") + "\n\nRejection comment: " + (comment or "")
+            batch.state = "draft"
         return True
 
     @api.model
@@ -381,8 +432,10 @@ class BahmniPrepackBatch(models.Model):
 
             grouped[key]["targets"].append(
                 {
+                    "line_id": line.id,
                     "size": line.product_id.pack_unit_qty,
                     "qty": line.package_qty,
+                    "state": line.state,
                 }
             )
 
@@ -519,7 +572,7 @@ class BahmniPrepackBatchLine(models.Model):
         store=True,
     )
     package_qty = fields.Integer(
-        string="Number of Packs",
+        string="Number of Prepacks",
         required=True,
         default=1,
     )
@@ -678,7 +731,9 @@ class BahmniPrepackBatchLine(models.Model):
     def _check_package_qty(self):
         for line in self:
             if line.package_qty <= 0:
-                raise ValidationError(_("Number of packs must be greater than zero."))
+                raise ValidationError(
+                    _("Number of prepacks must be greater than zero.")
+                )
 
     @api.constrains(
         "product_id", "bom_id", "bulk_lot_id", "batch_id.location_src_id", "package_qty"
@@ -746,6 +801,28 @@ class BahmniPrepackBatchLine(models.Model):
                         "available": line.bulk_qty_available,
                     }
                 )
+
+    def action_authorize_line(self):
+        """Authorize a single prepack line."""
+        self._complete_manufacturing_order()
+        # If all lines are done, mark the batch as done
+        if all(line.state == "done" for line in self.batch_id.line_ids):
+            self.batch_id.state = "done"
+        return True
+
+    def action_reject_line(self):
+        """Reject a single prepack line by cancelling its manufacturing order."""
+        for line in self:
+            if line.mrp_production_id:
+                mo = line.mrp_production_id
+                if mo.state not in ("done", "cancel"):
+                    try:
+                        mo.action_cancel()
+                    except Exception:
+                        pass
+            # Set line state to cancelled or draft
+            line.state = "cancel"
+        return True
 
     def _get_finished_lot_name(self):
         self.ensure_one()

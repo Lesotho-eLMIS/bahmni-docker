@@ -26,6 +26,8 @@ export class PrepackDashboard extends Component {
       batchId: null,
       batchName: "",
       isAuthorized: false,
+      includePrepacks: false,
+      rejectComment: "",
     });
     onWillStart(async () => {
       this.state.permissions = await this.orm.call("bahmni.prepack.batch", "check_prepack_permissions", []);
@@ -43,6 +45,12 @@ export class PrepackDashboard extends Component {
         if (this.state.permissions.can_create) {
           this.state.step = 1;
           await this.loadInventory();
+
+          // Load draft if exists
+          const draft = await this.orm.call("bahmni.prepack.batch", "fetch_draft_batch", []);
+          if (draft) {
+            this.state.batchItems = draft.items;
+          }
         } else if (this.state.permissions.can_authorize) {
           this.state.step = 3;
           this.state.pendingBatches = await this.orm.call("bahmni.prepack.batch", "fetch_pending_batches", []);
@@ -56,8 +64,14 @@ export class PrepackDashboard extends Component {
   }
 
   async loadInventory() {
-    const inventory = await this.orm.call("bahmni.prepack.batch", "fetch_bulk_inventory", []);
+    const inventory = await this.orm.call("bahmni.prepack.batch", "fetch_bulk_inventory", [], {
+      include_prepacks: this.state.includePrepacks,
+    });
     this.state.inventory = inventory;
+  }
+
+  async onIncludePrepacksToggle() {
+    await this.loadInventory();
   }
 
   async selectBatch(batchId) {
@@ -67,6 +81,13 @@ export class PrepackDashboard extends Component {
       this.state.batchName = details.name;
       this.state.batchItems = details.items;
       this.state.isAuthorized = details.isAuthorized;
+      this.state.rejectComment = "";
+    }
+  }
+
+  async autoSave() {
+    if (this.state.mode === "create") {
+      await this.orm.call("bahmni.prepack.batch", "save_prepack_batch", [this.state.batchItems]);
     }
   }
 
@@ -88,7 +109,7 @@ export class PrepackDashboard extends Component {
     this.state.canAddToBatch = chk1 && chk2 && (needsLiquid ? chk3 : true);
   }
 
-  addToBatch() {
+  async addToBatch() {
     if (this.state.batchItems.find(i => i.key === this.state.selectedProduct.key)) {
       this.notification.add("This product lot is already in your batch list.", { type: "danger" });
       return;
@@ -101,10 +122,20 @@ export class PrepackDashboard extends Component {
     this.state.selectedProduct = null;
     this.state.checks = { chk1: false, chk2: false, chk3: false };
     this.state.canAddToBatch = false;
+
+    await this.autoSave();
   }
 
-  removeFromBatch(key) {
+  async removeFromBatch(key) {
     this.state.batchItems = this.state.batchItems.filter(i => i.key !== key);
+    await this.autoSave();
+  }
+
+  async clearBatch() {
+    if (confirm("Are you sure you want to clear all items from the batch list?")) {
+      this.state.batchItems = [];
+      await this.autoSave();
+    }
   }
 
   goToStep(step) {
@@ -114,12 +145,14 @@ export class PrepackDashboard extends Component {
     }
     this.state.step = step;
   }
-  addTarget(item) {
+  async addTarget(item) {
     item.targets.push({ size: 0, qty: 0 });
+    await this.autoSave();
   }
 
-  removeTarget(item, index) {
+  async removeTarget(item, index) {
     item.targets.splice(index, 1);
+    await this.autoSave();
   }
 
   getTotalUsed(item) {
@@ -151,7 +184,7 @@ export class PrepackDashboard extends Component {
 
     if (!isValid) return;
     if (!hasTargets) {
-      this.notification.add("Please define at least one valid target size and quantity.", { type: "danger" });
+      this.notification.add("Please define at least one valid prepack size and quantity.", { type: "danger" });
       return;
     }
 
@@ -175,11 +208,79 @@ export class PrepackDashboard extends Component {
   async authorizeBatch() {
     await this.orm.call("bahmni.prepack.batch", "action_authorize_batch", [[this.state.batchId]]);
     this.state.isAuthorized = true;
-    this.notification.add("Document Authorized successfully!", { type: "success" });
+    this.notification.add("Batch Authorized successfully!", { type: "success" });
+
+    // Refresh batch details to update all lines
+    await this.selectBatch(this.state.batchId);
 
     // Refresh pending batches if in authorize mode
     if (this.state.mode === "authorize") {
       this.state.pendingBatches = await this.orm.call("bahmni.prepack.batch", "fetch_pending_batches", []);
+    }
+  }
+
+  async rejectBatch() {
+    if (!this.state.batchId) return;
+    const comment = this.state.rejectComment || "";
+    await this.orm.call("bahmni.prepack.batch", "action_reject_batch", [[this.state.batchId], comment]);
+    this.notification.add("Batch rejected and sent back to creator.", { type: "success" });
+
+    // Refresh view
+    this.state.batchId = null;
+    this.state.batchName = "";
+    this.state.batchItems = [];
+    this.state.isAuthorized = false;
+    this.state.rejectComment = "";
+    if (this.state.mode === "authorize") {
+      this.state.pendingBatches = await this.orm.call("bahmni.prepack.batch", "fetch_pending_batches", []);
+    }
+  }
+
+  async deleteBatch() {
+    if (!this.state.batchId) return;
+    if (!confirm("Are you sure you want to delete this prepacking batch? This cannot be undone.")) {
+      return;
+    }
+    await this.orm.call("bahmni.prepack.batch", "unlink", [[this.state.batchId]]);
+    this.notification.add("Prepacking batch deleted successfully.", { type: "success" });
+    this.state.batchId = null;
+    this.state.batchName = "";
+    this.state.batchItems = [];
+    this.state.isAuthorized = false;
+    if (this.state.mode === "authorize") {
+      this.state.pendingBatches = await this.orm.call("bahmni.prepack.batch", "fetch_pending_batches", []);
+    }
+  }
+
+  async authorizeLine(lineId) {
+    await this.orm.call("bahmni.prepack.batch.line", "action_authorize_line", [[lineId]]);
+    this.notification.add("Item Authorized successfully!", { type: "success" });
+
+    // Refresh batch details
+    await this.selectBatch(this.state.batchId);
+
+    // Refresh pending batches if in authorize mode
+    if (this.state.mode === "authorize") {
+      this.state.pendingBatches = await this.orm.call("bahmni.prepack.batch", "fetch_pending_batches", []);
+    }
+  }
+
+  async rejectLine(lineId) {
+    // For individual line rejection, we'll just cancel/reject the line's MO
+    // This is a simpler action than batch rejection
+    try {
+      await this.orm.call("bahmni.prepack.batch.line", "action_reject_line", [[lineId]]);
+      this.notification.add("Item rejected successfully!", { type: "success" });
+      
+      // Refresh batch details to show updated state
+      await this.selectBatch(this.state.batchId);
+      
+      // Refresh pending batches if in authorize mode
+      if (this.state.mode === "authorize") {
+        this.state.pendingBatches = await this.orm.call("bahmni.prepack.batch", "fetch_pending_batches", []);
+      }
+    } catch (error) {
+      this.notification.add("Failed to reject item: " + error.message, { type: "danger" });
     }
   }
 
