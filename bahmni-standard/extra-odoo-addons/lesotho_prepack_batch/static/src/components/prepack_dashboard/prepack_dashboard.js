@@ -27,6 +27,7 @@ export class PrepackDashboard extends Component {
       batchName: "",
       isAuthorized: false,
       includePrepacks: false,
+      rejectComment: "",
     });
     onWillStart(async () => {
       this.state.permissions = await this.orm.call("bahmni.prepack.batch", "check_prepack_permissions", []);
@@ -80,6 +81,7 @@ export class PrepackDashboard extends Component {
       this.state.batchName = details.name;
       this.state.batchItems = details.items;
       this.state.isAuthorized = details.isAuthorized;
+      this.state.rejectComment = "";
     }
   }
 
@@ -219,15 +221,7 @@ export class PrepackDashboard extends Component {
 
   async rejectBatch() {
     if (!this.state.batchId) return;
-    const comment = prompt("Please provide a reason for rejection (this will be sent to the creator):", "");
-    if (comment === null) {
-      // user cancelled
-      return;
-    }
-    if (!comment || comment.trim().length === 0) {
-      this.notification.add("Rejection requires a short comment.", { type: "danger" });
-      return;
-    }
+    const comment = this.state.rejectComment || "";
     await this.orm.call("bahmni.prepack.batch", "action_reject_batch", [[this.state.batchId], comment]);
     this.notification.add("Batch rejected and sent back to creator.", { type: "success" });
 
@@ -236,6 +230,7 @@ export class PrepackDashboard extends Component {
     this.state.batchName = "";
     this.state.batchItems = [];
     this.state.isAuthorized = false;
+    this.state.rejectComment = "";
     if (this.state.mode === "authorize") {
       this.state.pendingBatches = await this.orm.call("bahmni.prepack.batch", "fetch_pending_batches", []);
     }
@@ -267,6 +262,25 @@ export class PrepackDashboard extends Component {
     // Refresh pending batches if in authorize mode
     if (this.state.mode === "authorize") {
       this.state.pendingBatches = await this.orm.call("bahmni.prepack.batch", "fetch_pending_batches", []);
+    }
+  }
+
+  async rejectLine(lineId) {
+    // For individual line rejection, we'll just cancel/reject the line's MO
+    // This is a simpler action than batch rejection
+    try {
+      await this.orm.call("bahmni.prepack.batch.line", "action_reject_line", [[lineId]]);
+      this.notification.add("Item rejected successfully!", { type: "success" });
+      
+      // Refresh batch details to show updated state
+      await this.selectBatch(this.state.batchId);
+      
+      // Refresh pending batches if in authorize mode
+      if (this.state.mode === "authorize") {
+        this.state.pendingBatches = await this.orm.call("bahmni.prepack.batch", "fetch_pending_batches", []);
+      }
+    } catch (error) {
+      this.notification.add("Failed to reject item: " + error.message, { type: "danger" });
     }
   }
 

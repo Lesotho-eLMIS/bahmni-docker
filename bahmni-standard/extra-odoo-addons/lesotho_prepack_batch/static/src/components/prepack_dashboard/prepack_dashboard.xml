@@ -127,7 +127,7 @@
                                         </table>
                                     </div>
                                     <div class="card-footer bg-white text-end py-3">
-                                        <button class="btn btn-success btn-lg px-5 shadow-sm" t-att-disabled="state.batchItems.length === 0" t-on-click="() => this.goToStep(2)">
+                                        <button class="btn btn-primary btn-lg px-5 shadow-sm" t-att-disabled="state.batchItems.length === 0" t-on-click="() => this.goToStep(2)">
                                             Proceed to Calculations<i class="fa fa-arrow-right ms-2"></i>
                                         </button>
                                     </div>
@@ -152,8 +152,8 @@
                                             <h4 class="m-0 text-primary fw-bold"><t t-esc="item.name"/></h4>
                                             <span class="text-muted">Batch: <t t-esc="item.batch"/> | Available: <strong><t t-esc="item.soh"/> <t t-esc="item.uom"/></strong></span>
                                         </div>
-                                        <button class="btn btn-outline-primary fw-bold" t-on-click="() => this.addTarget(item)">
-                                            <i class="fa fa-plus me-1"></i>Add Prepack Size
+                                        <button class="btn btn-primary fw-bold" t-on-click="() => this.addTarget(item)">
+                                            <i class="fa fa-plus me-1"></i>Add Prepack
                                         </button>
                                     </div>
                                     <div class="card-body p-0">
@@ -218,7 +218,7 @@
                                 <button class="btn btn-danger btn-lg px-4 shadow-sm" t-att-disabled="state.batchItems.length === 0" t-on-click="() => this.clearBatch()">
                                     <i class="fa fa-trash me-2"></i>DELETE BATCH
                                 </button>
-                                <button class="btn btn-success btn-lg px-5 shadow-sm fw-bold" t-att-disabled="state.batchItems.length === 0" t-on-click="() => this.submitBatch()">
+                                <button class="btn btn-primary btn-lg px-5 shadow-sm fw-bold" t-att-disabled="state.batchItems.length === 0" t-on-click="() => this.submitBatch()">
                                     Submit Batch for Authorization<i class="fa fa-check-circle ms-2"></i>
                                 </button>
                             </div>
@@ -276,7 +276,7 @@
 
                             </div>
 
-                            <div class="card shadow-sm mb-5 bg-light border-0">
+                            <div class="card shadow-sm mb-4 bg-light border-0">
                                 <div class="card-body p-4 d-flex justify-content-between align-items-center">
                                     <div class="d-flex align-items-center">
                                         <div class="bg-warning-light p-3 rounded-circle me-4">
@@ -297,7 +297,7 @@
                                             <button class="btn btn-danger btn-lg px-4 shadow-sm py-3 fw-bold me-2" t-att-disabled="!state.batchId" t-on-click="() => this.rejectBatch()">
                                                 <i class="fa fa-times me-2"></i>REJECT BATCH
                                             </button>
-                                            <button class="btn btn-success btn-lg px-5 shadow py-3 fw-bold animate__animated animate__pulse animate__infinite" t-att-disabled="!state.batchId" t-on-click="() => this.authorizeBatch()">
+                                            <button class="btn btn-primary btn-lg px-5 shadow py-3 fw-bold animate__animated animate__pulse animate__infinite" t-att-disabled="!state.batchId" t-on-click="() => this.authorizeBatch()">
                                                 <i class="fa fa-stamp me-2"></i>AUTHORIZE ALL
                                             </button>
                                         </t>
@@ -313,6 +313,16 @@
                                 </div>
                             </div>
 
+                            <div class="card shadow-sm mb-4">
+                                <div class="card-body">
+                                    <div class="mb-3">
+                                        <label class="form-label fw-bold">Add Comment</label>
+                                        <textarea class="form-control" rows="3" t-model="state.rejectComment" placeholder="Enter rejection comment"></textarea>
+                                        <small class="text-muted">This message will be sent back to the prepack creator if the batch is rejected.</small>
+                                    </div>
+                                </div>
+                            </div>
+
                             <div class="card shadow-sm">
                                 <div class="card-body p-0">
                                     <table class="table table-hover align-middle mb-0">
@@ -322,7 +332,8 @@
                                                 <th class="py-3 text-center">Pack Size</th>
                                                 <th class="py-3 text-center">Quantity</th>
                                                 <th class="py-3 text-center">Bulk Usage</th>
-                                                <th class="pe-4 py-3 text-center">Status</th>
+                                                <th class="py-3 text-center">Status</th>
+                                                <th class="pe-4 py-3 text-center">Action</th>
                                             </tr>
                                         </thead>
                                         <tbody>
@@ -358,15 +369,25 @@
                                                         <td class="text-center py-3">
                                                             <span class="fw-bold"><t t-esc="target.size * target.qty"/></span> <small class="text-muted"><t t-esc="item.uom"/></small>
                                                         </td>
-                                                        <td class="pe-4 py-3 text-center">
+                                                        <td class="text-center py-3">
                                                             <t t-if="target.state === 'done'">
-                                                                <span class="badge bg-success text-white px-3 py-2 animate__animated animate__bounceIn"><i class="fa fa-check me-1"></i>AUTHORIZED</span>
+                                                                <span class="badge bg-success text-white px-3 py-2"><i class="fa fa-check me-1"></i>AUTHORIZED</span>
                                                             </t>
                                                             <t t-else="">
-                                                                <button class="btn btn-warning btn-sm fw-bold px-3 py-1 rounded-pill shadow-sm mb-1" t-on-click="() => this.authorizeLine(target.line_id)">
+                                                                <span class="badge bg-warning text-dark px-3 py-2"><i class="fa fa-clock me-1"></i>PENDING</span>
+                                                            </t>
+                                                        </td>
+                                                        <td class="pe-4 py-3 text-center">
+                                                            <t t-if="target.state === 'done'">
+                                                                <span class="text-muted small">Authorized</span>
+                                                            </t>
+                                                            <t t-else="">
+                                                                <button class="btn btn-primary btn-sm fw-bold px-3 py-1 rounded-pill shadow-sm me-2" t-on-click="() => this.authorizeLine(target.line_id)">
                                                                     <i class="fa fa-stamp me-1"></i>Authorize
                                                                 </button>
-                                                                <div class="small text-muted"><i class="fa fa-clock me-1"></i>PENDING</div>
+                                                                <button class="btn btn-danger btn-sm fw-bold px-3 py-1 rounded-pill shadow-sm" t-on-click="() => this.rejectLine(target.line_id)">
+                                                                    <i class="fa fa-times me-1"></i>Reject
+                                                                </button>
                                                             </t>
                                                         </td>
                                                     </tr>

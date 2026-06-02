@@ -810,6 +810,20 @@ class BahmniPrepackBatchLine(models.Model):
             self.batch_id.state = "done"
         return True
 
+    def action_reject_line(self):
+        """Reject a single prepack line by cancelling its manufacturing order."""
+        for line in self:
+            if line.mrp_production_id:
+                mo = line.mrp_production_id
+                if mo.state not in ("done", "cancel"):
+                    try:
+                        mo.action_cancel()
+                    except Exception:
+                        pass
+            # Set line state to cancelled or draft
+            line.state = "cancel"
+        return True
+
     def _get_finished_lot_name(self):
         self.ensure_one()
         return self.bulk_lot_id.name
