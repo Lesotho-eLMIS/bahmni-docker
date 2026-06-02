@@ -217,6 +217,46 @@ export class PrepackDashboard extends Component {
     }
   }
 
+  async rejectBatch() {
+    if (!this.state.batchId) return;
+    const comment = prompt("Please provide a reason for rejection (this will be sent to the creator):", "");
+    if (comment === null) {
+      // user cancelled
+      return;
+    }
+    if (!comment || comment.trim().length === 0) {
+      this.notification.add("Rejection requires a short comment.", { type: "danger" });
+      return;
+    }
+    await this.orm.call("bahmni.prepack.batch", "action_reject_batch", [[this.state.batchId], comment]);
+    this.notification.add("Batch rejected and sent back to creator.", { type: "success" });
+
+    // Refresh view
+    this.state.batchId = null;
+    this.state.batchName = "";
+    this.state.batchItems = [];
+    this.state.isAuthorized = false;
+    if (this.state.mode === "authorize") {
+      this.state.pendingBatches = await this.orm.call("bahmni.prepack.batch", "fetch_pending_batches", []);
+    }
+  }
+
+  async deleteBatch() {
+    if (!this.state.batchId) return;
+    if (!confirm("Are you sure you want to delete this prepacking batch? This cannot be undone.")) {
+      return;
+    }
+    await this.orm.call("bahmni.prepack.batch", "unlink", [[this.state.batchId]]);
+    this.notification.add("Prepacking batch deleted successfully.", { type: "success" });
+    this.state.batchId = null;
+    this.state.batchName = "";
+    this.state.batchItems = [];
+    this.state.isAuthorized = false;
+    if (this.state.mode === "authorize") {
+      this.state.pendingBatches = await this.orm.call("bahmni.prepack.batch", "fetch_pending_batches", []);
+    }
+  }
+
   async authorizeLine(lineId) {
     await this.orm.call("bahmni.prepack.batch.line", "action_authorize_line", [[lineId]]);
     this.notification.add("Item Authorized successfully!", { type: "success" });

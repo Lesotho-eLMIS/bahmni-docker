@@ -321,6 +321,40 @@ class BahmniPrepackBatch(models.Model):
             batch.state = "done"
         return True
 
+    def action_reject_batch(self, comment):
+        """Reject a pending authorization batch and send it back to the creator with a comment.
+
+        This will cancel any in-progress manufacturing orders for the batch (not done/cancelled),
+        post a message to the responsible user with the rejection comment and set the batch
+        back to draft so the creator can modify and resubmit.
+        """
+        for batch in self:
+            if batch.state != "pending_auth":
+                raise UserError(_("Only pending authorization batches can be rejected."))
+
+            # Cancel any running manufacturing orders created for this batch
+            for mo in batch.line_ids.mapped("mrp_production_id").filtered(
+                lambda m: m.state not in ("done", "cancel")
+            ):
+                try:
+                    mo.action_cancel()
+                except Exception:
+                    # Best effort: ignore cancellation errors and continue
+                    pass
+
+            # Post a message for the responsible user with the rejection comment
+            body = _("Prepack batch rejected by %s: \n\n%s") % (self.env.user.name, comment or "")
+            try:
+                batch.message_post(body=body, partner_ids=[batch.responsible_id.partner_id.id])
+            except Exception:
+                # If message posting fails, still proceed to set state
+                pass
+
+            # Save the comment to the note field and revert to draft
+            batch.note = (batch.note or "") + "\n\nRejection comment: " + (comment or "")
+            batch.state = "draft"
+        return True
+
     @api.model
     def fetch_pending_batches(self):
         """Fetch all batches in pending_auth state for the authorization UI."""

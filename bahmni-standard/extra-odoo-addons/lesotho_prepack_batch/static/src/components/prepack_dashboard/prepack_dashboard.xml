@@ -214,9 +214,14 @@
                             <button class="btn btn-outline-secondary btn-lg px-5 shadow-sm" t-on-click="() => this.goToStep(1)">
                                 <i class="fa fa-arrow-left me-2"></i>Back to Prepacking List
                             </button>
-                            <button class="btn btn-success btn-lg px-5 shadow-sm py-3 fw-bold" t-on-click="() => this.submitBatch()">
-                                Submit Batch for Authorization<i class="fa fa-check-circle ms-2"></i>
-                            </button>
+                            <div class="d-inline-flex align-items-center gap-2">
+                                <button class="btn btn-danger btn-lg px-4 shadow-sm" t-att-disabled="state.batchItems.length === 0" t-on-click="() => this.clearBatch()">
+                                    <i class="fa fa-trash me-2"></i>DELETE BATCH
+                                </button>
+                                <button class="btn btn-success btn-lg px-5 shadow-sm fw-bold" t-att-disabled="state.batchItems.length === 0" t-on-click="() => this.submitBatch()">
+                                    Submit Batch for Authorization<i class="fa fa-check-circle ms-2"></i>
+                                </button>
+                            </div>
                         </div>
                     </div>
 
@@ -231,7 +236,7 @@
                             <div class="card shadow-sm">
                                 <div class="card-body p-0">
                                     <table class="table table-hover align-middle mb-0">
-                                        <thead class="table-light text-uppercase small fw-bold">
+                                        <thead class="table-dark text-uppercase small fw-bold">
                                             <tr>
                                                 <th class="ps-4 py-3">Batch Reference</th>
                                                 <th class="py-3">Date Created</th>
@@ -289,8 +294,12 @@
                                             </button>
                                         </t>
                                         <t t-if="!state.isAuthorized">
+                                            <button class="btn btn-danger btn-lg px-4 shadow-sm py-3 fw-bold me-2" t-att-disabled="!state.batchId" t-on-click="() => this.rejectBatch()">
+                                                <i class="fa fa-times me-2"></i>REJECT BATCH
+                                            </button>
                                             <button class="btn btn-success btn-lg px-5 shadow py-3 fw-bold animate__animated animate__pulse animate__infinite" t-att-disabled="!state.batchId" t-on-click="() => this.authorizeBatch()">
-                                                <i class="fa fa-stamp me-2"></i>AUTHORIZE ALL                                            </button>
+                                                <i class="fa fa-stamp me-2"></i>AUTHORIZE ALL
+                                            </button>
                                         </t>
                                         <t t-else="">
                                             <button class="btn btn-primary btn-lg px-5 shadow-sm py-3 fw-bold me-2" t-on-click="() => this.printLabels()">
@@ -307,7 +316,7 @@
                             <div class="card shadow-sm">
                                 <div class="card-body p-0">
                                     <table class="table table-hover align-middle mb-0">
-                                        <thead class="table-light text-uppercase small fw-bold">
+                                        <thead class="table-dark text-uppercase small fw-bold">
                                             <tr>
                                                 <th class="ps-4 py-3">Product &amp; Batch</th>
                                                 <th class="py-3 text-center">Pack Size</th>
@@ -325,10 +334,26 @@
                                                             <small class="text-muted fw-bold">LOT: <t t-esc="item.batch"/></small>
                                                         </td>
                                                         <td class="text-center py-3">
-                                                            <span class="fs-5 fw-bold"><t t-esc="target.size"/></span> <small class="text-muted"><t t-esc="item.uom"/></small>
+                                                            <t t-if="target.state === 'done'">
+                                                                <span class="fs-5 fw-bold"><t t-esc="target.size"/></span> <small class="text-muted"><t t-esc="item.uom"/></small>
+                                                            </t>
+                                                            <t t-else="">
+                                                                <div class="input-group input-group-sm shadow-sm d-inline-flex">
+                                                                    <input type="number" class="form-control fw-bold border-end-0" min="0" t-model="target.size" t-on-change="() => this.autoSave()" style="width: 80px;"/>
+                                                                    <span class="input-group-text bg-white text-muted border-start-0 small"><t t-esc="item.uom"/></span>
+                                                                </div>
+                                                            </t>
                                                         </td>
                                                         <td class="text-center py-3">
-                                                            <span class="badge rounded-pill bg-info-light text-info fs-6 px-3 py-2 border border-info-light"><t t-esc="target.qty"/> packs</span>
+                                                            <t t-if="target.state === 'done'">
+                                                                <span class="badge rounded-pill bg-info-light text-info fs-6 px-3 py-2 border border-info-light"><t t-esc="target.qty"/> packs</span>
+                                                            </t>
+                                                            <t t-else="">
+                                                                <div class="input-group input-group-sm shadow-sm d-inline-flex">
+                                                                    <input type="number" class="form-control fw-bold border-end-0" min="0" t-model="target.qty" t-on-change="() => this.autoSave()" style="width: 80px;"/>
+                                                                    <span class="input-group-text bg-white text-muted border-start-0 small">packs</span>
+                                                                </div>
+                                                            </t>
                                                         </td>
                                                         <td class="text-center py-3">
                                                             <span class="fw-bold"><t t-esc="target.size * target.qty"/></span> <small class="text-muted"><t t-esc="item.uom"/></small>
@@ -365,7 +390,7 @@
                             <div class="card shadow-sm">
                                 <div class="card-body p-0">
                                     <table class="table table-hover align-middle mb-0">
-                                        <thead class="table-light text-uppercase small fw-bold">
+                                        <thead class="table-dark text-uppercase small fw-bold">
                                             <tr>
                                                 <th class="ps-4 py-3">Batch Reference</th>
                                                 <th class="py-3">Date Created</th>
@@ -425,6 +450,11 @@
                                         <button class="btn btn-outline-secondary btn-lg px-4 shadow-sm py-3 fw-bold me-2" t-on-click="() => { state.batchId = null; state.batchItems = []; }">
                                             <i class="fa fa-arrow-left me-2"></i>Back to History
                                         </button>
+                                        <t t-if="!state.isAuthorized">
+                                            <button class="btn btn-danger btn-lg px-4 shadow-sm py-3 fw-bold me-2" t-on-click="() => this.deleteBatch()">
+                                                <i class="fa fa-trash me-2"></i>DELETE BATCH
+                                            </button>
+                                        </t>
                                         <button class="btn btn-primary btn-lg px-5 shadow-sm py-3 fw-bold" t-on-click="() => this.printLabels()">
                                             <i class="fa fa-barcode me-2"></i>PRINT ALL LABELS
                                         </button>
@@ -435,7 +465,7 @@
                             <div class="card shadow-sm">
                                 <div class="card-body p-0">
                                     <table class="table table-hover align-middle mb-0">
-                                        <thead class="table-light text-uppercase small fw-bold">
+                                        <thead class="table-dark text-uppercase small fw-bold">
                                             <tr>
                                                 <th class="ps-4 py-3">Product &amp; Batch</th>
                                                 <th class="py-3 text-center">Pack Size</th>
