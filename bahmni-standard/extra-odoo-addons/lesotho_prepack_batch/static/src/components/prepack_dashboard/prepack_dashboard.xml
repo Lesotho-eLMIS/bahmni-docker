@@ -14,33 +14,45 @@
                 </div>
 
                 <t t-else="">
-                    <div class="workflow-step-indicator">
-                        <div id="step1" t-if="(state.mode === 'all' or state.mode === 'create') and state.permissions.can_create" t-attf-class="step {{ state.step === 1 ? 'active' : '' }}" t-on-click="() => this.goToStep(1)">Select Product</div>
-                        <div id="step2" t-if="(state.mode === 'all' or state.mode === 'create') and state.permissions.can_create" t-attf-class="step {{ state.step === 2 ? 'active' : '' }}" t-on-click="() => state.batchItems.length > 0 ? this.goToStep(2) : null">Create Prepacks</div>
-                        <div id="step3" t-if="(state.mode === 'all' or state.mode === 'authorize') and state.permissions.can_authorize" t-attf-class="step {{ state.step === 3 ? 'active' : '' }}" t-on-click="() => this.goToStep(3)">Authorization</div>
-                        <div id="step4" t-if="state.mode === 'history'" t-attf-class="step {{ state.step === 4 ? 'active' : '' }}" t-on-click="() => this.goToStep(4)">Prepacking History</div>
+                    <div class="prepack-topbar">
+                        <div class="prepack-breadcrumb">
+                            <span>Prepacking</span>
+                            <span class="separator">/</span>
+                            <strong t-if="state.step === 1">Select Products</strong>
+                            <strong t-if="state.step === 2">Create Prepacks</strong>
+                            <strong t-if="state.step === 3">Authorization</strong>
+                            <strong t-if="state.step === 4">History</strong>
+                        </div>
+                        <div class="workflow-step-indicator">
+                            <div id="step1" t-if="(state.mode === 'all' or state.mode === 'create') and state.permissions.can_create" t-attf-class="step {{ state.step === 1 ? 'active' : '' }}" t-on-click="() => this.goToStep(1)">Select Product</div>
+                            <div id="step2" t-if="(state.mode === 'all' or state.mode === 'create') and state.permissions.can_create" t-attf-class="step {{ state.step === 2 ? 'active' : '' }}" t-on-click="() => state.batchItems.length > 0 ? this.goToStep(2) : null">Create Prepacks</div>
+                            <div id="step3" t-if="(state.mode === 'all' or state.mode === 'authorize') and state.permissions.can_authorize" t-attf-class="step {{ state.step === 3 ? 'active' : '' }}" t-on-click="() => this.goToStep(3)">Authorization</div>
+                            <div id="step4" t-if="state.mode === 'history'" t-attf-class="step {{ state.step === 4 ? 'active' : '' }}" t-on-click="() => this.goToStep(4)">Prepacking History</div>
+                        </div>
                     </div>
 
                     <!-- STEP 1: QUALITY CHECK -->
                     <div t-if="state.step === 1" id="view-quality-check">
                         <div class="d-flex justify-content-between align-items-center mb-4 border-bottom pb-2">
-                            <h2 class="m-0">Build Prepacking List</h2>
+                            <h2 class="m-0 fw-bold fs-3">Build Prepacking List</h2>
 
                         </div>
 
                         <div class="row">
                             <div class="col-md-5">
                                 <div class="card shadow-sm mb-4">
+                                    <div class="card-header bg-primary text-white py-3">
+                                        <h5 class="m-0 fw-bold">Select Product from Store</h5>
+                                    </div>
                                     <div class="card-body">
                                         <div class="form-group mb-4">
-                                            <div class="d-flex justify-content-between align-items-center mb-2">
-                                                <label class="form-label fw-bold mb-0">Select Product from Store</label>
+                                            <div class="d-flex justify-content-end align-items-center mb-2">
                                                 <div class="form-check form-switch">
                                                     <input class="form-check-input" type="checkbox" id="includePrepacks" t-model="state.includePrepacks" t-on-change="() => this.onIncludePrepacksToggle()"/>
-                                                    <label class="form-check-label small" for="includePrepacks">Include Prepacks</label>
+                                                    <label class="form-check-label fw-semibold" for="includePrepacks">Include Prepacks</label>
                                                 </div>
                                             </div>
-                                            <select class="form-select form-select-lg" t-on-change="(ev) => this.onProductSelect(ev)">
+                                            <select class="form-select form-select-lg fw-semibold fs-5" t-on-change="(ev) => this.onProductSelect(ev)">
                                                 <option value="" disabled="disabled" t-att-selected="!state.selectedProductKey">-- Search / Select Product --</option>
                                                 <t t-foreach="state.inventory" t-as="item" t-key="item.key">
                                                     <option t-att-value="item.key"><t t-esc="item.name"/> (<t t-esc="item.batch"/>)</option>
@@ -51,25 +63,25 @@
                                         <div t-if="state.selectedProduct" class="product-meta p-3 rounded mb-4 animate__animated animate__fadeIn">
                                             <div class="row">
                                                 <div class="col-6">
-                                                    <small class="text-muted text-uppercase d-block">Batch / Expiry</small>
-                                                    <strong><t t-esc="state.selectedProduct.batch"/> / <t t-esc="state.selectedProduct.exp"/></strong>
+                                                    <small class="text-muted text-uppercase d-block fw-bold">Batch / Expiry</small>
+                                                    <strong class="fs-5"><t t-esc="state.selectedProduct.batch"/> / <t t-esc="state.selectedProduct.exp"/></strong>
                                                 </div>
                                                 <div class="col-6">
-                                                    <small class="text-muted text-uppercase d-block">Available SOH</small>
-                                                    <strong class="text-primary"><t t-esc="state.selectedProduct.soh"/> <t t-esc="state.selectedProduct.uom"/></strong>
+                                                    <small class="text-muted text-uppercase d-block fw-bold">Available SOH</small>
+                                                    <strong class="text-primary fs-5"><t t-esc="state.selectedProduct.soh"/> <t t-esc="state.selectedProduct.uom"/></strong>
                                                 </div>
                                             </div>
                                         </div>
 
                                         <div t-attf-class="checklist p-3 border rounded mb-4 {{ !state.selectedProduct ? 'disabled text-muted' : 'bg-light' }}">
-                                            <h5 class="mb-3 text-dark fw-bold"><i class="fa fa-clipboard-check me-2 text-primary"></i>Quality Checklist</h5>
+                                            <h5 class="mb-3 text-dark fw-bold fs-5"><i class="fa fa-clipboard-check me-2 text-primary"></i>Quality Checklist</h5>
                                             <div class="form-check mb-2">
                                                 <input class="form-check-input" type="checkbox" id="chk1" t-model="state.checks.chk1" t-on-change="() => this.validateChecklist()"/>
-                                                <label class="form-check-label" for="chk1">Product packaging is intact and undamaged.</label>
+                                                <label class="form-check-label fw-semibold" for="chk1">Product packaging is intact and undamaged.</label>
                                             </div>
                                             <div class="form-check mb-2">
                                                 <input class="form-check-input" type="checkbox" id="chk2" t-model="state.checks.chk2" t-on-change="() => this.validateChecklist()"/>
-                                                <label class="form-check-label" for="chk2">Expiry date is valid (> 6 months).</label>
+                                                <label class="form-check-label fw-semibold" for="chk2">Expiry date is valid (> 6 months).</label>
                                             </div>
                                             <div t-if="state.selectedProduct and state.selectedProduct.reqLiquidCheck" class="form-check mb-2 text-warning">
                                                 <input class="form-check-input" type="checkbox" id="chk3" t-model="state.checks.chk3" t-on-change="() => this.validateChecklist()"/>
@@ -87,20 +99,20 @@
                             <div class="col-md-7">
                                 <div class="card shadow-sm h-100">
                                     <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
-                                        <h5 class="m-0 fw-bold">Prepacking List </h5>
-                                        <button t-if="state.batchItems.length > 0" class="btn btn-outline-danger btn-sm" t-on-click="() => this.clearBatch()">
+                                        <h5 class="m-0 fw-bold fs-5">Prepacking List </h5>
+                                        <button t-if="state.batchItems.length > 0" class="btn btn-outline-danger btn-sm fw-semibold" t-on-click="() => this.clearBatch()">
                                             <i class="fa fa-trash-alt me-1"></i>Clear All
                                         </button>
                                     </div>
                                     <div class="card-body p-0">
                                         <table class="table table-hover align-middle mb-0">
-                                            <thead class="table-light">
+                                            <thead class="table-light fw-bold">
                                                 <tr>
-                                                    <th class="ps-3">Product Name</th>
-                                                    <th>Batch / Expiry</th>
-                                                    <th>Bulk SOH</th>
-                                                    <th>Status</th>
-                                                    <th class="text-center">Action</th>
+                                                    <th class="ps-3 fs-5">Product Name</th>
+                                                    <th class="fs-5">Batch / Expiry</th>
+                                                    <th class="fs-5">Bulk SOH</th>
+                                                    <th class="fs-5">Status</th>
+                                                    <th class="text-center fs-5">Action</th>
                                                 </tr>
                                             </thead>
                                             <tbody>
@@ -112,12 +124,12 @@
                                                 </tr>
                                                 <t t-foreach="state.batchItems" t-as="item" t-key="item.key">
                                                     <tr class="animate__animated animate__fadeIn">
-                                                        <td class="ps-3"><strong><t t-esc="item.name"/></strong></td>
-                                                        <td><span class="badge bg-light text-dark border"><t t-esc="item.batch"/></span> / <t t-esc="item.exp"/></td>
-                                                        <td><t t-esc="item.soh"/> <t t-esc="item.uom"/></td>
-                                                        <td><span class="badge bg-success-light text-success fw-bold p-2"><i class="fa fa-check-circle me-1"></i>VERIFIED</span></td>
+                                                        <td class="ps-3"><strong class="fs-5"><t t-esc="item.name"/></strong></td>
+                                                        <td><span class="badge bg-light text-dark border fw-semibold fs-6"><t t-esc="item.batch"/></span> / <t t-esc="item.exp"/></td>
+                                                        <td class="fw-semibold fs-5"><t t-esc="item.soh"/> <t t-esc="item.uom"/></td>
+                                                        <td><span class="badge bg-success-light text-success fw-bold p-2 fs-6"><i class="fa fa-check-circle me-1"></i>VERIFIED</span></td>
                                                         <td class="text-center">
-                                                            <button class="btn btn-outline-danger btn-sm rounded-pill" t-on-click="() => this.removeFromBatch(item.key)">
+                                                            <button class="btn btn-outline-danger btn-sm rounded-pill fw-semibold" t-on-click="() => this.removeFromBatch(item.key)">
                                                                 <i class="fa fa-trash"></i>
                                                             </button>
                                                         </td>
@@ -139,30 +151,30 @@
                     <!-- STEP 2: CALCULATIONS -->
                     <div t-if="state.step === 2" id="view-create-prepack">
                         <div class="d-flex justify-content-between align-items-center mb-4 border-bottom pb-2">
-                            <h2 class="m-0">Calculate Prepack Sizes</h2>
+                            <h2 class="m-0 fw-bold fs-3">Calculate Prepack Sizes</h2>
 
                         </div>
-                        <p class="lead text-muted mb-4">Define one or more prepack sizes for each bulk commodity.</p>
+                        <p class="lead text-muted mb-4 fw-semibold">Define one or more prepack sizes for each bulk commodity.</p>
 
                         <div id="calcCardsContainer">
                             <t t-foreach="state.batchItems" t-as="item" t-key="item.key">
                                 <div class="card shadow-sm mb-4 border-0 border-start border-4 border-primary">
                                     <div class="card-header bg-white d-flex justify-content-between align-items-center py-3">
                                         <div>
-                                            <h4 class="m-0 text-primary fw-bold"><t t-esc="item.name"/></h4>
-                                            <span class="text-muted">Batch: <t t-esc="item.batch"/> | Available: <strong><t t-esc="item.soh"/> <t t-esc="item.uom"/></strong></span>
+                                            <h4 class="m-0 text-primary fw-bold fs-5"><t t-esc="item.name"/></h4>
+                                            <span class="text-muted fw-semibold">Batch: <t t-esc="item.batch"/> | Available: <strong class="fs-5"><t t-esc="item.soh"/> <t t-esc="item.uom"/></strong></span>
                                         </div>
-                                        <button class="btn btn-primary fw-bold" t-on-click="() => this.addTarget(item)">
+                                        <button class="btn btn-primary fw-bold fw-semibold" t-on-click="() => this.addTarget(item)">
                                             <i class="fa fa-plus me-1"></i>Add Prepack
                                         </button>
                                     </div>
                                     <div class="card-body p-0">
                                         <table class="table table-borderless mb-0">
-                                            <thead class="bg-light text-uppercase small fw-bold text-muted">
+                                            <thead class="bg-light text-uppercase fw-bold text-muted">
                                                 <tr>
-                                                    <th class="ps-4 py-3" width="30%">Prepack Size</th>
-                                                    <th class="py-3" width="30%">Number of Prepacks</th>
-                                                    <th class="py-3" width="30%">Bulk Units Required</th>
+                                                    <th class="ps-4 py-3 fs-5" width="30%">Prepack Size</th>
+                                                    <th class="py-3 fs-5" width="30%">Number of Prepacks</th>
+                                                    <th class="py-3 fs-5" width="30%">Bulk Units Required</th>
                                                     <th class="pe-4 py-3 text-end" width="10%"></th>
                                                 </tr>
                                             </thead>
@@ -171,18 +183,18 @@
                                                     <tr class="align-middle border-bottom border-light">
                                                         <td class="ps-4 py-3">
                                                             <div class="input-group input-group-lg shadow-sm">
-                                                                <input type="number" class="form-control fw-bold border-end-0" min="0" t-model="target.size" t-on-change="() => this.autoSave()"/>
-                                                                <span class="input-group-text bg-white text-muted border-start-0 small"><t t-esc="item.uom"/></span>
+                                                                <input type="number" class="form-control fw-bold fs-5 border-end-0" min="0" t-model="target.size" t-on-change="() => this.autoSave()"/>
+                                                                <span class="input-group-text bg-white text-muted border-start-0 fw-bold fs-6"><t t-esc="item.uom"/></span>
                                                             </div>
                                                         </td>
                                                         <td class="py-3">
                                                             <div class="input-group input-group-lg shadow-sm">
-                                                                <input type="number" class="form-control fw-bold border-end-0" min="0" t-model="target.qty" t-on-change="() => this.autoSave()"/>
-                                                                <span class="input-group-text bg-white text-muted border-start-0 small">packs</span>
+                                                                <input type="number" class="form-control fw-bold fs-5 border-end-0" min="0" t-model="target.qty" t-on-change="() => this.autoSave()"/>
+                                                                <span class="input-group-text bg-white text-muted border-start-0 fw-bold fs-6">packs</span>
                                                             </div>
                                                         </td>
                                                         <td class="py-3 fs-5">
-                                                            <span class="text-dark fw-bold"><t t-esc="target.size * target.qty"/></span> <small class="text-muted"><t t-esc="item.uom"/></small>
+                                                            <span class="text-dark fw-bold fs-5"><t t-esc="target.size * target.qty"/></span> <small class="text-muted fw-bold fs-6"><t t-esc="item.uom"/></small>
                                                         </td>
                                                         <td class="pe-4 py-3 text-end">
                                                             <button t-if="item.targets.length > 1" class="btn btn-link text-danger p-0" t-on-click="() => this.removeTarget(item, target_index)">
@@ -196,12 +208,12 @@
                                     </div>
                                     <div class="card-footer bg-light border-0 py-3 px-4 d-flex justify-content-end align-items-center">
                                         <div class="me-4 pe-4 border-end border-2 border-white text-end">
-                                            <small class="text-muted text-uppercase d-block">Total Used</small>
-                                            <h5 class="m-0 fw-bold"><t t-esc="this.getTotalUsed(item)"/> <t t-esc="item.uom"/></h5>
+                                            <small class="text-muted text-uppercase d-block fw-bold">Total Used</small>
+                                            <h5 class="m-0 fw-bold fs-5"><t t-esc="this.getTotalUsed(item)"/> <t t-esc="item.uom"/></h5>
                                         </div>
                                         <div class="text-end">
-                                            <small class="text-muted text-uppercase d-block">Remaining Balance</small>
-                                            <h5 t-attf-class="m-0 fw-bold {{ item.soh - this.getTotalUsed(item) &lt; 0 ? 'text-danger animate__animated animate__shakeX' : 'text-success' }}">
+                                            <small class="text-muted text-uppercase d-block fw-bold">Remaining Balance</small>
+                                            <h5 t-attf-class="m-0 fw-bold fs-5 {{ item.soh - this.getTotalUsed(item) &lt; 0 ? 'text-danger animate__animated animate__shakeX' : 'text-success' }}">
                                                 <t t-esc="item.soh - this.getTotalUsed(item)"/> <t t-esc="item.uom"/>
                                             </h5>
                                         </div>
@@ -211,11 +223,11 @@
                         </div>
 
                         <div class="mt-5 pt-4 border-top text-end d-flex justify-content-between align-items-center mb-5">
-                            <button class="btn btn-outline-secondary btn-lg px-5 shadow-sm" t-on-click="() => this.goToStep(1)">
+                            <button class="btn btn-outline-secondary btn-lg px-5 shadow-sm fw-bold" t-on-click="() => this.goToStep(1)">
                                 <i class="fa fa-arrow-left me-2"></i>Back to Prepacking List
                             </button>
                             <div class="d-inline-flex align-items-center gap-2">
-                                <button class="btn btn-danger btn-lg px-4 shadow-sm" t-att-disabled="state.batchItems.length === 0" t-on-click="() => this.clearBatch()">
+                                <button class="btn btn-danger btn-lg px-4 shadow-sm fw-bold" t-att-disabled="state.batchItems.length === 0" t-on-click="() => this.clearBatch()">
                                     <i class="fa fa-trash me-2"></i>DELETE BATCH
                                 </button>
                                 <button class="btn btn-primary btn-lg px-5 shadow-sm fw-bold" t-att-disabled="state.batchItems.length === 0" t-on-click="() => this.submitBatch()">
@@ -272,7 +284,7 @@
                         </t>
                         <t t-else="">
                             <div class="d-flex justify-content-between align-items-center mb-4 border-bottom pb-2">
-                                <h2 class="m-0">Authorize Prepack Document</h2>
+                                <h2 class="m-0 fw-bold fs-3">Authorize Prepack Document</h2>
 
                             </div>
 
@@ -283,8 +295,8 @@
                                             <i class="fa fa-file-invoice fa-3x text-warning"></i>
                                         </div>
                                         <div>
-                                            <h5 class="text-muted text-uppercase small mb-1">Document Reference</h5>
-                                            <h3 class="m-0 fw-bold text-monospace bg-white px-3 py-1 border rounded shadow-sm d-inline-block"><t t-esc="state.batchName || 'NEW BATCH'"/></h3>
+                                            <h5 class="text-muted text-uppercase fw-bold mb-2 fs-6">Document Reference</h5>
+                                            <h2 class="m-0 fw-bold text-monospace bg-white px-4 py-2 border rounded shadow-sm d-inline-block fs-3"><t t-esc="state.batchName || 'NEW BATCH'"/></h2>
                                         </div>
                                     </div>
                                     <div class="text-end">
@@ -316,9 +328,9 @@
                             <div class="card shadow-sm mb-4">
                                 <div class="card-body">
                                     <div class="mb-3">
-                                        <label class="form-label fw-bold">Add Comment</label>
-                                        <textarea class="form-control" rows="3" t-model="state.rejectComment" placeholder="Enter rejection comment"></textarea>
-                                        <small class="text-muted">This message will be sent back to the prepack creator if the batch is rejected.</small>
+                                        <label class="form-label fw-bold fs-4">Add Comment</label>
+                                        <textarea class="form-control fs-5 fw-semibold" rows="4" t-model="state.rejectComment" placeholder="Enter rejection comment"></textarea>
+                                        <small class="text-muted fw-semibold">This message will be sent back to the prepack creator if the batch is rejected.</small>
                                     </div>
                                 </div>
                             </div>
@@ -326,66 +338,66 @@
                             <div class="card shadow-sm">
                                 <div class="card-body p-0">
                                     <table class="table table-hover align-middle mb-0">
-                                        <thead class="table-dark text-uppercase small fw-bold">
+                                        <thead class="table-dark text-uppercase fw-bold">
                                             <tr>
-                                                <th class="ps-4 py-3">Product &amp; Batch</th>
-                                                <th class="py-3 text-center">Pack Size</th>
-                                                <th class="py-3 text-center">Quantity</th>
-                                                <th class="py-3 text-center">Bulk Usage</th>
-                                                <th class="py-3 text-center">Status</th>
-                                                <th class="pe-4 py-3 text-center">Action</th>
+                                                <th class="ps-4 py-3 fs-6"><strong>Product &amp; Batch</strong></th>
+                                                <th class="py-3 text-center fs-6"><strong>Pack Size</strong></th>
+                                                <th class="py-3 text-center fs-6"><strong>Quantity</strong></th>
+                                                <th class="py-3 text-center fs-6"><strong>Bulk Usage</strong></th>
+                                                <th class="py-3 text-center fs-6"><strong>Status</strong></th>
+                                                <th class="pe-4 py-3 text-center fs-6"><strong>Action</strong></th>
                                             </tr>
                                         </thead>
                                         <tbody>
                                             <t t-foreach="state.batchItems" t-as="item" t-key="item.key">
                                                 <t t-foreach="item.targets" t-as="target" t-key="target_index">
                                                     <tr t-if="target.size > 0 and target.qty > 0" class="animate__animated animate__fadeIn">
-                                                        <td class="ps-4 py-3">
-                                                            <div class="fw-bold text-primary fs-5"><t t-esc="item.name"/></div>
-                                                            <small class="text-muted fw-bold">LOT: <t t-esc="item.batch"/></small>
+                                                        <td class="ps-4 py-4">
+                                                            <div class="fw-bold text-primary fs-5 mb-2"><t t-esc="item.name"/></div>
+                                                            <small class="text-muted fw-bold fs-6">LOT: <t t-esc="item.batch"/></small>
                                                         </td>
-                                                        <td class="text-center py-3">
+                                                        <td class="text-center py-4">
                                                             <t t-if="target.state === 'done'">
-                                                                <span class="fs-5 fw-bold"><t t-esc="target.size"/></span> <small class="text-muted"><t t-esc="item.uom"/></small>
+                                                                <span class="fs-5 fw-bold"><t t-esc="target.size"/></span> <small class="text-muted fw-bold fs-6"><t t-esc="item.uom"/></small>
                                                             </t>
                                                             <t t-else="">
                                                                 <div class="input-group input-group-sm shadow-sm d-inline-flex">
-                                                                    <input type="number" class="form-control fw-bold border-end-0" min="0" t-model="target.size" t-on-change="() => this.autoSave()" style="width: 80px;"/>
-                                                                    <span class="input-group-text bg-white text-muted border-start-0 small"><t t-esc="item.uom"/></span>
+                                                                    <input type="number" class="form-control fw-bold fs-5 border-end-0" min="0" t-model="target.size" t-on-change="() => this.autoSave()" style="width: 80px;"/>
+                                                                    <span class="input-group-text bg-white text-muted border-start-0 fw-bold fs-6"><t t-esc="item.uom"/></span>
                                                                 </div>
                                                             </t>
                                                         </td>
-                                                        <td class="text-center py-3">
+                                                        <td class="text-center py-4">
                                                             <t t-if="target.state === 'done'">
-                                                                <span class="badge rounded-pill bg-info-light text-info fs-6 px-3 py-2 border border-info-light"><t t-esc="target.qty"/> packs</span>
+                                                                <span class="badge rounded-pill bg-info-light text-info fs-5 px-3 py-2 border border-info-light fw-bold"><t t-esc="target.qty"/> packs</span>
                                                             </t>
                                                             <t t-else="">
                                                                 <div class="input-group input-group-sm shadow-sm d-inline-flex">
-                                                                    <input type="number" class="form-control fw-bold border-end-0" min="0" t-model="target.qty" t-on-change="() => this.autoSave()" style="width: 80px;"/>
-                                                                    <span class="input-group-text bg-white text-muted border-start-0 small">packs</span>
+                                                                    <input type="number" class="form-control fw-bold fs-5 border-end-0" min="0" t-model="target.qty" t-on-change="() => this.autoSave()" style="width: 80px;"/>
+                                                                    <span class="input-group-text bg-white text-muted border-start-0 fw-bold fs-6">packs</span>
                                                                 </div>
                                                             </t>
                                                         </td>
-                                                        <td class="text-center py-3">
-                                                            <span class="fw-bold"><t t-esc="target.size * target.qty"/></span> <small class="text-muted"><t t-esc="item.uom"/></small>
+                                                        <td class="text-center py-4">
+                                                            <span class="fw-bold fs-5"><t t-esc="target.size * target.qty"/></span> <small class="text-muted fw-bold fs-6"><t t-esc="item.uom"/></small>
                                                         </td>
-                                                        <td class="text-center py-3">
+                                                        <td class="text-center py-4">
                                                             <t t-if="target.state === 'done'">
-                                                                <span class="badge bg-success text-white px-3 py-2"><i class="fa fa-check me-1"></i>AUTHORIZED</span>
+                                                                <span class="badge bg-success text-white px-3 py-2 fs-6 fw-bold"><i class="fa fa-check me-1"></i>AUTHORIZED</span>
                                                             </t>
                                                             <t t-else="">
-                                                                <span class="badge bg-warning text-dark px-3 py-2"><i class="fa fa-clock me-1"></i>PENDING</span>
+                                                                <span class="badge bg-warning text-dark px-3 py-2 fs-6 fw-bold"><i class="fa fa-clock me-1"></i>PENDING</span>
                                                             </t>
                                                         </td>
-                                                        <td class="pe-4 py-3 text-center">
+                                                        <td class="pe-4 py-4 text-center">
                                                             <t t-if="target.state === 'done'">
-                                                                <span class="text-muted small">Authorized</span>
+                                                                <span class="text-muted fw-bold">Authorized</span>
                                                             </t>
                                                             <t t-else="">
-                                                                <button class="btn btn-primary btn-sm fw-bold px-3 py-1 rounded-pill shadow-sm me-2" t-on-click="() => this.authorizeLine(target.line_id)">
+                                                                <button class="btn btn-primary btn-sm fw-bold px-3 py-2 rounded-pill shadow-sm me-2" t-on-click="() => this.authorizeLine(target.line_id)">
                                                                     <i class="fa fa-stamp me-1"></i>Authorize
                                                                 </button>
-                                                                <button class="btn btn-danger btn-sm fw-bold px-3 py-1 rounded-pill shadow-sm" t-on-click="() => this.rejectLine(target.line_id)">
+                                                                <button class="btn btn-danger btn-sm fw-bold px-3 py-2 rounded-pill shadow-sm" t-on-click="() => this.rejectLine(target.line_id)">
                                                                     <i class="fa fa-times me-1"></i>Reject
                                                                 </button>
                                                             </t>

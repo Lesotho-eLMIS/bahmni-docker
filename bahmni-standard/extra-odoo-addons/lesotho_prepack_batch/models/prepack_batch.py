@@ -279,7 +279,20 @@ class BahmniPrepackBatch(models.Model):
             )
             prepack_product = tmpl.product_variant_id
 
+        self._ensure_prepack_product_barcode(prepack_product)
         return prepack_product
+
+    def _ensure_prepack_product_barcode(self, prepack_product):
+        if prepack_product.barcode:
+            return
+        barcode = f"PP{prepack_product.id:08d}"
+        existing_product = self.env["product.product"].search(
+            [("barcode", "=", barcode), ("id", "!=", prepack_product.id)],
+            limit=1,
+        )
+        if existing_product:
+            barcode = f"PP{prepack_product.id:08d}{self.env.company.id:03d}"
+        prepack_product.barcode = barcode
 
     def _get_or_create_prepack_bom(self, prepack_product, bulk_product, size):
         bom = self.env["mrp.bom"].search(
@@ -319,7 +332,7 @@ class BahmniPrepackBatch(models.Model):
             for line in batch.line_ids:
                 line._complete_manufacturing_order()
             batch.state = "done"
-        return True
+        return self.action_print_prepack_labels()
 
     def action_reject_batch(self, comment):
         """Reject a pending authorization batch and send it back to the creator with a comment.
@@ -515,6 +528,15 @@ class BahmniPrepackBatch(models.Model):
         }
         return action
 
+    def action_print_prepack_labels(self):
+        for batch in self:
+            if batch.state != "done":
+                raise UserError(_("Prepack labels can only be printed after authorization."))
+            batch.line_ids._ensure_label_barcodes()
+        return self.env.ref(
+            "lesotho_prepack_batch.action_report_prepack_labels"
+        ).report_action(self)
+
     def _check_can_edit_workflow(self):
         for batch in self:
             if batch.state in ("done", "cancel"):
@@ -546,6 +568,11 @@ class BahmniPrepackBatchLine(models.Model):
         string="Finished Product Template",
         related="product_id.product_tmpl_id",
         store=True,
+        readonly=True,
+    )
+    product_barcode = fields.Char(
+        string="Barcode",
+        related="product_id.barcode",
         readonly=True,
     )
     bom_id = fields.Many2one(
@@ -617,6 +644,39 @@ class BahmniPrepackBatchLine(models.Model):
         compute="_compute_state",
     )
     note = fields.Char()
+
+    def _ensure_label_barcodes(self):
+        for line in self:
+            line.batch_id._ensure_prepack_product_barcode(line.product_id)
+
+    def get_prepack_label_copies(self):
+        self.ensure_one()
+        self._ensure_label_barcodes()
+        copies = []
+        quantity_per_pack = self.component_qty_per_pack
+        display_quantity = int(quantity_per_pack) if float(quantity_per_pack).is_integer() else quantity_per_pack
+        bulk_product = self.bulk_lot_id.product_id
+        lot = self.finished_lot_id or self.bulk_lot_id
+        for copy_number in range(1, self.package_qty + 1):
+            copies.append(
+                {
+                    "serial": f"{self.batch_id.name}-{self.sequence or self.id:02d}-{copy_number:03d}",
+                    "medicine": bulk_product.name or self.product_id.name,
+                    "strength": bulk_product.display_name,
+                    "batch_number": lot.name if lot else "",
+                    "expiry_date": fields.Date.to_string(lot.expiration_date) if lot and lot.expiration_date else "",
+                    "quantity_per_pack": f"{display_quantity} {bulk_product.uom_id.name}",
+                    "facility": self.company_id.name,
+                    "barcode": self.product_id.barcode or self.product_id.default_code or "",
+                    "prepack_product": self.product_id.display_name,
+                    "prepacked_on": fields.Date.to_string(
+                        fields.Datetime.context_timestamp(
+                            self, self.batch_id.planned_date
+                        ).date()
+                    ) if self.batch_id.planned_date else "",
+                }
+            )
+        return copies
 
     @api.depends("bom_id", "bulk_lot_id", "package_qty", "product_id")
     def _compute_component_metrics(self):

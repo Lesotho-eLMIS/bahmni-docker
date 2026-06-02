@@ -1,0 +1,110 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="action_report_prepack_labels" model="ir.actions.report">
+        <field name="name">Prepack Labels</field>
+        <field name="model">bahmni.prepack.batch</field>
+        <field name="report_type">qweb-pdf</field>
+        <field name="report_name">lesotho_prepack_batch.report_prepack_labels</field>
+        <field name="report_file">lesotho_prepack_batch.report_prepack_labels</field>
+        <field name="print_report_name">'Prepack Labels - %s' % (object.name)</field>
+    </record>
+
+    <template id="report_prepack_labels">
+        <t t-call="web.html_container">
+            <style>
+                .prepack-label-page {
+                    font-family: Arial, sans-serif;
+                    color: #111;
+                }
+                .prepack-label {
+                    display: inline-block;
+                    width: 88mm;
+                    min-height: 55mm;
+                    margin: 3mm;
+                    padding: 4mm;
+                    vertical-align: top;
+                    border: 1px solid #111;
+                    page-break-inside: avoid;
+                    box-sizing: border-box;
+                }
+                .prepack-label h3 {
+                    margin: 0 0 3mm;
+                    font-size: 14px;
+                    font-weight: 700;
+                    text-align: center;
+                    text-transform: uppercase;
+                    border-bottom: 1px solid #111;
+                    padding-bottom: 2mm;
+                }
+                .prepack-label-row {
+                    margin-bottom: 1.4mm;
+                    font-size: 11px;
+                    line-height: 1.2;
+                }
+                .prepack-label-row strong {
+                    display: inline-block;
+                    min-width: 25mm;
+                    font-weight: 700;
+                }
+                .prepack-label-barcode {
+                    margin-top: 2mm;
+                    text-align: center;
+                }
+                .prepack-label-barcode img {
+                    width: 58mm;
+                    height: 13mm;
+                }
+                .prepack-label-code {
+                    margin-top: 1mm;
+                    font-size: 10px;
+                    font-weight: 700;
+                    letter-spacing: 1px;
+                    text-align: center;
+                }
+            </style>
+            <t t-foreach="docs" t-as="doc">
+                <div class="page prepack-label-page">
+                    <t t-foreach="doc.line_ids" t-as="line">
+                        <t t-foreach="line.get_prepack_label_copies()" t-as="label">
+                            <div class="prepack-label">
+                                <h3>Prepack Medicine</h3>
+                                <div class="prepack-label-row">
+                                    <strong>Serial Ref:</strong>
+                                    <span t-esc="label['serial']"/>
+                                </div>
+                                <div class="prepack-label-row">
+                                    <strong>Generic Name:</strong>
+                                    <span t-esc="label['medicine']"/>
+                                </div>
+                                <div class="prepack-label-row">
+                                    <strong>Strength:</strong>
+                                    <span t-esc="label['strength']"/>
+                                </div>
+                                <div class="prepack-label-row">
+                                    <strong>Batch No:</strong>
+                                    <span t-esc="label['batch_number']"/>
+                                </div>
+                                <div class="prepack-label-row">
+                                    <strong>Qty/Prepack:</strong>
+                                    <span t-esc="label['quantity_per_pack']"/>
+                                </div>
+                                <div class="prepack-label-row">
+                                    <strong>Facility:</strong>
+                                    <span t-esc="label['facility']"/>
+                                </div>
+                                <div class="prepack-label-row">
+                                    <strong>Prepacked On:</strong>
+                                    <span t-esc="label['prepacked_on']"/>
+                                </div>
+                                <div class="prepack-label-barcode" t-if="label['barcode']">
+                                    <img t-att-src="'/report/barcode/Code128/%s?width=600&amp;height=120&amp;humanreadable=0' % label['barcode']"/>
+                                    <div class="prepack-label-code" t-esc="label['barcode']"/>
+                                </div>
+                            </div>
+                        </t>
+                    </t>
+                </div>
+            </t>
+        </t>
+    </template>
+</odoo>

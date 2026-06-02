@@ -206,7 +206,7 @@ export class PrepackDashboard extends Component {
   }
 
   async authorizeBatch() {
-    await this.orm.call("bahmni.prepack.batch", "action_authorize_batch", [[this.state.batchId]]);
+    const action = await this.orm.call("bahmni.prepack.batch", "action_authorize_batch", [[this.state.batchId]]);
     this.state.isAuthorized = true;
     this.notification.add("Batch Authorized successfully!", { type: "success" });
 
@@ -216,6 +216,11 @@ export class PrepackDashboard extends Component {
     // Refresh pending batches if in authorize mode
     if (this.state.mode === "authorize") {
       this.state.pendingBatches = await this.orm.call("bahmni.prepack.batch", "fetch_pending_batches", []);
+    }
+
+    // If the server returned a print action, execute it immediately
+    if (action && typeof action === "object") {
+      await this.actionService.doAction(action);
     }
   }
 
@@ -284,8 +289,17 @@ export class PrepackDashboard extends Component {
     }
   }
 
-  printLabels() {
-    this.notification.add("Printing Barcodes/Labels for all targets...", { type: "info" });
+  async printLabels() {
+    if (!this.state.batchId) {
+      this.notification.add("Select an authorized batch before printing labels.", { type: "warning" });
+      return;
+    }
+    const action = await this.orm.call(
+      "bahmni.prepack.batch",
+      "action_print_prepack_labels",
+      [[this.state.batchId]]
+    );
+    await this.actionService.doAction(action);
   }
 }
 PrepackDashboard.template = "lesotho_prepack_batch.PrepackDashboard";
