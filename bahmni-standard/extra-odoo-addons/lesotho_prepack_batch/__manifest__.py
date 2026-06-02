@@ -9,6 +9,7 @@
         "mrp",
         "stock",
         "lesotho_manufacturing",
+        "lesotho_base",
     ],
     "data": [
         "security/ir.model.access.csv",
@@ -16,6 +17,13 @@
         "views/prepack_batch_views.xml",
         "views/mrp_production_views.xml",
     ],
+    "assets": {
+        "web.assets_backend": [
+            "lesotho_prepack_batch/static/src/components/prepack_dashboard/prepack_dashboard.js",
+            "lesotho_prepack_batch/static/src/components/prepack_dashboard/prepack_dashboard.xml",
+            "lesotho_prepack_batch/static/src/components/prepack_dashboard/prepack_dashboard.scss",
+        ],
+    },
     "installable": True,
     "application": False,
 }

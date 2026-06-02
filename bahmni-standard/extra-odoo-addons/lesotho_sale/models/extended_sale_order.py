@@ -1,6 +1,7 @@
 import logging
 
 from odoo import _, api, fields, models
+from odoo.exceptions import UserError
 
 _logger = logging.getLogger(__name__)
 
@@ -83,6 +84,12 @@ class ExtendedSaleOrder(models.Model):
         compute="_compute_bp_display",
         store=True,
         help="Blood pressure (e.g., 120/80 mmHg).",
+    )
+
+    medication_explanation_confirmed = fields.Boolean(
+        string="Medication Explanation Confirmed",
+        copy=False,
+        help="The dispenser confirmed that medication use was explained to the patient.",
     )
 
     @api.depends("systolic", "diastolic")
@@ -174,6 +181,16 @@ class ExtendedSaleOrder(models.Model):
             }
         )
         return action
+
+    def action_open_prescription_dispense_page(self):
+        self.ensure_one()
+        return {
+            "type": "ir.actions.client",
+            "name": _("Prescription Dispensing"),
+            "tag": "lesotho_sale.prescription_dispense",
+            "target": "current",
+            "context": {"active_id": self.id},
+        }
     
     def action_mark_all_dispensed(self):
         """Mark all lines in the order as dispensed"""
@@ -182,6 +199,335 @@ class ExtendedSaleOrder(models.Model):
             lambda l: not l.dispensed and not l.display_type
         )
         lines_to_dispense.write({"dispensed": True})
+        return True
+
+    def action_serve_prescription(self):
+        self.ensure_one()
+        if not self.medication_explanation_confirmed:
+            raise UserError(
+                _("Confirm that the medication instructions were explained before serving.")
+            )
+
+        lines_to_dispense = self.order_line.filtered(
+            lambda l: not l.display_type and not l.dispensed
+        )
+        if not lines_to_dispense:
+            raise UserError(_("There are no prescription lines left to serve."))
+
+        if self.state in ("draft", "sent"):
+            self.action_confirm()
+
+        lines_to_dispense.write({"dispensed": True, "served_internally": True})
+        self.message_post(
+            body=_(
+                "Prescription served by %(user)s. %(count)s product(s) marked as dispensed.",
+                user=self.env.user.display_name,
+                count=len(lines_to_dispense),
+            )
+        )
+
+        report = self.env.ref("lesotho_sale.action_report_dispensed_prescription")
+        return report.report_action(self)
+
+    def action_serve_prescription_from_ui(self):
+        return self.action_serve_prescription()
+
+    def _serialize_dispensing_line(self, line):
+        self.ensure_one()
+        prescribed_product = line.prescribed_product_id or line.product_id
+        expiry_date = self._get_dispensing_line_expiry(line)
+        return {
+            "id": line.id,
+            "is_existing_prescription": line.is_existing_prescription,
+            "prescribed_product": prescribed_product.display_name if prescribed_product else "",
+            "prescribed_product_id": prescribed_product.id if prescribed_product else False,
+            "dispensed_product": line.product_id.display_name if line.product_id else (prescribed_product.display_name if prescribed_product else ""),
+            "product_id": line.product_id.id if line.product_id else (prescribed_product.id if prescribed_product else False),
+            "quantity_prescribed": line.prescribed_qty_base_units or line.product_uom_qty or 0,
+            "quantity_dispensed": line.product_uom_qty or 0,
+            "dose": self._format_prescription_option_value(line.dose) if line.dose else "",
+            "dose_unit": line.dose_units or "",
+            "frequency": line.frequency or "",
+            "route": line.route or "",
+            "duration": self._format_prescription_option_value(line.duration) if line.duration else "",
+            "duration_units": line.duration_units or "",
+            "instructions": line.administration_instructions or "",
+            "additional_instructions": line.additional_instructions or "",
+            "barcode": line.barcode_scan or "",
+            "batch_number": line.dispensing_batch_number or "",
+            "expiry_date": expiry_date,
+            "served_internally": line.served_internally,
+            "stock_on_hand": line.stock_on_hand or 0,
+            "out_of_stock": line.out_of_stock,
+            "is_pack_substituted": line.is_pack_substituted,
+            "comments": line.dispensing_comments or "",
+        }
+
+    def _get_dispensing_line_expiry(self, line):
+        for field_name in ("expire_date", "expiry_date", "expiration_date"):
+            if field_name in line._fields and getattr(line, field_name):
+                return self._format_dispensing_expiry(getattr(line, field_name), line._fields[field_name])
+
+        if not line.dispensing_batch_number or not line.product_id:
+            return ""
+
+        lot = self.env["stock.lot"].search(
+            [
+                ("name", "=", line.dispensing_batch_number),
+                ("product_id", "=", line.product_id.id),
+            ],
+            limit=1,
+        )
+        for field_name in ("expiration_date", "use_date", "removal_date", "alert_date"):
+            if field_name in lot._fields and getattr(lot, field_name):
+                return self._format_dispensing_expiry(getattr(lot, field_name), lot._fields[field_name])
+        return ""
+
+    def _format_dispensing_expiry(self, value, field):
+        if not value:
+            return ""
+        if field.type == "date":
+            return fields.Date.to_string(value)
+        return fields.Datetime.to_string(value)
+
+    def fetch_prescription_dispensing(self):
+        self.ensure_one()
+        dispensing_lines = self.order_line.filtered(lambda l: not l.display_type)
+        dispensing_lines.filtered(lambda l: not l.served_internally).write({"served_internally": True})
+        return {
+            "id": self.id,
+            "name": self.name,
+            "state": self.state,
+            "patient": self.partner_id.display_name or "",
+            "sex": dict(self.partner_id._fields["sex"].selection).get(self.partner_id.sex, self.partner_id.sex or ""),
+            "age": self.patient_age or "",
+            "village": self.partner_village.display_name or "",
+            "weight": self.weight or "",
+            "height": self.height or "",
+            "bmi": self.bmi or "",
+            "bp": self.bp_display or "",
+            "date": fields.Datetime.to_string(self.date_order) if self.date_order else "",
+            "prescriber": self.provider_name or "",
+            "care_setting": self.care_setting or "",
+            "dispensary": self.shop_id.display_name if self.shop_id else "",
+            "medication_explanation_confirmed": self.medication_explanation_confirmed,
+            "direction_options": self._get_prescription_direction_options(dispensing_lines),
+            "product_options": self._get_dispensing_product_options(),
+            "lines": [
+                self._serialize_dispensing_line(line)
+                for line in dispensing_lines
+            ],
+        }
+
+    def _get_dispensing_product_options(self):
+        products = self.env["product.product"].with_context(active_test=False).search([], order="name, id")
+        return [
+            {
+                "id": product.id,
+                "name": product.display_name,
+            }
+            for product in products
+        ]
+
+    def _get_prescription_direction_options(self, current_lines):
+        option_fields = {
+            "dose_unit": "dose_units",
+            "frequency": "frequency",
+            "route": "route",
+            "duration_units": "duration_units",
+            "instructions": "administration_instructions",
+        }
+        options = {key: set() for key in option_fields}
+        ordered_options = {
+            "dose_unit": [
+                "Tablet",
+                "Capsule",
+                "ml",
+                "mg",
+                "IU",
+                "Drop",
+                "Tablespoon",
+                "Teaspoon",
+                "Unit",
+                "Puff",
+            ],
+            "frequency": [
+                "Immediately",
+                "Once a day",
+                "Twice a day",
+                "Thrice a day",
+                "Four times a day",
+                "Every Hour",
+                "Every 2 hours",
+                "Every 3 hours",
+                "Every 4 hours",
+                "Every 6 hours",
+                "Every 8 hours",
+                "Every 12 hours",
+                "On alternate days",
+                "Once a week",
+                "Twice a week",
+                "Thrice a week",
+                "Every 2 weeks",
+                "Every 3 weeks",
+                "Once a month",
+                "Five times a day",
+                "Four days a week",
+                "Five days a week",
+                "Six days a week",
+            ],
+            "route": [
+                "Intramuscular",
+                "Intravenous",
+                "Oral",
+                "Per Vaginal",
+                "Sub Cutaneous",
+                "Per Rectum",
+                "Sub Lingual",
+                "Nasogastric",
+                "Intradermal",
+                "Intraperitoneal",
+                "Intrathecal",
+                "Intraosseous",
+                "Topical",
+                "Nasal",
+                "Inhalation",
+            ],
+            "duration_units": [
+                "Days",
+                "Weeks",
+                "Months",
+            ],
+            "instructions": [
+                "Before meals",
+                "Empty stomach",
+                "After meals",
+                "In the morning",
+                "In the evening",
+                "At bedtime",
+                "Immediately",
+                "As directed",
+            ],
+        }
+        options["dose_unit"].update(ordered_options["dose_unit"])
+        options["frequency"].update(ordered_options["frequency"])
+        options["route"].update(ordered_options["route"])
+        options["duration_units"].update(ordered_options["duration_units"])
+        options["instructions"].update(
+            ordered_options["instructions"]
+        )
+
+        recent_lines = self.env["sale.order.line"].search(
+            [
+                ("display_type", "=", False),
+                "|",
+                ("order_id", "=", self.id),
+                ("has_prescription_data", "=", True),
+            ],
+            order="id desc",
+            limit=1000,
+        )
+        for line in current_lines | recent_lines:
+            for option_key, field_name in option_fields.items():
+                value = getattr(line, field_name)
+                if value not in (False, None, ""):
+                    options[option_key].add(self._format_prescription_option_value(value))
+
+        direction_options = {}
+        for key, values in options.items():
+            if key in ordered_options:
+                ordered_values = [
+                    value for value in ordered_options[key]
+                    if value in values
+                ]
+                extra_values = sorted(
+                    values - set(ordered_values),
+                    key=lambda value: (not self._is_numeric_option(value), self._option_sort_value(value)),
+                )
+                direction_options[key] = ordered_values + extra_values
+            else:
+                direction_options[key] = sorted(
+                    values,
+                    key=lambda value: (not self._is_numeric_option(value), self._option_sort_value(value)),
+                )
+        return direction_options
+
+    def _format_prescription_option_value(self, value):
+        if isinstance(value, float):
+            if value.is_integer():
+                return str(int(value))
+            return ("%s" % value).rstrip("0").rstrip(".")
+        return str(value)
+
+    def _is_numeric_option(self, value):
+        try:
+            float(value)
+            return True
+        except (TypeError, ValueError):
+            return False
+
+    def _option_sort_value(self, value):
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return value.lower()
+
+    def add_prescription_dispensing_line(self):
+        self.ensure_one()
+        line = self.env["sale.order.line"].with_context(skip_prescription_init=True).create(
+            {
+                "order_id": self.id,
+                "name": _("New Dispensing Product"),
+                "product_uom_qty": 1.0,
+            }
+        )
+        return self._serialize_dispensing_line(line)
+
+    def update_prescription_dispensing_line(self, line_id, vals):
+        self.ensure_one()
+        line = self.order_line.filtered(lambda l: l.id == line_id)
+        if not line:
+            raise UserError(_("Prescription line not found."))
+
+        write_vals = {}
+        field_map = {
+            "quantity_dispensed": "product_uom_qty",
+            "dose": "dose",
+            "dose_unit": "dose_units",
+            "frequency": "frequency",
+            "route": "route",
+            "duration": "duration",
+            "duration_units": "duration_units",
+            "instructions": "administration_instructions",
+            "additional_instructions": "additional_instructions",
+            "batch_number": "dispensing_batch_number",
+            "served_internally": "served_internally",
+            "is_pack_substituted": "is_pack_substituted",
+            "comments": "dispensing_comments",
+        }
+        for source, target in field_map.items():
+            if source in vals:
+                write_vals[target] = vals[source]
+        if vals.get("product_id"):
+            product = self.env["product.product"].browse(vals["product_id"])
+            write_vals.update(
+                {
+                    "product_id": product.id,
+                    "product_uom": product.uom_id.id,
+                }
+            )
+            if not write_vals.get("name"):
+                write_vals["name"] = product.display_name
+        if write_vals:
+            line.with_context(skip_prescription_init=True).write(write_vals)
+        return self._serialize_dispensing_line(line)
+
+    def remove_prescription_dispensing_line(self, line_id):
+        self.ensure_one()
+        line = self.order_line.filtered(lambda l: l.id == line_id)
+        if not line:
+            return True
+        line.unlink()
         return True
 
     def action_mark_all_undispensed(self):

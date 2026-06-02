@@ -1,0 +1,284 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+    <t t-name="lesotho_sale.PrescriptionDispense" owl="1">
+        <div class="o_lesotho_dispense_page" t-ref="root">
+            <div t-if="state.loading" class="o_lesotho_loading">Loading prescription...</div>
+            <div t-elif="!state.orderId" class="o_lesotho_empty">Open a prescription before dispensing.</div>
+            <t t-else="">
+                <div class="o_lesotho_control_panel">
+                    <div class="o_lesotho_cp_top">
+                        <div class="o_lesotho_breadcrumbs">
+                            <span>Prescriptions</span>
+                            <span>/</span>
+                            <strong><t t-esc="state.order.name"/></strong>
+                        </div>
+                    </div>
+                    <div class="o_lesotho_cp_bottom">
+                        <div class="o_lesotho_cp_actions">
+                            <button type="button" class="o_lesotho_cp_serve" t-att-disabled="!state.explanationConfirmed" t-on-click="() => this.serve()">Serve</button>
+                            <button type="button" class="o_lesotho_cp_cancel" t-on-click="() => this.cancel()">Cancel</button>
+                        </div>
+                        <div class="o_lesotho_statusbar" aria-label="Prescription status">
+                            <span t-att-class="this.getOrderStatusClass('draft')">Quotation</span>
+                            <span t-att-class="this.getOrderStatusClass('sent')">Quotation Sent</span>
+                            <span t-att-class="this.getOrderStatusClass('sale')">Sales Order</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="o_lesotho_topbar">
+                    <div class="o_lesotho_patient_grid">
+                        <section class="o_lesotho_patient_group o_lesotho_patient_identity">
+                            <h3><span class="o_lesotho_card_icon">P</span>Patient</h3>
+                            <div class="o_lesotho_patient_detail o_lesotho_patient_name"><strong>Name</strong> <span><t t-esc="state.order.patient"/></span></div>
+                            <div class="o_lesotho_patient_inline">
+                                <div class="o_lesotho_patient_detail"><strong>Sex</strong> <span><t t-esc="state.order.sex"/></span></div>
+                                <div class="o_lesotho_patient_detail"><strong>Age</strong> <span><t t-esc="state.order.age"/></span></div>
+                                <div class="o_lesotho_patient_detail"><strong>Village</strong> <span><t t-esc="state.order.village"/></span></div>
+                            </div>
+                        </section>
+                        <section class="o_lesotho_patient_group">
+                            <h3><span class="o_lesotho_card_icon">M</span>Measurements</h3>
+                            <div class="o_lesotho_patient_detail"><strong>Weight (kg)</strong> <span><t t-esc="state.order.weight"/></span></div>
+                            <div class="o_lesotho_patient_detail"><strong>Height (cm)</strong> <span><t t-esc="state.order.height"/></span></div>
+                            <div class="o_lesotho_patient_detail"><strong>BMI (kg/m2)</strong> <span><t t-esc="state.order.bmi"/></span></div>
+                            <div class="o_lesotho_patient_detail"><strong>BP (mmHg)</strong> <span><t t-esc="state.order.bp"/></span></div>
+                        </section>
+                        <section class="o_lesotho_patient_group">
+                            <h3><span class="o_lesotho_card_icon">Rx</span>Prescription</h3>
+                            <div class="o_lesotho_patient_detail"><strong>Date</strong> <span><t t-esc="state.order.date"/></span></div>
+                            <div class="o_lesotho_patient_detail"><strong>Prescriber</strong> <span><t t-esc="state.order.prescriber"/></span></div>
+                            <div class="o_lesotho_patient_detail"><strong>Care Setting</strong> <span><t t-esc="state.order.care_setting"/></span></div>
+                            <div class="o_lesotho_patient_detail"><strong>Dispensary</strong> <span><t t-esc="state.order.dispensary"/></span></div>
+                        </section>
+                    </div>
+                </div>
+
+                <div class="o_lesotho_workspace">
+                    <aside class="o_lesotho_prescribed_list" role="tablist">
+                        <h3>Prescribed Items (<t t-esc="state.lines.length"/>)</h3>
+                        <t t-foreach="state.lines" t-as="line" t-key="line.id">
+                            <button
+                                type="button"
+                                role="tab"
+                                t-att-aria-selected="this.isLineActive(line)"
+                                t-attf-class="o_lesotho_prescribed_item {{ this.isLineActive(line) ? 'active' : '' }}"
+                                t-on-click="() => this.selectLine(line)"
+                            >
+                                <span class="o_lesotho_item_number"><t t-esc="line_index + 1"/></span>
+                                <div>
+                                    <strong><t t-esc="line.prescribed_product"/></strong>
+                                    <p>Qty: <t t-esc="line.quantity_prescribed"/> <span>-</span> <t t-esc="line.dose"/> <t t-esc="line.dose_unit"/> <t t-esc="line.frequency"/></p>
+                                    <p><t t-esc="line.route"/> <span>-</span> <t t-esc="line.duration"/> <t t-esc="line.duration_units"/></p>
+                                    <span t-att-class="this.getLineStatusClass(line)"><t t-esc="this.getLineStatus(line)"/></span>
+                                </div>
+                            </button>
+                        </t>
+                    </aside>
+
+                    <main class="o_lesotho_dispense_cards">
+                        <t t-foreach="state.lines" t-as="line" t-key="line.id">
+                            <section t-if="this.isLineActive(line)" class="o_lesotho_dispense_card">
+                                <header class="o_lesotho_card_header">
+                                    <div>
+                                        <span class="o_lesotho_line_number"><t t-esc="line_index + 1"/>.</span>
+                                        <h3><t t-esc="line.prescribed_product"/></h3>
+                                    </div>
+                                    <div class="o_lesotho_card_actions">
+                                        <span class="o_lesotho_status_pill">Prescribed</span>
+                                        <span t-if="line.dispensed_product &amp;&amp; line.dispensed_product !== line.prescribed_product" class="o_lesotho_change_pill">Change Made</span>
+                                    </div>
+                                </header>
+
+                                <div t-if="line.dispensed_product &amp;&amp; line.dispensed_product !== line.prescribed_product" class="o_lesotho_notice">
+                                    You can dispense a different product and adjust the dose and instructions as appropriate.
+                                </div>
+
+                                <div class="o_lesotho_form_grid">
+                                    <section class="o_lesotho_field_group">
+                                        <h4>Product Status</h4>
+                                        <div class="o_lesotho_group_grid o_lesotho_group_grid_top">
+                                            <label class="o_lesotho_field o_lesotho_field_wide">
+                                                <span>Dispensed Product</span>
+                                                <select t-att-disabled="!line.is_pack_substituted" t-att-value="line.product_id || ''" t-on-change="(ev) => this.saveLine(line, 'product_id', parseInt(ev.target.value || 0))">
+                                                    <t t-foreach="state.productOptions" t-as="product" t-key="product.id">
+                                                        <option t-att-value="product.id" t-att-selected="product.id === line.product_id"><t t-esc="product.name"/></option>
+                                                    </t>
+                                                </select>
+                                            </label>
+                                            <label class="o_lesotho_field o_lesotho_checkbox_field">
+                                                <span>Out of Stock</span>
+                                                <input type="checkbox" disabled="disabled" t-att-checked="line.out_of_stock"/>
+                                            </label>
+                                            <label class="o_lesotho_field">
+                                                <span>Stock on Hand</span>
+                                                <input readonly="readonly" t-att-value="line.stock_on_hand"/>
+                                            </label>
+                                            <label class="o_lesotho_field o_lesotho_checkbox_field">
+                                                <span>Substitute</span>
+                                                <input type="checkbox" t-att-checked="line.is_pack_substituted" t-on-change="(ev) => this.setSubstitute(line, ev.target.checked)"/>
+                                            </label>
+                                            <label class="o_lesotho_field o_lesotho_field_full">
+                                                <span>Comments</span>
+                                                <input t-att-value="line.comments" t-on-change="(ev) => this.saveLine(line, 'comments', ev.target.value)"/>
+                                            </label>
+                                        </div>
+                                    </section>
+
+                                    <section class="o_lesotho_field_group">
+                                        <h4>Dispensing Details</h4>
+                                        <div class="o_lesotho_group_grid">
+                                            <label class="o_lesotho_field">
+                                                <span>Quantity Dispensed</span>
+                                                <input type="number" t-att-value="line.quantity_dispensed" t-on-change="(ev) => this.saveLine(line, 'quantity_dispensed', parseFloat(ev.target.value || 0))"/>
+                                            </label>
+                                            <label class="o_lesotho_field">
+                                                <span>Batch Number</span>
+                                                <input t-att-value="line.batch_number" t-on-change="(ev) => this.saveLine(line, 'batch_number', ev.target.value)"/>
+                                            </label>
+                                            <label class="o_lesotho_field">
+                                                <span>Expiry Date</span>
+                                                <input readonly="readonly" t-att-value="line.expiry_date"/>
+                                            </label>
+                                            <label class="o_lesotho_field">
+                                                <span>Barcode</span>
+                                                <input class="o_lesotho_barcode" t-att-value="line.barcode" t-on-input="(ev) => this.updateLocal(line, 'barcode', ev.target.value)" t-on-keydown="(ev) => this.scanBarcode(line, line_index, ev)"/>
+                                            </label>
+                                            <label class="o_lesotho_field o_lesotho_checkbox_field">
+                                                <span>Served Internally</span>
+                                                <input type="checkbox" t-att-checked="line.served_internally" t-on-change="(ev) => this.saveLine(line, 'served_internally', ev.target.checked)"/>
+                                            </label>
+                                        </div>
+                                    </section>
+
+                                    <section class="o_lesotho_field_group">
+                                        <h4>Directions</h4>
+                                        <div class="o_lesotho_group_grid o_lesotho_group_grid_directions">
+                                            <label class="o_lesotho_field">
+                                                <span>Dose</span>
+                                                <input type="number" step="1" t-att-disabled="!line.is_pack_substituted" t-att-value="line.dose" t-on-change="(ev) => this.saveLine(line, 'dose', parseInt(ev.target.value || 0))"/>
+                                            </label>
+                                            <label class="o_lesotho_field">
+                                                <span>Dose Unit</span>
+                                                <select t-att-disabled="!line.is_pack_substituted" t-att-value="line.dose_unit" t-on-change="(ev) => this.saveLine(line, 'dose_unit', ev.target.value)">
+                                                    <t t-foreach="state.directionOptions.dose_unit || []" t-as="option" t-key="option">
+                                                        <option t-att-value="option" t-att-selected="option === line.dose_unit"><t t-esc="option"/></option>
+                                                    </t>
+                                                </select>
+                                            </label>
+                                            <label class="o_lesotho_field">
+                                                <span>Frequency</span>
+                                                <select t-att-disabled="!line.is_pack_substituted" t-att-value="line.frequency" t-on-change="(ev) => this.saveLine(line, 'frequency', ev.target.value)">
+                                                    <t t-foreach="state.directionOptions.frequency || []" t-as="option" t-key="option">
+                                                        <option t-att-value="option" t-att-selected="option === line.frequency"><t t-esc="option"/></option>
+                                                    </t>
+                                                </select>
+                                            </label>
+                                            <label class="o_lesotho_field">
+                                                <span>Route</span>
+                                                <select t-att-disabled="!line.is_pack_substituted" t-att-value="line.route" t-on-change="(ev) => this.saveLine(line, 'route', ev.target.value)">
+                                                    <t t-foreach="state.directionOptions.route || []" t-as="option" t-key="option">
+                                                        <option t-att-value="option" t-att-selected="option === line.route"><t t-esc="option"/></option>
+                                                    </t>
+                                                </select>
+                                            </label>
+                                            <label class="o_lesotho_field">
+                                                <span>Duration</span>
+                                                <input type="number" step="1" t-att-disabled="!line.is_pack_substituted" t-att-value="line.duration" t-on-change="(ev) => this.saveLine(line, 'duration', parseInt(ev.target.value || 0))"/>
+                                            </label>
+                                            <label class="o_lesotho_field">
+                                                <span>Duration Unit</span>
+                                                <select t-att-disabled="!line.is_pack_substituted" t-att-value="line.duration_units" t-on-change="(ev) => this.saveLine(line, 'duration_units', ev.target.value)">
+                                                    <t t-foreach="state.directionOptions.duration_units || []" t-as="option" t-key="option">
+                                                        <option t-att-value="option" t-att-selected="option === line.duration_units"><t t-esc="option"/></option>
+                                                    </t>
+                                                </select>
+                                            </label>
+                                            <label class="o_lesotho_field o_lesotho_field_wide">
+                                                <span>Instructions</span>
+                                                <select t-att-disabled="!line.is_pack_substituted" t-att-value="line.instructions" t-on-change="(ev) => this.saveLine(line, 'instructions', ev.target.value)">
+                                                    <t t-foreach="state.directionOptions.instructions || []" t-as="option" t-key="option">
+                                                        <option t-att-value="option" t-att-selected="option === line.instructions"><t t-esc="option"/></option>
+                                                    </t>
+                                                </select>
+                                            </label>
+                                            <label class="o_lesotho_field o_lesotho_field_wide">
+                                                <span>Additional Instructions</span>
+                                                <input t-att-value="line.additional_instructions" t-on-change="(ev) => this.saveLine(line, 'additional_instructions', ev.target.value)"/>
+                                            </label>
+                                        </div>
+                                    </section>
+                                </div>
+                            </section>
+                        </t>
+                    </main>
+                </div>
+
+                <section class="o_lesotho_review">
+                    <button
+                        type="button"
+                        class="o_lesotho_review_toggle"
+                        t-on-click="() => this.toggleReview()"
+                        t-att-aria-expanded="state.reviewExpanded"
+                    >
+                        <span>Review Dispensed Items</span>
+                        <span class="o_lesotho_review_chevron"><t t-esc="state.reviewExpanded ? 'Hide' : 'Show'"/></span>
+                    </button>
+                    <div t-if="state.reviewExpanded" class="o_lesotho_table_wrap">
+                        <table class="o_lesotho_rx_table o_lesotho_review_table">
+                            <thead>
+                                <tr>
+                                    <th>#</th>
+                                    <th>Prescribed Product</th>
+                                    <th>Dispensed Product</th>
+                                    <th>Qty</th>
+                                    <th>Dose</th>
+                                    <th>Dose Unit</th>
+                                    <th>Frequency</th>
+                                    <th>Route</th>
+                                    <th>Duration</th>
+                                    <th>Duration Unit</th>
+                                    <th>Batch</th>
+                                    <th>Expiry</th>
+                                    <th>Barcode</th>
+                                    <th>Stock</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <t t-foreach="state.lines" t-as="line" t-key="line.id">
+                                    <tr>
+                                        <td><t t-esc="line_index + 1"/></td>
+                                        <td class="o_lesotho_product_cell"><t t-esc="line.prescribed_product"/></td>
+                                        <td class="o_lesotho_product_cell">
+                                            <t t-esc="line.dispensed_product"/>
+                                            <span t-if="line.dispensed_product &amp;&amp; line.dispensed_product !== line.prescribed_product" class="o_lesotho_review_badge">Modified</span>
+                                        </td>
+                                        <td><t t-esc="line.quantity_dispensed"/></td>
+                                        <td><t t-esc="line.dose"/></td>
+                                        <td><t t-esc="line.dose_unit"/></td>
+                                        <td><t t-esc="line.frequency"/></td>
+                                        <td><t t-esc="line.route"/></td>
+                                        <td><t t-esc="line.duration"/></td>
+                                        <td><t t-esc="line.duration_units"/></td>
+                                        <td><t t-esc="line.batch_number"/></td>
+                                        <td><t t-esc="line.expiry_date"/></td>
+                                        <td><t t-esc="line.barcode"/></td>
+                                        <td><t t-esc="line.stock_on_hand"/></td>
+                                    </tr>
+                                </t>
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+
+                <div class="o_lesotho_footer">
+                    <label class="o_lesotho_explain">
+                        <input type="checkbox" t-att-checked="state.explanationConfirmed" t-on-change="(ev) => this.setExplanation(ev)"/>
+                        <span>I have explained how the medication should be taken to the patient and they understand</span>
+                    </label>
+                    <button class="o_lesotho_serve" t-att-disabled="!state.explanationConfirmed" t-on-click="() => this.serve()">Serve</button>
+                </div>
+            </t>
+        </div>
+    </t>
+</templates>
