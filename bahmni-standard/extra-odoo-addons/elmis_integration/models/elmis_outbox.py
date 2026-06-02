@@ -1,6 +1,6 @@
 import json
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from odoo import _, api, fields, models
 from odoo.exceptions import UserError
@@ -143,14 +143,49 @@ class ElmisOutbox(models.Model):
 
     @api.model
     def drain_pending_to_elmis(self, limit=50):
-        events = self.sudo().search(
-            [("status", "in", ("PENDING", "FAILED"))],
-            order="created_at asc, id asc",
-            limit=limit,
-        )
+        events = self._get_retryable_submission_batch(limit=limit)
         result = events.submit_to_elmis()
         result["selected"] = len(events)
         return result
+
+    @api.model
+    def _get_retryable_submission_batch(self, limit=50):
+        limit = max(int(limit or 50), 1)
+        self.env.cr.execute(
+            """
+            SELECT id
+              FROM elmis_outbox
+             WHERE status IN ('PENDING', 'FAILED')
+             ORDER BY created_at ASC, id ASC
+             LIMIT %s
+             FOR UPDATE SKIP LOCKED
+            """,
+            [limit],
+        )
+        return self.sudo().browse([row[0] for row in self.env.cr.fetchall()])
+
+    @api.model
+    def drain_all_retryable_to_elmis(self, batch_limit=50):
+        aggregate = {
+            "selected": 0,
+            "processed": 0,
+            "delivered": 0,
+            "failed": 0,
+            "skipped": 0,
+        }
+        batch_limit = max(int(batch_limit or 50), 1)
+
+        while True:
+            result = self.drain_pending_to_elmis(limit=batch_limit)
+            for key in aggregate:
+                aggregate[key] += result.get(key, 0)
+
+            if result.get("failed"):
+                break
+            if result.get("selected", 0) < batch_limit:
+                break
+
+        return aggregate
 
     @api.model
     def _cron_drain_pending_to_elmis(self):
@@ -188,6 +223,29 @@ class ElmisOutbox(models.Model):
             % {"count": len(candidates)}
         )
 
+    @api.model
+    def get_stuck_sent_events(self, limit=None):
+        cutoff = self._get_stuck_sent_cutoff()
+        return self.sudo().search(
+            [
+                ("status", "=", "SENT"),
+                "|",
+                ("sent_at", "=", False),
+                ("sent_at", "<=", cutoff),
+            ],
+            order="sent_at asc, created_at asc, id asc",
+            limit=limit,
+        )
+
+    @api.model
+    def _get_stuck_sent_cutoff(self):
+        params = self.env["ir.config_parameter"].sudo()
+        stale_after_minutes = int(
+            params.get_param("elmis_integration.sent_stale_after_minutes", "30") or 30
+        )
+        stale_after_minutes = max(stale_after_minutes, 1)
+        return fields.Datetime.now() - timedelta(minutes=stale_after_minutes)
+
     def submit_to_elmis(self):
         result = {
             "processed": 0,
@@ -195,8 +253,12 @@ class ElmisOutbox(models.Model):
             "failed": 0,
             "skipped": 0,
         }
-        for event in self:
-            if event.status in ("DELIVERED", "DLQ"):
+        locked_events = self._lock_submission_records()
+        locked_ids = set(locked_events.ids)
+        result["skipped"] += len(self) - len(locked_events)
+
+        for event in self.filtered(lambda item: item.id in locked_ids):
+            if event.status not in ("PENDING", "FAILED"):
                 result["skipped"] += 1
                 continue
 
@@ -206,6 +268,23 @@ class ElmisOutbox(models.Model):
             else:
                 result["failed"] += 1
         return result
+
+    def _lock_submission_records(self):
+        if not self:
+            return self
+        self.env.cr.execute(
+            """
+            SELECT id
+              FROM elmis_outbox
+             WHERE id = ANY(%s)
+             FOR UPDATE SKIP LOCKED
+            """,
+            [self.ids],
+        )
+        locked_ids = [row[0] for row in self.env.cr.fetchall()]
+        locked_events = self.browse(locked_ids)
+        locked_events.invalidate_recordset(["status", "attempt_count"])
+        return locked_events
 
     @api.model
     def _get_submission_notification(self, result):
@@ -241,12 +320,23 @@ class ElmisOutbox(models.Model):
             "failed": 0,
             "dlq": 0,
             "retryable": 0,
+            "stuck_sent": 0,
         }
         for group in self.read_group([], ["status"], ["status"]):
             key = (group.get("status") or "").lower()
             if key in counts:
                 counts[key] = group["status_count"]
         counts["retryable"] = counts["pending"] + counts["failed"]
+        stuck_sent = self.get_stuck_sent_events(limit=1)
+        if stuck_sent:
+            counts["stuck_sent"] = self.search_count(
+                [
+                    ("status", "=", "SENT"),
+                    "|",
+                    ("sent_at", "=", False),
+                    ("sent_at", "<=", self._get_stuck_sent_cutoff()),
+                ]
+            )
 
         oldest_retryable = self.search(
             [("status", "in", ("PENDING", "FAILED"))],
@@ -269,6 +359,8 @@ class ElmisOutbox(models.Model):
             **counts,
             "oldest_retryable_at": self._datetime_to_iso(oldest_created_at),
             "oldest_retryable_age_seconds": self._age_seconds(oldest_created_at),
+            "oldest_stuck_sent_at": self._datetime_to_iso(stuck_sent.sent_at),
+            "oldest_stuck_sent_age_seconds": self._age_seconds(stuck_sent.sent_at),
             "last_delivered_at": self._datetime_to_iso(last_delivered.delivered_at),
             "last_error": last_failed.error_message if last_failed else False,
         }

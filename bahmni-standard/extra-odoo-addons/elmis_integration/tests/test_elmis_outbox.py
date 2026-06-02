@@ -1,6 +1,8 @@
 import json
+from datetime import timedelta
 from unittest.mock import patch
 
+from odoo import fields
 from odoo.exceptions import UserError
 from odoo.tests import TransactionCase, tagged
 
@@ -59,6 +61,11 @@ class TestElmisOutbox(TransactionCase):
         }
         vals.update(overrides)
         return self.env["elmis.outbox"].create(vals)
+
+    def _clear_existing_retryable_outbox(self):
+        self.env["elmis.outbox"].search([("status", "in", ("PENDING", "FAILED"))]).write(
+            {"status": "DLQ"}
+        )
 
     def test_defaults_message_id_status_reason_and_attempt_count(self):
         event = self._create_outbox()
@@ -222,7 +229,20 @@ class TestElmisOutbox(TransactionCase):
         self.assertEqual(result["skipped"], 1)
         self.assertEqual(event.attempt_count, 0)
 
+    def test_submit_to_elmis_skips_sent_event(self):
+        event = self._create_outbox(status="SENT", sent_at=fields.Datetime.now())
+
+        result = event.submit_to_elmis()
+
+        self.assertEqual(result["processed"], 0)
+        self.assertEqual(result["delivered"], 0)
+        self.assertEqual(result["failed"], 0)
+        self.assertEqual(result["skipped"], 1)
+        self.assertEqual(event.status, "SENT")
+        self.assertEqual(event.attempt_count, 0)
+
     def test_drain_pending_to_elmis_only_selects_retryable_events(self):
+        self._clear_existing_retryable_outbox()
         pending = self._create_outbox(message_id="pending-message", status="PENDING")
         failed = self._create_outbox(message_id="failed-message", status="FAILED")
         delivered = self._create_outbox(message_id="delivered-message", status="DELIVERED")
@@ -257,7 +277,169 @@ class TestElmisOutbox(TransactionCase):
         self.assertEqual(dlq.attempt_count, 0)
         self.assertEqual(sent.attempt_count, 0)
 
+    def test_retryable_submission_batch_locks_pending_and_failed_in_order(self):
+        self._clear_existing_retryable_outbox()
+        pending = self._create_outbox(message_id="pending-message", status="PENDING")
+        failed = self._create_outbox(message_id="failed-message", status="FAILED")
+        self._create_outbox(message_id="delivered-message", status="DELIVERED")
+        self._create_outbox(message_id="dlq-message", status="DLQ")
+        self._create_outbox(message_id="sent-message", status="SENT")
+
+        batch = self.env["elmis.outbox"]._get_retryable_submission_batch(limit=10)
+
+        self.assertEqual(batch.ids, [pending.id, failed.id])
+
+    def test_submit_to_elmis_skips_events_locked_by_another_worker(self):
+        event = self._create_outbox()
+        submitted_ids = []
+
+        def fake_lock(records):
+            return records.browse()
+
+        def fake_submit(outbox_event):
+            submitted_ids.append(outbox_event.id)
+            return True
+
+        with patch.object(type(event), "_lock_submission_records", fake_lock):
+            with patch.object(type(event), "_submit_one_to_elmis", fake_submit):
+                result = event.submit_to_elmis()
+
+        self.assertEqual(result["processed"], 0)
+        self.assertEqual(result["delivered"], 0)
+        self.assertEqual(result["failed"], 0)
+        self.assertEqual(result["skipped"], 1)
+        self.assertEqual(submitted_ids, [])
+        self.assertEqual(event.status, "PENDING")
+
+    def test_stuck_sent_events_only_include_stale_sent_records(self):
+        stale_sent = self._create_outbox(
+            message_id="stale-sent-message",
+            status="SENT",
+            sent_at=fields.Datetime.now() - timedelta(minutes=45),
+        )
+        recent_sent = self._create_outbox(
+            message_id="recent-sent-message",
+            status="SENT",
+            sent_at=fields.Datetime.now(),
+        )
+        self.env["ir.config_parameter"].sudo().set_param(
+            "elmis_integration.sent_stale_after_minutes",
+            "30",
+        )
+
+        stuck_events = self.env["elmis.outbox"].get_stuck_sent_events()
+
+        self.assertIn(stale_sent.id, stuck_events.ids)
+        self.assertNotIn(recent_sent.id, stuck_events.ids)
+
+    def test_health_summary_counts_stuck_sent_events(self):
+        self._create_outbox(
+            message_id="stale-sent-message",
+            status="SENT",
+            sent_at=fields.Datetime.now() - timedelta(minutes=45),
+        )
+        self._create_outbox(
+            message_id="recent-sent-message",
+            status="SENT",
+            sent_at=fields.Datetime.now(),
+        )
+        self.env["ir.config_parameter"].sudo().set_param(
+            "elmis_integration.sent_stale_after_minutes",
+            "30",
+        )
+
+        summary = self.env["elmis.outbox"].get_health_summary()
+
+        self.assertEqual(summary["sent"], 2)
+        self.assertEqual(summary["stuck_sent"], 1)
+        self.assertTrue(summary["oldest_stuck_sent_at"])
+        self.assertTrue(summary["oldest_stuck_sent_age_seconds"])
+
+    def test_drain_all_retryable_to_elmis_drains_multiple_batches(self):
+        self._clear_existing_retryable_outbox()
+        first = self._create_outbox(message_id="first-message", status="PENDING")
+        second = self._create_outbox(message_id="second-message", status="PENDING")
+        third = self._create_outbox(message_id="third-message", status="PENDING")
+        submitted_ids = []
+        batches = [
+            self.env["elmis.outbox"].browse([first.id, second.id]),
+            third,
+            self.env["elmis.outbox"],
+        ]
+
+        def fake_batch(outbox, limit=50):
+            self.assertEqual(limit, 2)
+            return batches.pop(0)
+
+        def fake_submit(event):
+            submitted_ids.append(event.id)
+            event.write(
+                {
+                    "status": "DELIVERED",
+                    "attempt_count": event.attempt_count + 1,
+                }
+            )
+            return True
+
+        Outbox = self.env["elmis.outbox"]
+        with patch.object(type(Outbox), "_get_retryable_submission_batch", fake_batch):
+            with patch.object(type(Outbox), "_submit_one_to_elmis", fake_submit):
+                result = Outbox.drain_all_retryable_to_elmis(batch_limit=2)
+
+        self.assertEqual(result["selected"], 3)
+        self.assertEqual(result["processed"], 3)
+        self.assertEqual(result["delivered"], 3)
+        self.assertEqual(result["failed"], 0)
+        self.assertEqual(result["skipped"], 0)
+        self.assertEqual(submitted_ids, [first.id, second.id, third.id])
+        self.assertEqual(first.status, "DELIVERED")
+        self.assertEqual(second.status, "DELIVERED")
+        self.assertEqual(third.status, "DELIVERED")
+
+    def test_drain_all_retryable_to_elmis_stops_after_failed_batch(self):
+        self._clear_existing_retryable_outbox()
+        first = self._create_outbox(message_id="first-message", status="PENDING")
+        second = self._create_outbox(message_id="second-message", status="PENDING")
+        third = self._create_outbox(message_id="third-message", status="PENDING")
+        submitted_ids = []
+        batches = [
+            self.env["elmis.outbox"].browse([first.id, second.id]),
+            third,
+        ]
+
+        def fake_batch(outbox, limit=50):
+            self.assertEqual(limit, 2)
+            return batches.pop(0)
+
+        def fake_submit(event):
+            submitted_ids.append(event.id)
+            if event.id == second.id:
+                event.write({"status": "FAILED"})
+                return False
+            event.write(
+                {
+                    "status": "DELIVERED",
+                    "attempt_count": event.attempt_count + 1,
+                }
+            )
+            return True
+
+        Outbox = self.env["elmis.outbox"]
+        with patch.object(type(Outbox), "_get_retryable_submission_batch", fake_batch):
+            with patch.object(type(Outbox), "_submit_one_to_elmis", fake_submit):
+                result = Outbox.drain_all_retryable_to_elmis(batch_limit=2)
+
+        self.assertEqual(result["selected"], 2)
+        self.assertEqual(result["processed"], 2)
+        self.assertEqual(result["delivered"], 1)
+        self.assertEqual(result["failed"], 1)
+        self.assertEqual(submitted_ids, [first.id, second.id])
+        self.assertEqual(first.status, "DELIVERED")
+        self.assertEqual(second.status, "FAILED")
+        self.assertEqual(third.status, "PENDING")
+
     def test_cron_drain_pending_to_elmis_uses_configured_batch_limit(self):
+        self._clear_existing_retryable_outbox()
         first = self._create_outbox(message_id="first-message", status="PENDING")
         second = self._create_outbox(message_id="second-message", status="PENDING")
         third = self._create_outbox(message_id="third-message", status="PENDING")

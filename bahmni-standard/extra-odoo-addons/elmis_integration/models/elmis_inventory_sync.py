@@ -292,7 +292,11 @@ class ElmisInventorySync(models.Model):
                 "skipped": 0,
             }
 
-        result = self.env["elmis.outbox"].sudo().drain_pending_to_elmis()
+        params = self.env["ir.config_parameter"].sudo()
+        batch_limit = int(params.get_param("elmis_integration.outbox_batch_limit", "50") or 50)
+        result = self.env["elmis.outbox"].sudo().drain_all_retryable_to_elmis(
+            batch_limit=batch_limit
+        )
         if result.get("failed"):
             raise UserError(
                 _(
@@ -300,6 +304,16 @@ class ElmisInventorySync(models.Model):
                     "outbox event(s) failed to submit. Fix or retry the outbox first."
                 )
                 % {"failed": result["failed"]}
+            )
+        stuck_sent = self.env["elmis.outbox"].sudo().get_stuck_sent_events(limit=1)
+        if stuck_sent:
+            raise UserError(
+                _(
+                    "Cannot sync inventory from eLMIS because eLMIS outbox event %(message)s "
+                    "is stuck in SENT status. Check whether it reached eLMIS, then reset it "
+                    "to pending for retry or move it to dead letter."
+                )
+                % {"message": stuck_sent.message_id}
             )
         return result
 

@@ -76,6 +76,9 @@ export class ElmisSyncStatus extends Component {
   }
 
   get statusClass() {
+    if (this.state.outbox && this.state.outbox.stuck_sent) {
+      return "o_elmis_sync_status_failed";
+    }
     if (this.state.outbox && this.state.outbox.failed) {
       return "o_elmis_sync_status_failed";
     }
@@ -97,6 +100,9 @@ export class ElmisSyncStatus extends Component {
   get summaryLabel() {
     if (this.state.loading) {
       return "Loading";
+    }
+    if (this.state.outbox && this.state.outbox.stuck_sent) {
+      return `${this.state.outbox.stuck_sent} stuck`;
     }
     if (this.state.outbox && this.state.outbox.failed) {
       return `${this.state.outbox.failed} failed`;
@@ -135,6 +141,13 @@ export class ElmisSyncStatus extends Component {
       return "None";
     }
     return this.formatDuration(this.state.outbox.oldest_retryable_age_seconds);
+  }
+
+  get oldestStuckSentLabel() {
+    if (!this.state.outbox || !this.state.outbox.oldest_stuck_sent_age_seconds) {
+      return "None";
+    }
+    return this.formatDuration(this.state.outbox.oldest_stuck_sent_age_seconds);
   }
 
   get lastDeliveredLabel() {

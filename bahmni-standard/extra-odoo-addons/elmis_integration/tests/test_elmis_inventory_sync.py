@@ -1,5 +1,8 @@
+from datetime import timedelta
+from uuid import uuid4
 from unittest.mock import patch
 
+from odoo import fields
 from odoo.exceptions import UserError
 from odoo.tests import TransactionCase, tagged
 
@@ -133,7 +136,7 @@ class TestElmisInventorySync(TransactionCase):
         params.set_param("elmis_integration.mirror_location_id", str(self.mirror_location.id))
         calls = []
 
-        def fake_drain(outbox, limit=50):
+        def fake_drain(outbox, batch_limit=50):
             calls.append("drain")
             return {
                 "selected": 1,
@@ -154,7 +157,11 @@ class TestElmisInventorySync(TransactionCase):
                 "quants_updated": 0,
             }
 
-        with patch.object(type(self.env["elmis.outbox"]), "drain_pending_to_elmis", fake_drain):
+        with patch.object(
+            type(self.env["elmis.outbox"]),
+            "drain_all_retryable_to_elmis",
+            fake_drain,
+        ):
             with patch.object(
                 type(self.sync_service),
                 "sync_facility_inventory",
@@ -178,7 +185,7 @@ class TestElmisInventorySync(TransactionCase):
             ]
         )
 
-        def fake_drain(outbox, limit=50):
+        def fake_drain(outbox, batch_limit=50):
             return {
                 "selected": 1,
                 "processed": 1,
@@ -187,7 +194,11 @@ class TestElmisInventorySync(TransactionCase):
                 "skipped": 0,
             }
 
-        with patch.object(type(self.env["elmis.outbox"]), "drain_pending_to_elmis", fake_drain):
+        with patch.object(
+            type(self.env["elmis.outbox"]),
+            "drain_all_retryable_to_elmis",
+            fake_drain,
+        ):
             with self.assertRaises(UserError):
                 self.sync_service.sync_inventory_snapshot(self._snapshot(stock_on_hand=7))
 
@@ -195,6 +206,62 @@ class TestElmisInventorySync(TransactionCase):
             [
                 ("product_id", "=", product.id),
                 ("location_id", "=", self.mirror_location.id),
+                ("lot_id", "=", lot.id),
+            ]
+        )
+        self.assertEqual(sum(quant.mapped("quantity")), 25.0)
+
+    def test_stuck_sent_outbox_prevents_inventory_snapshot_overwrite(self):
+        product_code = "TEST-STUCK-SENT-%s" % uuid4()
+        lot_number = "LOT-STUCK-SENT-%s" % uuid4()
+        snapshot = self._snapshot(stock_on_hand=25)
+        snapshot["items"][0]["productCode"] = product_code
+        snapshot["items"][0]["lot"] = lot_number
+
+        result = self.sync_service.with_context(elmis_outbox_drained=True).sync_inventory_snapshot(
+            snapshot
+        )
+        product = self.env["product.product"].search(
+            [("elmis_product_code", "=", product_code)]
+        )
+        lot = self.env["stock.lot"].search(
+            [
+                ("product_id", "=", product.id),
+                ("elmis_lot_number", "=", lot_number),
+            ]
+        )
+        program = self.env["elmis.program"].search([("code", "=", "art")], limit=1)
+        self.env["ir.config_parameter"].sudo().set_param(
+            "elmis_integration.sent_stale_after_minutes",
+            "30",
+        )
+        self.env["elmis.outbox"].create(
+            {
+                "message_id": "stuck-sent-before-pull",
+                "transaction_type": "DISPENSE",
+                "facility_code": "A2681-cp",
+                "program_id": program.id,
+                "elmis_orderable_id": product.id,
+                "lot_id": lot.id,
+                "quantity": 1,
+                "uom_id": self.env.ref("uom.product_uom_unit").id,
+                "transaction_date": fields.Datetime.now(),
+                "prescription_ref": "RX-STUCK-SENT",
+                "status": "SENT",
+                "sent_at": fields.Datetime.now() - timedelta(minutes=45),
+            }
+        )
+
+        overwrite_snapshot = self._snapshot(stock_on_hand=7)
+        overwrite_snapshot["items"][0]["productCode"] = product_code
+        overwrite_snapshot["items"][0]["lot"] = lot_number
+        with self.assertRaises(UserError):
+            self.sync_service.sync_inventory_snapshot(overwrite_snapshot)
+
+        quant = self.env["stock.quant"].search(
+            [
+                ("product_id", "=", product.id),
+                ("location_id", "=", result["location_id"]),
                 ("lot_id", "=", lot.id),
             ]
         )

@@ -36,8 +36,16 @@
             <strong t-esc="state.outbox.failed"/>
           </div>
           <div class="o_elmis_sync_status_row">
+            <span>Stuck sent</span>
+            <strong t-esc="state.outbox.stuck_sent"/>
+          </div>
+          <div class="o_elmis_sync_status_row">
             <span>Oldest retryable</span>
             <strong t-esc="oldestRetryableLabel"/>
+          </div>
+          <div class="o_elmis_sync_status_row">
+            <span>Oldest stuck sent</span>
+            <strong t-esc="oldestStuckSentLabel"/>
           </div>
           <div class="o_elmis_sync_status_row">
             <span>Last delivered</span>
