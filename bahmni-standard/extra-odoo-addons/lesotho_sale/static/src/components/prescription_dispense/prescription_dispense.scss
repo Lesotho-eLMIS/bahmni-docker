@@ -36,6 +36,7 @@
 }
 
 .o_lesotho_topbar,
+.o_lesotho_control_panel,
 .o_lesotho_workspace,
 .o_lesotho_review,
 .o_lesotho_footer {
@@ -43,6 +44,186 @@
     max-width: 1760px;
     margin-left: auto;
     margin-right: auto;
+}
+
+.o_lesotho_control_panel {
+    display: block;
+    max-width: none;
+    min-height: 76px;
+    width: 100vw;
+    margin: -16px calc(50% - 50vw) 16px;
+    padding: 0;
+    border-bottom: 1px solid #d8d8d8;
+    background: #ffffff;
+}
+
+.o_lesotho_cp_top,
+.o_lesotho_cp_bottom {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    min-width: 0;
+    padding: 0 14px;
+}
+
+.o_lesotho_cp_top {
+    min-height: 40px;
+    border-bottom: 1px solid #e5e5e5;
+}
+
+.o_lesotho_cp_bottom {
+    min-height: 36px;
+}
+
+.o_lesotho_breadcrumbs {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    min-width: 0;
+    color: #4c4a73;
+    font-size: 18px;
+    line-height: 1.25;
+}
+
+.o_lesotho_breadcrumbs span,
+.o_lesotho_breadcrumbs strong {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.o_lesotho_breadcrumbs strong {
+    color: #555555;
+    font-weight: 500;
+}
+
+.o_lesotho_cp_actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 36px;
+}
+
+.o_lesotho_cp_serve,
+.o_lesotho_cp_cancel {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 28px;
+    padding: 7px 12px;
+    border: 0;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1;
+    text-transform: uppercase;
+}
+
+.o_lesotho_cp_serve {
+    background: #5b4ee6;
+    color: #ffffff;
+}
+
+.o_lesotho_cp_serve:hover:not(:disabled) {
+    background: #4b40c9;
+}
+
+.o_lesotho_cp_serve:disabled {
+    background: #b8b2f0;
+    color: #ffffff;
+    cursor: not-allowed;
+}
+
+.o_lesotho_cp_cancel {
+    background: transparent;
+    color: #4c4a73;
+}
+
+.o_lesotho_cp_cancel:hover {
+    background: #f5f4fb;
+}
+
+.o_lesotho_statusbar {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    min-width: 0;
+    height: 36px;
+}
+
+.o_lesotho_status_step {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 112px;
+    height: 36px;
+    margin-left: -1px;
+    padding: 0 17px 0 23px;
+    border-top: 1px solid #d7d7d7;
+    border-bottom: 1px solid #d7d7d7;
+    background: #ffffff;
+    color: #5f5f6f;
+    font-size: 10px;
+    font-weight: 700;
+    line-height: 1;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
+.o_lesotho_status_step:first-child {
+    border-left: 1px solid #d7d7d7;
+    border-radius: 3px 0 0 3px;
+    padding-left: 16px;
+}
+
+.o_lesotho_status_step:last-child {
+    border-right: 1px solid #d7d7d7;
+    border-radius: 0 3px 3px 0;
+}
+
+.o_lesotho_status_step::after,
+.o_lesotho_status_step::before {
+    content: "";
+    position: absolute;
+    top: -1px;
+    right: -14px;
+    width: 0;
+    height: 0;
+    border-top: 19px solid transparent;
+    border-bottom: 19px solid transparent;
+    border-left: 14px solid #d7d7d7;
+    z-index: 2;
+}
+
+.o_lesotho_status_step::after {
+    top: 0;
+    right: -12px;
+    border-top-width: 18px;
+    border-bottom-width: 18px;
+    border-left-color: #ffffff;
+    z-index: 3;
+}
+
+.o_lesotho_status_step:last-child::after,
+.o_lesotho_status_step:last-child::before {
+    display: none;
+}
+
+.o_lesotho_status_step.active {
+    border-color: #7564a4;
+    background: #7c6bad;
+    color: #ffffff;
+    z-index: 4;
+}
+
+.o_lesotho_status_step.active::before {
+    border-left-color: #7564a4;
+}
+
+.o_lesotho_status_step.active::after {
+    border-left-color: #7c6bad;
 }
 
 .o_lesotho_topbar {
@@ -807,6 +988,25 @@
         padding: 12px 10px 28px;
     }
 
+    .o_lesotho_control_panel {
+        flex-direction: column;
+        gap: 8px;
+        margin: -12px calc(50% - 50vw) 14px;
+        padding: 0;
+    }
+
+    .o_lesotho_statusbar {
+        align-self: stretch;
+        justify-content: flex-start;
+        min-width: 0;
+        overflow-x: auto;
+        padding-bottom: 0;
+    }
+
+    .o_lesotho_status_step {
+        flex: 0 0 auto;
+    }
+
     .o_lesotho_patient_grid,
     .o_lesotho_workspace {
         grid-template-columns: 1fr;
@@ -832,6 +1032,19 @@
 }
 
 @media (max-width: 620px) {
+    .o_lesotho_breadcrumbs {
+        font-size: 16px;
+    }
+
+    .o_lesotho_cp_actions {
+        flex-wrap: wrap;
+    }
+
+    .o_lesotho_cp_serve,
+    .o_lesotho_cp_cancel {
+        min-width: 96px;
+    }
+
     .o_lesotho_patient_inline,
     .o_lesotho_group_grid {
         grid-template-columns: 1fr;

@@ -297,6 +297,7 @@ class ExtendedSaleOrder(models.Model):
         return {
             "id": self.id,
             "name": self.name,
+            "state": self.state,
             "patient": self.partner_id.display_name or "",
             "sex": dict(self.partner_id._fields["sex"].selection).get(self.partner_id.sex, self.partner_id.sex or ""),
             "age": self.patient_age or "",

@@ -110,6 +110,12 @@ export class PrescriptionDispense extends Component {
         this.state.reviewExpanded = !this.state.reviewExpanded;
     }
 
+    getOrderStatusClass(status) {
+        const orderState = this.state.order.state;
+        const activeStatus = orderState === "sent" ? "sent" : (["sale", "done"].includes(orderState) ? "sale" : "draft");
+        return `o_lesotho_status_step ${activeStatus === status ? "active" : ""}`;
+    }
+
     focusBarcode(index) {
         setTimeout(() => {
             const inputs = this.root.el.querySelectorAll(".o_lesotho_barcode");
@@ -198,6 +204,16 @@ export class PrescriptionDispense extends Component {
         this.state.explanationConfirmed = ev.target.checked;
         await this.orm.write("sale.order", [this.state.orderId], {
             medication_explanation_confirmed: this.state.explanationConfirmed,
+        });
+    }
+
+    async cancel() {
+        await this.action.doAction({
+            type: "ir.actions.act_window",
+            res_model: "sale.order",
+            res_id: this.state.orderId,
+            views: [[false, "form"]],
+            target: "current",
         });
     }
 

@@ -5,6 +5,27 @@
             <div t-if="state.loading" class="o_lesotho_loading">Loading prescription...</div>
             <div t-elif="!state.orderId" class="o_lesotho_empty">Open a prescription before dispensing.</div>
             <t t-else="">
+                <div class="o_lesotho_control_panel">
+                    <div class="o_lesotho_cp_top">
+                        <div class="o_lesotho_breadcrumbs">
+                            <span>Prescriptions</span>
+                            <span>/</span>
+                            <strong><t t-esc="state.order.name"/></strong>
+                        </div>
+                    </div>
+                    <div class="o_lesotho_cp_bottom">
+                        <div class="o_lesotho_cp_actions">
+                            <button type="button" class="o_lesotho_cp_serve" t-att-disabled="!state.explanationConfirmed" t-on-click="() => this.serve()">Serve</button>
+                            <button type="button" class="o_lesotho_cp_cancel" t-on-click="() => this.cancel()">Cancel</button>
+                        </div>
+                        <div class="o_lesotho_statusbar" aria-label="Prescription status">
+                            <span t-att-class="this.getOrderStatusClass('draft')">Quotation</span>
+                            <span t-att-class="this.getOrderStatusClass('sent')">Quotation Sent</span>
+                            <span t-att-class="this.getOrderStatusClass('sale')">Sales Order</span>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="o_lesotho_topbar">
                     <div class="o_lesotho_patient_grid">
                         <section class="o_lesotho_patient_group o_lesotho_patient_identity">
