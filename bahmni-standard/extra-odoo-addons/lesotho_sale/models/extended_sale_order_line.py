@@ -120,6 +120,12 @@ class ExtendedSaleOrderLine(models.Model):
         help="Dispensing notes to print with this medication.",
     )
 
+    dispensing_comments = fields.Text(
+        string="Dispensing Comments",
+        copy=False,
+        help="Comments added by the dispenser during prescription dispensing.",
+    )
+
     is_existing_prescription = fields.Boolean(
         string="Existing Prescription",
         compute="_compute_is_existing_prescription",

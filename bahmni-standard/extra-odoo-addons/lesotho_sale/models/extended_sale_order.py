@@ -240,8 +240,9 @@ class ExtendedSaleOrder(models.Model):
             "id": line.id,
             "is_existing_prescription": line.is_existing_prescription,
             "prescribed_product": prescribed_product.display_name if prescribed_product else "",
-            "dispensed_product": line.product_id.display_name if line.product_id else "",
-            "product_id": line.product_id.id if line.product_id else False,
+            "prescribed_product_id": prescribed_product.id if prescribed_product else False,
+            "dispensed_product": line.product_id.display_name if line.product_id else (prescribed_product.display_name if prescribed_product else ""),
+            "product_id": line.product_id.id if line.product_id else (prescribed_product.id if prescribed_product else False),
             "quantity_prescribed": line.prescribed_qty_base_units or line.product_uom_qty or 0,
             "quantity_dispensed": line.product_uom_qty or 0,
             "dose": self._format_prescription_option_value(line.dose) if line.dose else "",
@@ -259,7 +260,7 @@ class ExtendedSaleOrder(models.Model):
             "stock_on_hand": line.stock_on_hand or 0,
             "out_of_stock": line.out_of_stock,
             "is_pack_substituted": line.is_pack_substituted,
-            "comments": line.name or "",
+            "comments": line.dispensing_comments or "",
         }
 
     def _get_dispensing_line_expiry(self, line):
@@ -310,11 +311,22 @@ class ExtendedSaleOrder(models.Model):
             "dispensary": self.shop_id.display_name if self.shop_id else "",
             "medication_explanation_confirmed": self.medication_explanation_confirmed,
             "direction_options": self._get_prescription_direction_options(dispensing_lines),
+            "product_options": self._get_dispensing_product_options(),
             "lines": [
                 self._serialize_dispensing_line(line)
                 for line in dispensing_lines
             ],
         }
+
+    def _get_dispensing_product_options(self):
+        products = self.env["product.product"].with_context(active_test=False).search([], order="name, id")
+        return [
+            {
+                "id": product.id,
+                "name": product.display_name,
+            }
+            for product in products
+        ]
 
     def _get_prescription_direction_options(self, current_lines):
         option_fields = {
@@ -322,8 +334,87 @@ class ExtendedSaleOrder(models.Model):
             "frequency": "frequency",
             "route": "route",
             "duration_units": "duration_units",
+            "instructions": "administration_instructions",
         }
         options = {key: set() for key in option_fields}
+        ordered_options = {
+            "dose_unit": [
+                "Tablet",
+                "Capsule",
+                "ml",
+                "mg",
+                "IU",
+                "Drop",
+                "Tablespoon",
+                "Teaspoon",
+                "Unit",
+                "Puff",
+            ],
+            "frequency": [
+                "Immediately",
+                "Once a day",
+                "Twice a day",
+                "Thrice a day",
+                "Four times a day",
+                "Every Hour",
+                "Every 2 hours",
+                "Every 3 hours",
+                "Every 4 hours",
+                "Every 6 hours",
+                "Every 8 hours",
+                "Every 12 hours",
+                "On alternate days",
+                "Once a week",
+                "Twice a week",
+                "Thrice a week",
+                "Every 2 weeks",
+                "Every 3 weeks",
+                "Once a month",
+                "Five times a day",
+                "Four days a week",
+                "Five days a week",
+                "Six days a week",
+            ],
+            "route": [
+                "Intramuscular",
+                "Intravenous",
+                "Oral",
+                "Per Vaginal",
+                "Sub Cutaneous",
+                "Per Rectum",
+                "Sub Lingual",
+                "Nasogastric",
+                "Intradermal",
+                "Intraperitoneal",
+                "Intrathecal",
+                "Intraosseous",
+                "Topical",
+                "Nasal",
+                "Inhalation",
+            ],
+            "duration_units": [
+                "Days",
+                "Weeks",
+                "Months",
+            ],
+            "instructions": [
+                "Before meals",
+                "Empty stomach",
+                "After meals",
+                "In the morning",
+                "In the evening",
+                "At bedtime",
+                "Immediately",
+                "As directed",
+            ],
+        }
+        options["dose_unit"].update(ordered_options["dose_unit"])
+        options["frequency"].update(ordered_options["frequency"])
+        options["route"].update(ordered_options["route"])
+        options["duration_units"].update(ordered_options["duration_units"])
+        options["instructions"].update(
+            ordered_options["instructions"]
+        )
 
         recent_lines = self.env["sale.order.line"].search(
             [
@@ -341,10 +432,24 @@ class ExtendedSaleOrder(models.Model):
                 if value not in (False, None, ""):
                     options[option_key].add(self._format_prescription_option_value(value))
 
-        return {
-            key: sorted(values, key=lambda value: (not self._is_numeric_option(value), self._option_sort_value(value)))
-            for key, values in options.items()
-        }
+        direction_options = {}
+        for key, values in options.items():
+            if key in ordered_options:
+                ordered_values = [
+                    value for value in ordered_options[key]
+                    if value in values
+                ]
+                extra_values = sorted(
+                    values - set(ordered_values),
+                    key=lambda value: (not self._is_numeric_option(value), self._option_sort_value(value)),
+                )
+                direction_options[key] = ordered_values + extra_values
+            else:
+                direction_options[key] = sorted(
+                    values,
+                    key=lambda value: (not self._is_numeric_option(value), self._option_sort_value(value)),
+                )
+        return direction_options
 
     def _format_prescription_option_value(self, value):
         if isinstance(value, float):
@@ -397,7 +502,7 @@ class ExtendedSaleOrder(models.Model):
             "batch_number": "dispensing_batch_number",
             "served_internally": "served_internally",
             "is_pack_substituted": "is_pack_substituted",
-            "comments": "name",
+            "comments": "dispensing_comments",
         }
         for source, target in field_map.items():
             if source in vals:

@@ -636,6 +636,35 @@ class ExtendedOrderSaveService(models.Model):
         return self._update_single_order_line(order_line, order_data)
 
     @api.model
+    def _get_first_order_value(self, order_data, keys):
+        for key in keys:
+            value = order_data.get(key)
+            if value not in (None, ""):
+                return value
+        return None
+
+    @api.model
+    def _clean_instruction_value(self, value):
+        if not isinstance(value, str):
+            return value
+        if not value.startswith("{"):
+            return value
+        try:
+            instruction_data = json.loads(value)
+        except json.JSONDecodeError:
+            return value
+        for key in (
+            "instructions",
+            "instruction",
+            "administrationInstructions",
+            "additionalInstructions",
+            "additionalInstruction",
+        ):
+            if instruction_data.get(key):
+                return instruction_data[key]
+        return value
+
+    @api.model
     def _update_single_order_line(self, order_line, order_data):
         """Update prescription data on a single order line"""
         # Prepare prescription data
@@ -649,7 +678,6 @@ class ExtendedOrderSaveService(models.Model):
             "doseUnits": "dose_units",
             "frequency": "frequency",
             "route": "route",
-            "administrationInstructions": "administration_instructions",
             "duration": "duration",
             "durationUnits": "duration_units",
             "numRefills": "num_refills",
@@ -677,20 +705,34 @@ class ExtendedOrderSaveService(models.Model):
                 else:
                     prescription_data[model_field] = value
 
-        # Clean administration instructions if it's JSON
-        admin_instructions = prescription_data.get("administration_instructions")
-        if (
-            admin_instructions
-            and isinstance(admin_instructions, str)
-            and admin_instructions.startswith('{"instructions":"')
-        ):
-            try:
-                instructions_json = json.loads(admin_instructions)
-                prescription_data["administration_instructions"] = (
-                    instructions_json.get("instructions", admin_instructions)
-                )
-            except json.JSONDecodeError:
-                pass
+        instruction_value = self._get_first_order_value(
+            order_data,
+            (
+                "administrationInstructions",
+                "instructions",
+                "instruction",
+                "dosingInstructions",
+            ),
+        )
+        if instruction_value is not None:
+            prescription_data["administration_instructions"] = (
+                self._clean_instruction_value(instruction_value)
+            )
+
+        additional_instruction_value = self._get_first_order_value(
+            order_data,
+            (
+                "additionalInstructions",
+                "additionalInstruction",
+                "additional_instructions",
+                "additionalInstructionText",
+                "additionalInstructionsText",
+            ),
+        )
+        if additional_instruction_value is not None:
+            prescription_data["additional_instructions"] = (
+                self._clean_instruction_value(additional_instruction_value)
+            )
 
         # Only update if we have data
         if prescription_data:

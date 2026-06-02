@@ -79,7 +79,11 @@
                                         <div class="o_lesotho_group_grid o_lesotho_group_grid_top">
                                             <label class="o_lesotho_field o_lesotho_field_wide">
                                                 <span>Dispensed Product</span>
-                                                <strong><t t-esc="line.dispensed_product"/></strong>
+                                                <select t-att-disabled="!line.is_pack_substituted" t-att-value="line.product_id || ''" t-on-change="(ev) => this.saveLine(line, 'product_id', parseInt(ev.target.value || 0))">
+                                                    <t t-foreach="state.productOptions" t-as="product" t-key="product.id">
+                                                        <option t-att-value="product.id" t-att-selected="product.id === line.product_id"><t t-esc="product.name"/></option>
+                                                    </t>
+                                                </select>
                                             </label>
                                             <label class="o_lesotho_field o_lesotho_checkbox_field">
                                                 <span>Out of Stock</span>
@@ -91,7 +95,7 @@
                                             </label>
                                             <label class="o_lesotho_field o_lesotho_checkbox_field">
                                                 <span>Substitute</span>
-                                                <input type="checkbox" t-att-checked="line.is_pack_substituted" t-on-change="(ev) => this.saveLine(line, 'is_pack_substituted', ev.target.checked)"/>
+                                                <input type="checkbox" t-att-checked="line.is_pack_substituted" t-on-change="(ev) => this.setSubstitute(line, ev.target.checked)"/>
                                             </label>
                                             <label class="o_lesotho_field o_lesotho_field_full">
                                                 <span>Comments</span>
@@ -136,27 +140,24 @@
                                             <label class="o_lesotho_field">
                                                 <span>Dose Unit</span>
                                                 <select t-att-disabled="!line.is_pack_substituted" t-att-value="line.dose_unit" t-on-change="(ev) => this.saveLine(line, 'dose_unit', ev.target.value)">
-                                                    <option value=""></option>
                                                     <t t-foreach="state.directionOptions.dose_unit || []" t-as="option" t-key="option">
-                                                        <option t-att-value="option"><t t-esc="option"/></option>
+                                                        <option t-att-value="option" t-att-selected="option === line.dose_unit"><t t-esc="option"/></option>
                                                     </t>
                                                 </select>
                                             </label>
                                             <label class="o_lesotho_field">
                                                 <span>Frequency</span>
                                                 <select t-att-disabled="!line.is_pack_substituted" t-att-value="line.frequency" t-on-change="(ev) => this.saveLine(line, 'frequency', ev.target.value)">
-                                                    <option value=""></option>
                                                     <t t-foreach="state.directionOptions.frequency || []" t-as="option" t-key="option">
-                                                        <option t-att-value="option"><t t-esc="option"/></option>
+                                                        <option t-att-value="option" t-att-selected="option === line.frequency"><t t-esc="option"/></option>
                                                     </t>
                                                 </select>
                                             </label>
                                             <label class="o_lesotho_field">
                                                 <span>Route</span>
                                                 <select t-att-disabled="!line.is_pack_substituted" t-att-value="line.route" t-on-change="(ev) => this.saveLine(line, 'route', ev.target.value)">
-                                                    <option value=""></option>
                                                     <t t-foreach="state.directionOptions.route || []" t-as="option" t-key="option">
-                                                        <option t-att-value="option"><t t-esc="option"/></option>
+                                                        <option t-att-value="option" t-att-selected="option === line.route"><t t-esc="option"/></option>
                                                     </t>
                                                 </select>
                                             </label>
@@ -167,15 +168,18 @@
                                             <label class="o_lesotho_field">
                                                 <span>Duration Unit</span>
                                                 <select t-att-disabled="!line.is_pack_substituted" t-att-value="line.duration_units" t-on-change="(ev) => this.saveLine(line, 'duration_units', ev.target.value)">
-                                                    <option value=""></option>
                                                     <t t-foreach="state.directionOptions.duration_units || []" t-as="option" t-key="option">
-                                                        <option t-att-value="option"><t t-esc="option"/></option>
+                                                        <option t-att-value="option" t-att-selected="option === line.duration_units"><t t-esc="option"/></option>
                                                     </t>
                                                 </select>
                                             </label>
                                             <label class="o_lesotho_field o_lesotho_field_wide">
                                                 <span>Instructions</span>
-                                                <input t-att-value="line.instructions" t-on-change="(ev) => this.saveLine(line, 'instructions', ev.target.value)"/>
+                                                <select t-att-disabled="!line.is_pack_substituted" t-att-value="line.instructions" t-on-change="(ev) => this.saveLine(line, 'instructions', ev.target.value)">
+                                                    <t t-foreach="state.directionOptions.instructions || []" t-as="option" t-key="option">
+                                                        <option t-att-value="option" t-att-selected="option === line.instructions"><t t-esc="option"/></option>
+                                                    </t>
+                                                </select>
                                             </label>
                                             <label class="o_lesotho_field o_lesotho_field_wide">
                                                 <span>Additional Instructions</span>

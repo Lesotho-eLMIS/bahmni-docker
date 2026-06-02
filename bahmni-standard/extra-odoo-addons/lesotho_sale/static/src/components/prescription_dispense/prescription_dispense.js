@@ -17,6 +17,7 @@ export class PrescriptionDispense extends Component {
             lines: [],
             activeLineId: false,
             directionOptions: {},
+            productOptions: [],
             explanationConfirmed: false,
             reviewExpanded: true,
         });
@@ -37,6 +38,7 @@ export class PrescriptionDispense extends Component {
         this.state.lines = data.lines;
         this.state.activeLineId = data.lines.length ? data.lines[0].id : false;
         this.state.directionOptions = data.direction_options || {};
+        this.state.productOptions = data.product_options || [];
         this.state.explanationConfirmed = data.medication_explanation_confirmed;
         this.state.loading = false;
     }
@@ -140,10 +142,32 @@ export class PrescriptionDispense extends Component {
 
     async saveLine(line, field, value) {
         this.updateLocal(line, field, value);
+        if (field === "product_id") {
+            const product = this.state.productOptions.find((item) => item.id === value);
+            this.updateLocal(line, "dispensed_product", product ? product.name : "");
+        }
         const updated = await this.orm.call(
             "sale.order",
             "update_prescription_dispensing_line",
             [[this.state.orderId], line.id, { [field]: value }]
+        );
+        Object.assign(line, updated);
+    }
+
+    async setSubstitute(line, checked) {
+        if (checked) {
+            await this.saveLine(line, "is_pack_substituted", true);
+            return;
+        }
+        const productId = line.prescribed_product_id || line.product_id || false;
+        this.updateLocal(line, "is_pack_substituted", false);
+        this.updateLocal(line, "product_id", productId);
+        const product = this.state.productOptions.find((item) => item.id === productId);
+        this.updateLocal(line, "dispensed_product", product ? product.name : line.prescribed_product);
+        const updated = await this.orm.call(
+            "sale.order",
+            "update_prescription_dispensing_line",
+            [[this.state.orderId], line.id, { is_pack_substituted: false, product_id: productId }]
         );
         Object.assign(line, updated);
     }
