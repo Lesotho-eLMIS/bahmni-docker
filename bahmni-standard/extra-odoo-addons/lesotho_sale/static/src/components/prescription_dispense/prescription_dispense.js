@@ -146,23 +146,45 @@ export class PrescriptionDispense extends Component {
         line[field] = value;
     }
 
-    async saveLine(line, field, value) {
+    onProductChanged(line, value) {
+        const productId = value ? parseInt(value) : false;
+        if (productId) {
+            this.saveLine(line, 'product_id', productId);
+        }
+    }
+
+    onFieldChanged(line, field, value) {
+        if (field === 'quantity_dispensed') {
+            this.saveLine(line, field, parseFloat(value || 0));
+        } else if (field === 'dose' || field === 'duration') {
+            this.saveLine(line, field, parseInt(value || 0));
+        } else {
+            this.saveLine(line, field, value);
+        }
+    }
+
+    saveLine(line, field, value) {
         this.updateLocal(line, field, value);
         if (field === "product_id") {
             const product = this.state.productOptions.find((item) => item.id === value);
             this.updateLocal(line, "dispensed_product", product ? product.name : "");
         }
-        const updated = await this.orm.call(
+        // Fire and forget the ORM call, but don't await in the event handler
+        this.orm.call(
             "sale.order",
             "update_prescription_dispensing_line",
             [[this.state.orderId], line.id, { [field]: value }]
-        );
-        Object.assign(line, updated);
+        ).then((updated) => {
+            Object.assign(line, updated);
+        }).catch((error) => {
+            this.notification.add(error.message || "Error updating prescription line.", { type: "danger" });
+        });
     }
 
-    async setSubstitute(line, checked) {
+    setSubstitute(line, checked) {
         if (checked) {
-            await this.saveLine(line, "is_pack_substituted", true);
+            // When enabling substitute, mark it as pack substituted
+            this.saveLine(line, "is_pack_substituted", true);
             return;
         }
         const productId = line.prescribed_product_id || line.product_id || false;
@@ -170,12 +192,17 @@ export class PrescriptionDispense extends Component {
         this.updateLocal(line, "product_id", productId);
         const product = this.state.productOptions.find((item) => item.id === productId);
         this.updateLocal(line, "dispensed_product", product ? product.name : line.prescribed_product);
-        const updated = await this.orm.call(
+        
+        // Fire and forget the ORM call
+        this.orm.call(
             "sale.order",
             "update_prescription_dispensing_line",
             [[this.state.orderId], line.id, { is_pack_substituted: false, product_id: productId }]
-        );
-        Object.assign(line, updated);
+        ).then((updated) => {
+            Object.assign(line, updated);
+        }).catch((error) => {
+            this.notification.add(error.message || "Error updating prescription line.", { type: "danger" });
+        });
     }
 
     async scanBarcode(line, index, ev) {
@@ -200,10 +227,12 @@ export class PrescriptionDispense extends Component {
         }
     }
 
-    async setExplanation(ev) {
+    setExplanation(ev) {
         this.state.explanationConfirmed = ev.target.checked;
-        await this.orm.write("sale.order", [this.state.orderId], {
+        this.orm.write("sale.order", [this.state.orderId], {
             medication_explanation_confirmed: this.state.explanationConfirmed,
+        }).catch((error) => {
+            this.notification.add(error.message || "Error updating explanation status.", { type: "danger" });
         });
     }
 
