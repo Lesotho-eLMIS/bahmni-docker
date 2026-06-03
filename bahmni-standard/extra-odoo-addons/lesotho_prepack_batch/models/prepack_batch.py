@@ -589,6 +589,12 @@ class BahmniPrepackBatchLine(models.Model):
         related="product_id.barcode",
         readonly=True,
     )
+    label_barcode = fields.Char(
+        string="Label Barcode",
+        copy=False,
+        index=True,
+        readonly=True,
+    )
     bom_id = fields.Many2one(
         "mrp.bom",
         string="Prepack Template",
@@ -663,6 +669,8 @@ class BahmniPrepackBatchLine(models.Model):
     def _ensure_label_barcodes(self):
         for line in self:
             line.batch_id._ensure_prepack_product_barcode(line.product_id)
+            if not line.label_barcode:
+                line.label_barcode = f"PPL{line.id:08d}"
 
     def get_prepack_label_copies(self):
         self.ensure_one()
@@ -672,6 +680,12 @@ class BahmniPrepackBatchLine(models.Model):
         display_quantity = int(quantity_per_pack) if float(quantity_per_pack).is_integer() else quantity_per_pack
         bulk_product = self.bulk_lot_id.product_id
         lot = self.finished_lot_id or self.bulk_lot_id
+        expiry_date = ""
+        if lot and lot.expiration_date:
+            expiry_value = lot.expiration_date
+            if hasattr(expiry_value, "date"):
+                expiry_value = expiry_value.date()
+            expiry_date = fields.Date.to_string(expiry_value)
         for copy_number in range(1, self.package_qty + 1):
             copies.append(
                 {
@@ -679,10 +693,11 @@ class BahmniPrepackBatchLine(models.Model):
                     "medicine": bulk_product.name or self.product_id.name,
                     "strength": bulk_product.display_name,
                     "batch_number": lot.name if lot else "",
-                    "expiry_date": fields.Date.to_string(lot.expiration_date) if lot and lot.expiration_date else "",
+                    "expiry_date": expiry_date,
                     "quantity_per_pack": f"{display_quantity} {bulk_product.uom_id.name}",
                     "facility": self.company_id.name,
-                    "barcode": self.product_id.barcode or self.product_id.default_code or "",
+                    "barcode": self.label_barcode or self.product_id.barcode or self.product_id.default_code or "",
+                    "product_barcode": self.product_id.barcode or self.product_id.default_code or "",
                     "prepack_product": self.product_id.display_name,
                     "prepacked_on": fields.Date.to_string(
                         fields.Datetime.context_timestamp(

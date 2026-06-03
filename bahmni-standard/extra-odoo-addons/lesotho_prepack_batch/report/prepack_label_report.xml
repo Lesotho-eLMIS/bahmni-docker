@@ -63,6 +63,7 @@
                 }
             </style>
             <t t-foreach="docs" t-as="doc">
+                <t t-set="web_base_url" t-value="doc.env['ir.config_parameter'].sudo().get_param('web.base.url')"/>
                 <div class="page prepack-label-page">
                     <t t-set="line_ids" t-value="doc.env.context.get('prepack_line_ids')"/>
                     <t t-foreach="doc.line_ids" t-as="line">
@@ -86,6 +87,10 @@
                                     <span t-esc="label['batch_number']"/>
                                 </div>
                                 <div class="prepack-label-row">
+                                    <strong>Expiry Date:</strong>
+                                    <span t-esc="label['expiry_date'] or 'N/A'"/>
+                                </div>
+                                <div class="prepack-label-row">
                                     <strong>Qty/Prepack:</strong>
                                     <span t-esc="label['quantity_per_pack']"/>
                                 </div>
@@ -98,8 +103,10 @@
                                     <span t-esc="label['prepacked_on']"/>
                                 </div>
                                 <div class="prepack-label-barcode" t-if="label['barcode']">
-                                    <img t-att-src="'/report/barcode/Code128/%s?width=600&amp;height=120&amp;humanreadable=0' % label['barcode']"/>
+                                    <img t-att-src="'%s/report/barcode?type=Code128&amp;value=%s&amp;width=600&amp;height=120&amp;humanreadable=0' % (web_base_url, label['barcode'])"/>
+                                    <div class="prepack-label-code">Scan to Dispense</div>
                                     <div class="prepack-label-code" t-esc="label['barcode']"/>
+                                    <div class="prepack-label-code" t-if="label['product_barcode']">Product: <span t-esc="label['product_barcode']"/></div>
                                 </div>
                             </div>
                         </t>
