@@ -304,8 +304,12 @@ class ElmisOutbox(models.Model):
 
     @api.model
     def _cron_drain_pending_to_elmis(self):
-        params = self.env["ir.config_parameter"].sudo()
-        limit = int(params.get_param("elmis_integration.outbox_batch_limit", "50") or 50)
+        limit = int(
+            self.env["elmis.inventory.sync"]._get_config_param(
+                "outbox_batch_limit", "50"
+            )
+            or 50
+        )
         return self.drain_pending_to_elmis(limit=limit)
 
     @api.model
@@ -354,9 +358,11 @@ class ElmisOutbox(models.Model):
 
     @api.model
     def _get_stuck_sent_cutoff(self):
-        params = self.env["ir.config_parameter"].sudo()
         stale_after_minutes = int(
-            params.get_param("elmis_integration.sent_stale_after_minutes", "30") or 30
+            self.env["elmis.inventory.sync"]._get_config_param(
+                "sent_stale_after_minutes", "30"
+            )
+            or 30
         )
         stale_after_minutes = max(stale_after_minutes, 1)
         return fields.Datetime.now() - timedelta(minutes=stale_after_minutes)

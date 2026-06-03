@@ -21,10 +21,10 @@ class TestElmisInventorySyncRun(TransactionCase):
 
     def _set_config(self):
         params = self.env["ir.config_parameter"].sudo()
-        params.set_param("elmis_integration.base_url", "https://dev.elmis.gov.ls/api/")
-        params.set_param("elmis_integration.program_codes", "art")
-        params.set_param("elmis_integration.api_token", "test-token")
-        params.set_param("elmis_integration.mirror_location_id", str(self.mirror_location.id))
+        params.set_param("lesotho_elmis_integration.base_url", "https://dev.elmis.gov.ls/api/")
+        params.set_param("lesotho_elmis_integration.program_codes", "art")
+        params.set_param("lesotho_elmis_integration.api_token", "test-token")
+        params.set_param("lesotho_elmis_integration.mirror_location_id", str(self.mirror_location.id))
 
     def test_connection_wrapper_creates_successful_run(self):
         self._set_config()
@@ -88,7 +88,7 @@ class TestElmisInventorySyncRun(TransactionCase):
         self.assertTrue(run.finished_at)
 
     def test_sync_status_reports_cron_and_last_success(self):
-        cron = self.env.ref("elmis_integration.ir_cron_elmis_inventory_sync")
+        cron = self.env.ref("lesotho_elmis_integration.ir_cron_elmis_inventory_sync")
         cron.write(
             {
                 "active": True,

@@ -25,12 +25,12 @@ class TestElmisInventorySyncWizard(TransactionCase):
             }
         )
         params = cls.env["ir.config_parameter"].sudo()
-        params.set_param("elmis_integration.base_url", "https://dev.elmis.gov.ls/api/")
-        params.set_param("elmis_integration.program_codes", "art,em")
-        params.set_param("elmis_integration.api_token", "test-token")
-        params.set_param("elmis_integration.mirror_location_id", str(cls.mirror_location.id))
+        params.set_param("lesotho_elmis_integration.base_url", "https://dev.elmis.gov.ls/api/")
+        params.set_param("lesotho_elmis_integration.program_codes", "art,em")
+        params.set_param("lesotho_elmis_integration.api_token", "test-token")
+        params.set_param("lesotho_elmis_integration.mirror_location_id", str(cls.mirror_location.id))
         params.set_param(
-            "elmis_integration.mirror_location_ids",
+            "lesotho_elmis_integration.mirror_location_ids",
             "%s,%s" % (cls.mirror_location.id, cls.second_mirror_location.id),
         )
 
@@ -99,8 +99,8 @@ class TestElmisInventorySyncWizard(TransactionCase):
 
     def test_sync_menus_live_under_inventory_operations(self):
         operations_menu = self.env.ref("stock.menu_stock_warehouse_mgmt")
-        trigger_menu = self.env.ref("elmis_integration.menu_elmis_inventory_sync_wizard")
-        history_menu = self.env.ref("elmis_integration.menu_elmis_inventory_sync_runs")
+        trigger_menu = self.env.ref("lesotho_elmis_integration.menu_elmis_inventory_sync_wizard")
+        history_menu = self.env.ref("lesotho_elmis_integration.menu_elmis_inventory_sync_runs")
 
         self.assertEqual(trigger_menu.parent_id, operations_menu)
         self.assertEqual(history_menu.parent_id, operations_menu)

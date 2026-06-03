@@ -1,5 +1,5 @@
 {
-    "name": "eLMIS Integration",
+    "name": "Lesotho eLMIS Integration",
     "summary": "Foundation model extensions for OpenLMIS product and lot sync",
     "version": "16.0.1.0.0",
     "category": "Inventory",
@@ -31,9 +31,9 @@
     ],
     "assets": {
         "web.assets_backend": [
-            "elmis_integration/static/src/scss/elmis_sync_status.scss",
-            "elmis_integration/static/src/js/elmis_sync_status.js",
-            "elmis_integration/static/src/xml/elmis_sync_status.xml",
+            "lesotho_elmis_integration/static/src/scss/elmis_sync_status.scss",
+            "lesotho_elmis_integration/static/src/js/elmis_sync_status.js",
+            "lesotho_elmis_integration/static/src/xml/elmis_sync_status.xml",
         ],
     },
     "installable": True,

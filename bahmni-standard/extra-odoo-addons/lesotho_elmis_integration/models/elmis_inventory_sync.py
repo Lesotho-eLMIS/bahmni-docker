@@ -12,6 +12,9 @@ from odoo.tools.float_utils import float_compare
 
 _logger = logging.getLogger(__name__)
 
+CONFIG_PREFIX = "lesotho_elmis_integration."
+LEGACY_CONFIG_PREFIX = "elmis_integration."
+
 
 class ElmisInventorySync(models.Model):
     _name = "elmis.inventory.sync"
@@ -160,9 +163,17 @@ class ElmisInventorySync(models.Model):
     @api.model
     def _get_sync_cron(self):
         return self.env.ref(
-            "elmis_integration.ir_cron_elmis_inventory_sync",
+            "lesotho_elmis_integration.ir_cron_elmis_inventory_sync",
             raise_if_not_found=False,
         )
+
+    @api.model
+    def _get_config_param(self, key, default=None):
+        params = self.env["ir.config_parameter"].sudo()
+        value = params.get_param("%s%s" % (CONFIG_PREFIX, key))
+        if value in (None, False, ""):
+            value = params.get_param("%s%s" % (LEGACY_CONFIG_PREFIX, key), default)
+        return value
 
     @api.model
     def _format_status_run(self, run):
@@ -292,8 +303,7 @@ class ElmisInventorySync(models.Model):
                 "skipped": 0,
             }
 
-        params = self.env["ir.config_parameter"].sudo()
-        batch_limit = int(params.get_param("elmis_integration.outbox_batch_limit", "50") or 50)
+        batch_limit = int(self._get_config_param("outbox_batch_limit", "50") or 50)
         result = self.env["elmis.outbox"].sudo().drain_all_retryable_to_elmis(
             batch_limit=batch_limit
         )
@@ -319,14 +329,13 @@ class ElmisInventorySync(models.Model):
 
     @api.model
     def _get_elmis_config(self):
-        params = self.env["ir.config_parameter"].sudo()
-        base_url = params.get_param("elmis_integration.base_url")
+        base_url = self._get_config_param("base_url")
         program_codes = self._split_program_codes(
-            params.get_param("elmis_integration.program_codes")
+            self._get_config_param("program_codes")
         )
-        username = params.get_param("elmis_integration.username")
-        password = params.get_param("elmis_integration.password")
-        api_token = params.get_param("elmis_integration.api_token")
+        username = self._get_config_param("username")
+        password = self._get_config_param("password")
+        api_token = self._get_config_param("api_token")
 
         if not base_url:
             raise UserError(_("eLMIS Base URL is not configured."))
@@ -352,12 +361,11 @@ class ElmisInventorySync(models.Model):
 
     @api.model
     def _get_configured_mirror_locations(self):
-        params = self.env["ir.config_parameter"].sudo()
         location_ids = self._split_location_ids(
-            params.get_param("elmis_integration.mirror_location_ids")
+            self._get_config_param("mirror_location_ids")
         )
         if not location_ids:
-            legacy_location_id = params.get_param("elmis_integration.mirror_location_id")
+            legacy_location_id = self._get_config_param("mirror_location_id")
             location_ids = self._split_location_ids(legacy_location_id)
 
         locations = self.env["stock.location"]

@@ -9,7 +9,7 @@ class TestPrepackBatchElmisTraceability(TransactionCase):
         super().setUpClass()
         cls.unit_uom = cls.env.ref("uom.product_uom_unit")
         cls.stock_location = cls.env.ref("stock.stock_location_stock")
-        cls.program = cls.env.ref("elmis_integration.elmis_program_art")
+        cls.program = cls.env.ref("lesotho_elmis_integration.elmis_program_art")
         cls.bulk_product = cls._create_product(
             "Tenofovir 300mg Tablets",
             is_elmis_product=True,

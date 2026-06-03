@@ -28,10 +28,10 @@ class TestElmisConfigSettings(TransactionCase):
     def test_default_non_secret_config_parameters_are_available(self):
         params = self.env["ir.config_parameter"].sudo()
 
-        self.assertTrue(params.get_param("elmis_integration.base_url"))
-        self.assertTrue(params.get_param("elmis_integration.program_codes"))
-        self.assertTrue(params.get_param("elmis_integration.sync_interval_number"))
-        self.assertTrue(params.get_param("elmis_integration.sync_interval_type"))
+        self.assertTrue(params.get_param("lesotho_elmis_integration.base_url"))
+        self.assertTrue(params.get_param("lesotho_elmis_integration.program_codes"))
+        self.assertTrue(params.get_param("lesotho_elmis_integration.sync_interval_number"))
+        self.assertTrue(params.get_param("lesotho_elmis_integration.sync_interval_type"))
 
     def test_settings_can_store_credentials_and_mirror_location_for_local_testing(self):
         settings = self.env["res.config.settings"].create(
@@ -49,20 +49,20 @@ class TestElmisConfigSettings(TransactionCase):
         settings.execute()
 
         params = self.env["ir.config_parameter"].sudo()
-        self.assertEqual(params.get_param("elmis_integration.username"), "test-user")
-        self.assertEqual(params.get_param("elmis_integration.password"), "test-password")
-        self.assertEqual(params.get_param("elmis_integration.api_token"), "test-token")
+        self.assertEqual(params.get_param("lesotho_elmis_integration.username"), "test-user")
+        self.assertEqual(params.get_param("lesotho_elmis_integration.password"), "test-password")
+        self.assertEqual(params.get_param("lesotho_elmis_integration.api_token"), "test-token")
         self.assertEqual(
-            params.get_param("elmis_integration.mirror_location_id"),
+            params.get_param("lesotho_elmis_integration.mirror_location_id"),
             str(self.mirror_location.id),
         )
         self.assertEqual(
-            params.get_param("elmis_integration.mirror_location_ids"),
+            params.get_param("lesotho_elmis_integration.mirror_location_ids"),
             "%s,%s" % (self.mirror_location.id, self.second_mirror_location.id),
         )
 
     def test_settings_can_configure_scheduled_sync_cron(self):
-        cron = self.env.ref("elmis_integration.ir_cron_elmis_inventory_sync")
+        cron = self.env.ref("lesotho_elmis_integration.ir_cron_elmis_inventory_sync")
         cron.write({"active": False, "interval_number": 6, "interval_type": "hours"})
         settings = self.env["res.config.settings"].create(
             {

@@ -129,11 +129,11 @@ class TestElmisInventorySync(TransactionCase):
 
     def test_inventory_sync_drains_outbox_before_syncing_configured_locations(self):
         params = self.env["ir.config_parameter"].sudo()
-        params.set_param("elmis_integration.base_url", "https://dev.elmis.gov.ls/api/")
-        params.set_param("elmis_integration.program_codes", "art")
-        params.set_param("elmis_integration.api_token", "test-token")
-        params.set_param("elmis_integration.mirror_location_ids", "")
-        params.set_param("elmis_integration.mirror_location_id", str(self.mirror_location.id))
+        params.set_param("lesotho_elmis_integration.base_url", "https://dev.elmis.gov.ls/api/")
+        params.set_param("lesotho_elmis_integration.program_codes", "art")
+        params.set_param("lesotho_elmis_integration.api_token", "test-token")
+        params.set_param("lesotho_elmis_integration.mirror_location_ids", "")
+        params.set_param("lesotho_elmis_integration.mirror_location_id", str(self.mirror_location.id))
         calls = []
 
         def fake_drain(outbox, batch_limit=50):
@@ -232,7 +232,7 @@ class TestElmisInventorySync(TransactionCase):
         )
         program = self.env["elmis.program"].search([("code", "=", "art")], limit=1)
         self.env["ir.config_parameter"].sudo().set_param(
-            "elmis_integration.sent_stale_after_minutes",
+            "lesotho_elmis_integration.sent_stale_after_minutes",
             "30",
         )
         self.env["elmis.outbox"].create(
@@ -313,9 +313,9 @@ class TestElmisInventorySync(TransactionCase):
 
     def test_sync_facility_inventory_fetches_and_normalizes_elmis_stock(self):
         params = self.env["ir.config_parameter"].sudo()
-        params.set_param("elmis_integration.base_url", "https://dev.elmis.gov.ls/api/")
-        params.set_param("elmis_integration.program_codes", "art")
-        params.set_param("elmis_integration.api_token", "test-token")
+        params.set_param("lesotho_elmis_integration.base_url", "https://dev.elmis.gov.ls/api/")
+        params.set_param("lesotho_elmis_integration.program_codes", "art")
+        params.set_param("lesotho_elmis_integration.api_token", "test-token")
 
         def fake_get_json(service, base_url, path, token, query=None):
             self.assertEqual(base_url, "https://dev.elmis.gov.ls/api/")
@@ -385,9 +385,9 @@ class TestElmisInventorySync(TransactionCase):
 
     def test_sync_facility_inventory_can_limit_items_for_trial_run(self):
         params = self.env["ir.config_parameter"].sudo()
-        params.set_param("elmis_integration.base_url", "https://dev.elmis.gov.ls/api/")
-        params.set_param("elmis_integration.program_codes", "art")
-        params.set_param("elmis_integration.api_token", "test-token")
+        params.set_param("lesotho_elmis_integration.base_url", "https://dev.elmis.gov.ls/api/")
+        params.set_param("lesotho_elmis_integration.program_codes", "art")
+        params.set_param("lesotho_elmis_integration.api_token", "test-token")
 
         def fake_get_json(service, base_url, path, token, query=None):
             if path == "facilities/full":
@@ -446,11 +446,11 @@ class TestElmisInventorySync(TransactionCase):
 
     def test_configured_connection_fetches_counts_without_creating_inventory(self):
         params = self.env["ir.config_parameter"].sudo()
-        params.set_param("elmis_integration.base_url", "https://dev.elmis.gov.ls/api/")
-        params.set_param("elmis_integration.program_codes", "art")
-        params.set_param("elmis_integration.api_token", "test-token")
-        params.set_param("elmis_integration.mirror_location_ids", "")
-        params.set_param("elmis_integration.mirror_location_id", str(self.mirror_location.id))
+        params.set_param("lesotho_elmis_integration.base_url", "https://dev.elmis.gov.ls/api/")
+        params.set_param("lesotho_elmis_integration.program_codes", "art")
+        params.set_param("lesotho_elmis_integration.api_token", "test-token")
+        params.set_param("lesotho_elmis_integration.mirror_location_ids", "")
+        params.set_param("lesotho_elmis_integration.mirror_location_id", str(self.mirror_location.id))
 
         def fake_get_json(service, base_url, path, token, query=None):
             if path == "facilities/full":
@@ -488,11 +488,11 @@ class TestElmisInventorySync(TransactionCase):
 
     def test_configured_inventory_sync_fetches_multiple_mirror_locations(self):
         params = self.env["ir.config_parameter"].sudo()
-        params.set_param("elmis_integration.base_url", "https://dev.elmis.gov.ls/api/")
-        params.set_param("elmis_integration.program_codes", "art")
-        params.set_param("elmis_integration.api_token", "test-token")
+        params.set_param("lesotho_elmis_integration.base_url", "https://dev.elmis.gov.ls/api/")
+        params.set_param("lesotho_elmis_integration.program_codes", "art")
+        params.set_param("lesotho_elmis_integration.api_token", "test-token")
         params.set_param(
-            "elmis_integration.mirror_location_ids",
+            "lesotho_elmis_integration.mirror_location_ids",
             "%s,%s,%s" % (self.location_d.id, self.location_c.id, self.location_b.id),
         )
 

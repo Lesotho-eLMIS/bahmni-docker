@@ -8,7 +8,7 @@ class TestPrepackBatchTraceability(TransactionCase):
     def setUpClass(cls):
         super().setUpClass()
         cls.unit_uom = cls.env.ref("uom.product_uom_unit")
-        cls.program_art = cls.env.ref("elmis_integration.elmis_program_art")
+        cls.program_art = cls.env.ref("lesotho_elmis_integration.elmis_program_art")
         cls.picking_type = cls.env["stock.picking.type"].search(
             [("code", "=", "mrp_operation")],
             order="company_id desc, sequence, id",

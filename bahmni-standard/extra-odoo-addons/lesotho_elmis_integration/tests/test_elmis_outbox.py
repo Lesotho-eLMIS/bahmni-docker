@@ -13,7 +13,7 @@ class TestElmisOutbox(TransactionCase):
     def setUpClass(cls):
         super().setUpClass()
         cls.unit_uom = cls.env.ref("uom.product_uom_unit")
-        cls.program = cls.env.ref("elmis_integration.elmis_program_art")
+        cls.program = cls.env.ref("lesotho_elmis_integration.elmis_program_art")
         cls.product = cls._create_elmis_product()
         cls.lot = cls.env["stock.lot"].create(
             {
@@ -192,9 +192,9 @@ class TestElmisOutbox(TransactionCase):
     def test_submit_to_elmis_posts_public_stock_event_and_marks_delivered(self):
         event = self._create_outbox()
         params = self.env["ir.config_parameter"].sudo()
-        params.set_param("elmis_integration.base_url", "https://dev.elmis.gov.ls/api/")
-        params.set_param("elmis_integration.program_codes", "art")
-        params.set_param("elmis_integration.api_token", "test-token")
+        params.set_param("lesotho_elmis_integration.base_url", "https://dev.elmis.gov.ls/api/")
+        params.set_param("lesotho_elmis_integration.program_codes", "art")
+        params.set_param("lesotho_elmis_integration.api_token", "test-token")
         calls = []
 
         def fake_request_json(
@@ -245,9 +245,9 @@ class TestElmisOutbox(TransactionCase):
     def test_submit_to_elmis_marks_failed_and_records_error(self):
         event = self._create_outbox()
         params = self.env["ir.config_parameter"].sudo()
-        params.set_param("elmis_integration.base_url", "https://dev.elmis.gov.ls/api/")
-        params.set_param("elmis_integration.program_codes", "art")
-        params.set_param("elmis_integration.api_token", "test-token")
+        params.set_param("lesotho_elmis_integration.base_url", "https://dev.elmis.gov.ls/api/")
+        params.set_param("lesotho_elmis_integration.program_codes", "art")
+        params.set_param("lesotho_elmis_integration.api_token", "test-token")
 
         def fake_request_json(
             service,
@@ -389,7 +389,7 @@ class TestElmisOutbox(TransactionCase):
             sent_at=fields.Datetime.now(),
         )
         self.env["ir.config_parameter"].sudo().set_param(
-            "elmis_integration.sent_stale_after_minutes",
+            "lesotho_elmis_integration.sent_stale_after_minutes",
             "30",
         )
 
@@ -410,7 +410,7 @@ class TestElmisOutbox(TransactionCase):
             sent_at=fields.Datetime.now(),
         )
         self.env["ir.config_parameter"].sudo().set_param(
-            "elmis_integration.sent_stale_after_minutes",
+            "lesotho_elmis_integration.sent_stale_after_minutes",
             "30",
         )
 
@@ -511,7 +511,7 @@ class TestElmisOutbox(TransactionCase):
         third = self._create_outbox(message_id="third-message", status="PENDING")
         submitted_ids = []
         self.env["ir.config_parameter"].sudo().set_param(
-            "elmis_integration.outbox_batch_limit",
+            "lesotho_elmis_integration.outbox_batch_limit",
             "2",
         )
 

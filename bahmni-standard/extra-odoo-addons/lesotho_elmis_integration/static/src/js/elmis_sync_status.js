@@ -33,7 +33,7 @@ export class ElmisSyncStatus extends Component {
 
   async refresh() {
     try {
-      const status = await this.rpc("/elmis_integration/sync_status", {});
+      const status = await this.rpc("/lesotho_elmis_integration/sync_status", {});
       this.state.enabled = status.enabled;
       this.state.nextcallSeconds = status.nextcall_seconds;
       this.state.lastRun = status.last_run;
@@ -62,17 +62,17 @@ export class ElmisSyncStatus extends Component {
 
   async openHistory() {
     this.state.open = false;
-    await this.action.doAction("elmis_integration.action_elmis_inventory_sync_run");
+    await this.action.doAction("lesotho_elmis_integration.action_elmis_inventory_sync_run");
   }
 
   async openTrigger() {
     this.state.open = false;
-    await this.action.doAction("elmis_integration.action_elmis_inventory_sync_wizard");
+    await this.action.doAction("lesotho_elmis_integration.action_elmis_inventory_sync_wizard");
   }
 
   async openOutbox() {
     this.state.open = false;
-    await this.action.doAction("elmis_integration.action_elmis_outbox");
+    await this.action.doAction("lesotho_elmis_integration.action_elmis_outbox");
   }
 
   get statusClass() {
@@ -197,9 +197,9 @@ export class ElmisSyncStatus extends Component {
   }
 }
 
-ElmisSyncStatus.template = "elmis_integration.SyncStatus";
+ElmisSyncStatus.template = "lesotho_elmis_integration.SyncStatus";
 
-registry.category("systray").add("elmis_integration.SyncStatus", {
+registry.category("systray").add("lesotho_elmis_integration.SyncStatus", {
   Component: ElmisSyncStatus,
   sequence: 5,
 });

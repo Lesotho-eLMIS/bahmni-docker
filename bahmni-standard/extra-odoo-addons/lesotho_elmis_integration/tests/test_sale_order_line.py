@@ -20,11 +20,11 @@ class TestSaleOrderLineElmisSelection(TransactionCase):
             }
         )
         cls.env["ir.config_parameter"].sudo().set_param(
-            "elmis_integration.mirror_location_id",
+            "lesotho_elmis_integration.mirror_location_id",
             cls.mirror_location.id,
         )
-        cls.program_art = cls.env.ref("elmis_integration.elmis_program_art")
-        cls.program_em = cls.env.ref("elmis_integration.elmis_program_em")
+        cls.program_art = cls.env.ref("lesotho_elmis_integration.elmis_program_art")
+        cls.program_em = cls.env.ref("lesotho_elmis_integration.elmis_program_em")
         cls.prescribed_product = cls._create_product("Paracetamol 500mg")
         cls.elmis_product = cls._create_product(
             "Paracetamol 500Mg Tablets 1000",

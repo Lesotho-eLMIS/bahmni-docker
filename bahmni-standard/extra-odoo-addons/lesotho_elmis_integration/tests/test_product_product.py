@@ -24,7 +24,7 @@ class TestElmisProductExtension(TransactionCase):
                 "is_elmis_product": True,
                 "elmis_orderable_id": orderable_id,
                 "elmis_product_code": product_code,
-                "elmis_program_ids": [(4, self.env.ref("elmis_integration.elmis_program_art").id)],
+                "elmis_program_ids": [(4, self.env.ref("lesotho_elmis_integration.elmis_program_art").id)],
                 "elmis_generic_name": "Paracetamol",
                 "elmis_strength": "500Mg",
                 "elmis_dosage_form": "tablets",

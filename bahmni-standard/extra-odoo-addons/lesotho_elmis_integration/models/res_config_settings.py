@@ -2,43 +2,45 @@ import os
 
 from odoo import _, fields, models
 
+CONFIG_PREFIX = "lesotho_elmis_integration."
+
 
 class ResConfigSettings(models.TransientModel):
     _inherit = "res.config.settings"
 
     elmis_base_url = fields.Char(
         string="eLMIS Base URL",
-        config_parameter="elmis_integration.base_url",
+        config_parameter="lesotho_elmis_integration.base_url",
         default=lambda self: os.environ.get(
             "ELMIS_BASE_URL", "https://dev.elmis.gov.ls/api/"
         ),
     )
     elmis_program_codes = fields.Char(
         string="eLMIS Program Codes",
-        config_parameter="elmis_integration.program_codes",
+        config_parameter="lesotho_elmis_integration.program_codes",
         default=lambda self: os.environ.get("ELMIS_PROGRAM_CODES", "art,em,lab,ois"),
         help="Comma-separated eLMIS program codes to include in facility inventory sync.",
     )
     elmis_username = fields.Char(
         string="eLMIS Service Account Username",
-        config_parameter="elmis_integration.username",
+        config_parameter="lesotho_elmis_integration.username",
         default=lambda self: os.environ.get("ELMIS_USERNAME"),
     )
     elmis_password = fields.Char(
         string="eLMIS Service Account Password",
-        config_parameter="elmis_integration.password",
+        config_parameter="lesotho_elmis_integration.password",
         default=lambda self: os.environ.get("ELMIS_PASSWORD"),
     )
     elmis_api_token = fields.Char(
         string="eLMIS API Token",
-        config_parameter="elmis_integration.api_token",
+        config_parameter="lesotho_elmis_integration.api_token",
         default=lambda self: os.environ.get("ELMIS_API_TOKEN"),
         help="Optional token. If provided, it takes precedence over username/password.",
     )
     elmis_mirror_location_id = fields.Many2one(
         "stock.location",
         string="Legacy eLMIS Mirror Location",
-        config_parameter="elmis_integration.mirror_location_id",
+        config_parameter="lesotho_elmis_integration.mirror_location_id",
         domain=[
             ("usage", "=", "internal"),
             ("active", "=", True),
@@ -63,14 +65,14 @@ class ResConfigSettings(models.TransientModel):
     )
     elmis_sync_cron_active = fields.Boolean(
         string="Run Scheduled eLMIS Sync",
-        config_parameter="elmis_integration.sync_cron_active",
+        config_parameter="lesotho_elmis_integration.sync_cron_active",
         default=lambda self: os.environ.get("ELMIS_SYNC_CRON_ACTIVE", "False")
         == "True",
         help="Automatically sync the configured eLMIS facility inventory on a schedule.",
     )
     elmis_sync_interval_number = fields.Integer(
         string="Sync Every",
-        config_parameter="elmis_integration.sync_interval_number",
+        config_parameter="lesotho_elmis_integration.sync_interval_number",
         default=lambda self: int(os.environ.get("ELMIS_SYNC_INTERVAL_NUMBER", "6")),
     )
     elmis_sync_interval_type = fields.Selection(
@@ -80,7 +82,7 @@ class ResConfigSettings(models.TransientModel):
             ("days", "Days"),
         ],
         string="Sync Interval Unit",
-        config_parameter="elmis_integration.sync_interval_type",
+        config_parameter="lesotho_elmis_integration.sync_interval_type",
         default=lambda self: os.environ.get("ELMIS_SYNC_INTERVAL_TYPE", "hours"),
     )
     elmis_sync_nextcall = fields.Datetime(
@@ -99,14 +101,23 @@ class ResConfigSettings(models.TransientModel):
 
     def get_values(self):
         values = super().get_values()
-        params = self.env["ir.config_parameter"].sudo()
-        location_ids = self.env["elmis.inventory.sync"]._split_location_ids(
-            params.get_param("elmis_integration.mirror_location_ids")
-        )
+        sync = self.env["elmis.inventory.sync"]
+        for field_name, key in [
+            ("elmis_base_url", "base_url"),
+            ("elmis_program_codes", "program_codes"),
+            ("elmis_username", "username"),
+            ("elmis_password", "password"),
+            ("elmis_api_token", "api_token"),
+        ]:
+            if not values.get(field_name):
+                values[field_name] = sync._get_config_param(key)
+
+        location_ids = sync._split_location_ids(sync._get_config_param("mirror_location_ids"))
         if not location_ids:
-            location_ids = self.env["elmis.inventory.sync"]._split_location_ids(
-                params.get_param("elmis_integration.mirror_location_id")
-            )
+            legacy_location_id = sync._get_config_param("mirror_location_id")
+            location_ids = sync._split_location_ids(legacy_location_id)
+            if legacy_location_id and not values.get("elmis_mirror_location_id"):
+                values["elmis_mirror_location_id"] = int(legacy_location_id)
         values["elmis_mirror_location_ids"] = [(6, 0, location_ids)]
         return values
 
@@ -116,7 +127,7 @@ class ResConfigSettings(models.TransientModel):
         if not location_ids and settings.elmis_mirror_location_id:
             location_ids = [settings.elmis_mirror_location_id.id]
         self.env["ir.config_parameter"].sudo().set_param(
-            "elmis_integration.mirror_location_ids",
+            "%smirror_location_ids" % CONFIG_PREFIX,
             ",".join(str(location_id) for location_id in location_ids),
         )
 
