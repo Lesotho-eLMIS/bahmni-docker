@@ -22,6 +22,8 @@
             <form string="Prepack Batch">
                 <header>
                     <button name="action_authorize_batch" string="Authorize" type="object" class="btn-primary" states="pending_auth" groups="mrp.group_mrp_manager"/>
+                    <button name="action_print_prepack_labels" string="Print Labels" type="object" class="btn-primary" states="done"/>
+                    <button name="action_record_damaged_products" string="Record Damaged Products" type="object" class="btn-secondary" attrs="{'invisible': ['|', ('has_damaged_products', '=', False), ('state', 'not in', ('draft', 'rejected'))]}"/>
                     <button name="action_cancel" string="Cancel" type="object" states="draft,pending_auth"/>
                     <field name="state" widget="statusbar" statusbar_visible="draft,pending_auth,done,cancel"/>
                 </header>
@@ -38,6 +40,7 @@
                         <group>
                             <field name="planned_date"/>
                             <field name="responsible_id"/>
+                            <field name="has_damaged_products"/>
                         </group>
                         <group>
                             <field name="company_id" groups="base.group_multi_company"/>
@@ -55,6 +58,7 @@
                                     <field name="package_qty"/>
                                     <field name="component_required_qty"/>
                                     <field name="finished_lot_id"/>
+                                    <field name="product_barcode"/>
                                     <field name="state" widget="badge"/>
                                 </tree>
                             </field>
@@ -65,11 +69,68 @@
                                 <field name="location_dest_id"/>
                             </group>
                         </page>
+                        <page string="Damage Records" attrs="{'invisible': [('has_damaged_products', '=', False)]}">
+                            <field name="damage_scrap_ids" readonly="1">
+                                <tree>
+                                    <field name="name"/>
+                                    <field name="product_id"/>
+                                    <field name="scrap_qty"/>
+                                    <field name="product_uom_id"/>
+                                    <field name="location_id"/>
+                                    <field name="scrap_location_id"/>
+                                    <field name="state"/>
+                                </tree>
+                            </field>
+                            <field name="damage_move_ids" readonly="1">
+                                <tree>
+                                    <field name="name"/>
+                                    <field name="product_id"/>
+                                    <field name="product_uom_qty"/>
+                                    <field name="product_uom"/>
+                                    <field name="location_id"/>
+                                    <field name="location_dest_id"/>
+                                    <field name="state"/>
+                                </tree>
+                            </field>
+                        </page>
                         <page string="Notes">
                             <field name="note" placeholder="Add internal notes..."/>
                         </page>
                     </notebook>
                 </sheet>
+                <div class="oe_chatter">
+                    <field name="message_follower_ids"/>
+                    <field name="activity_ids"/>
+                    <field name="message_ids"/>
+                </div>
+            </form>
+        </field>
+    </record>
+
+    <record id="view_prepack_damage_wizard_form" model="ir.ui.view">
+        <field name="name">prepack.damage.wizard.form</field>
+        <field name="model">prepack.damage.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Record Damaged Products">
+                <sheet>
+                    <group>
+                        <field name="damage_reason" placeholder="Describe how the product was damaged."/>
+                    </group>
+                    <group>
+                        <field name="prepack_job_id"/>
+                        <field name="available_product_ids" invisible="1"/>
+                        <field name="product_id"/>
+                        <field name="damaged_qty"/>
+                        <field name="unserviceable_location_id"/>
+                        <field name="available_elmis_program_ids" invisible="1"/>
+                        <field name="elmis_program_id" attrs="{'invisible': [('product_id', '=', False)]}"/>
+                        <field name="elmis_adjustment_reason" attrs="{'invisible': [('product_id', '=', False)]}"/>
+                    </group>
+                </sheet>
+                <footer>
+                    <button name="action_confirm_damage" string="Confirm Damage" type="object" class="btn-primary"/>
+                    <button string="Cancel" class="btn-secondary" special="cancel"/>
+                </footer>
             </form>
         </field>
     </record>

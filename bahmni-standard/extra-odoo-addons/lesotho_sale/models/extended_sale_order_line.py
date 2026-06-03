@@ -520,6 +520,10 @@ class ExtendedSaleOrderLine(models.Model):
             barcode = (line.barcode_scan or "").strip()
             if not barcode:
                 continue
+            prepack_line = line._get_prepack_line_from_barcode(barcode)
+            if prepack_line:
+                line._apply_prepack_line_barcode(prepack_line, barcode, use_write=False)
+                continue
             product = Product.search([("barcode", "=", barcode)], limit=1)
             if not product:
                 product = Product.search([("default_code", "=", barcode)], limit=1)
@@ -551,6 +555,11 @@ class ExtendedSaleOrderLine(models.Model):
         if not barcode:
             return False
 
+        prepack_line = self._get_prepack_line_from_barcode(barcode)
+        if prepack_line:
+            self._apply_prepack_line_barcode(prepack_line, barcode, use_write=True)
+            return self.order_id._serialize_dispensing_line(self)
+
         product = self.env["product.product"].search([("barcode", "=", barcode)], limit=1)
         if not product:
             product = self.env["product.product"].search([("default_code", "=", barcode)], limit=1)
@@ -579,6 +588,41 @@ class ExtendedSaleOrderLine(models.Model):
         self.with_context(skip_prescription_init=True).write(write_vals)
         return self.order_id._serialize_dispensing_line(self)
 
+    def _get_prepack_line_from_barcode(self, barcode):
+        if "bahmni.prepack.batch.line" not in self.env:
+            return False
+        return self.env["bahmni.prepack.batch.line"].search(
+            [("label_barcode", "=", barcode), ("state", "=", "done")],
+            limit=1,
+        )
+
+    def _apply_prepack_line_barcode(self, prepack_line, barcode, use_write=False):
+        self.ensure_one()
+        product = prepack_line.product_id
+        qty = (
+            product.pack_unit_qty
+            if product.is_dispensing_pack and product.pack_unit_qty
+            else 1.0
+        )
+        lot = self._get_fefo_available_lot(product, qty)
+        values = {
+            "barcode_scan": barcode,
+            "product_id": product.id,
+            "product_uom": product.uom_id.id,
+            "product_uom_qty": qty,
+            "served_internally": True,
+            "dispensing_batch_number": lot.name if lot else False,
+        }
+        if use_write:
+            self.with_context(skip_prescription_init=True).write(values)
+            return
+        self.product_id = product
+        self.product_uom = product.uom_id
+        self.product_uom_qty = qty
+        self.served_internally = True
+        self.dispensing_batch_number = values["dispensing_batch_number"]
+
+    def _get_fefo_available_lot(self, product, required_qty=1.0):
     def _get_dispensing_batch_clear_vals(self):
         self.ensure_one()
         vals = {"dispensing_batch_number": False}

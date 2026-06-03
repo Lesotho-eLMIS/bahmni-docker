@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+    <record id="view_stock_quant_tree_prepack_damaged" model="ir.ui.view">
+        <field name="name">stock.quant.tree.prepack.damaged</field>
+        <field name="model">stock.quant</field>
+        <field name="arch" type="xml">
+            <tree string="Damaged Products" create="false" edit="false">
+                <field name="product_id" string="Product"/>
+                <field name="prepack_damage_source_location_id" string="Location Where Damage Occurred"/>
+                <field name="prepack_damaged_quantity" string="Damaged Quantity"/>
+                <field name="prepack_damaged_on_hand_quantity" string="Quantity On Hand"/>
+                <field name="prepack_damage_removal_date" string="Removal Date"/>
+                <field name="prepack_damage_recorded_by_id" string="Recorded By"/>
+            </tree>
+        </field>
+    </record>
+</odoo>
