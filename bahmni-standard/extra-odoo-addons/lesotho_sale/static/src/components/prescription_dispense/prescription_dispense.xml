@@ -15,14 +15,19 @@
                     </div>
                     <div class="o_lesotho_cp_bottom">
                         <div class="o_lesotho_cp_actions">
-                            <button type="button" class="o_lesotho_cp_serve" t-att-disabled="!state.explanationConfirmed" t-on-click="() => this.serve()">Serve</button>
-                            <button type="button" class="o_lesotho_cp_cancel" t-on-click="() => this.cancel()">Cancel</button>
+                            <button t-if="!state.readOnly" type="button" class="o_lesotho_cp_save" t-on-click="() => this.save()">Save</button>
+                            <button t-if="!state.readOnly" type="button" class="o_lesotho_cp_serve" t-att-disabled="!state.explanationConfirmed" t-on-click="() => this.serve()">Serve</button>
+                            <button type="button" class="o_lesotho_cp_cancel" t-on-click="() => this.cancel()"><t t-esc="state.readOnly ? 'Close' : 'Cancel'"/></button>
                         </div>
                         <div class="o_lesotho_statusbar" aria-label="Prescription status">
-                            <span t-att-class="this.getOrderStatusClass('draft')">Quotation</span>
-                            <span t-att-class="this.getOrderStatusClass('sent')">Quotation Sent</span>
-                            <span t-att-class="this.getOrderStatusClass('sale')">Sales Order</span>
+                            <span t-att-class="this.getOrderStatusClass('awaiting_dispensing')">Awaiting Dispensing</span>
+                            <span t-att-class="this.getOrderStatusClass('partially_fulfilled')">Partially Served</span>
+                            <span t-att-class="this.getOrderStatusClass('on_hold')">On Hold</span>
+                            <span t-att-class="this.getOrderStatusClass('fully_served')">Fully Served</span>
                         </div>
+                    </div>
+                    <div t-if="state.readOnly" class="o_lesotho_readonly_notice">
+                        This prescription has been fully served. You can review the details below, but the record is now read-only.
                     </div>
                 </div>
 
@@ -100,7 +105,7 @@
                                         <div class="o_lesotho_group_grid o_lesotho_group_grid_top">
                                             <label class="o_lesotho_field o_lesotho_field_wide">
                                                 <span>Dispensed Product</span>
-                                                <select t-att-disabled="!line.is_pack_substituted" t-att-value="line.product_id || ''" t-on-change="(ev) => this.onProductChanged(line, ev.target.value)">
+                                                <select t-att-disabled="state.readOnly || !line.is_pack_substituted" t-att-value="line.product_id || ''" t-on-change="(ev) => this.onProductChanged(line, ev.target.value)">
                                                     <t t-foreach="state.productOptions" t-as="product" t-key="product.id">
                                                         <option t-att-value="product.id" t-att-selected="product.id === line.product_id"><t t-esc="product.name"/></option>
                                                     </t>
@@ -116,11 +121,11 @@
                                             </label>
                                             <label class="o_lesotho_field o_lesotho_checkbox_field">
                                                 <span>Substitute</span>
-                                                <input type="checkbox" t-att-checked="line.is_pack_substituted" t-on-change="(ev) => this.setSubstitute(line, ev.target.checked)"/>
+                                                <input type="checkbox" t-att-disabled="state.readOnly" t-att-checked="line.is_pack_substituted" t-on-change="(ev) => this.setSubstitute(line, ev.target.checked)"/>
                                             </label>
                                             <label class="o_lesotho_field o_lesotho_field_full">
                                                 <span>Comments</span>
-                                                <input t-att-value="line.comments" t-on-change="(ev) => this.onFieldChanged(line, 'comments', ev.target.value)"/>
+                                                <input t-att-disabled="state.readOnly" t-att-value="line.comments" t-on-change="(ev) => this.onFieldChanged(line, 'comments', ev.target.value)"/>
                                             </label>
                                         </div>
                                     </section>
@@ -130,13 +135,13 @@
                                         <div class="o_lesotho_group_grid">
                                             <label class="o_lesotho_field">
                                                 <span>Quantity Dispensed</span>
-                                                <input type="number" t-att-value="line.quantity_dispensed" t-on-change="(ev) => this.onFieldChanged(line, 'quantity_dispensed', ev.target.value)"/>
+                                                <input type="number" t-att-disabled="state.readOnly" t-att-value="line.quantity_dispensed" t-on-change="(ev) => this.onFieldChanged(line, 'quantity_dispensed', ev.target.value)"/>
                                             </label>
                                             <label class="o_lesotho_field">
                                                 <span>Batch Number</span>
                                                 <select
                                                     t-att-value="line.batch_number || ''"
-                                                    t-att-disabled="!(line.batch_options || []).length"
+                                                    t-att-disabled="state.readOnly || !(line.batch_options || []).length"
                                                     t-on-change="(ev) => this.onBatchChanged(line, ev.target.value)"
                                                 >
                                                     <option value="">
@@ -155,11 +160,11 @@
                                             </label>
                                             <label class="o_lesotho_field">
                                                 <span>Barcode</span>
-                                                <input class="o_lesotho_barcode" t-att-value="line.barcode" t-on-input="(ev) => this.updateLocal(line, 'barcode', ev.target.value)" t-on-keydown="(ev) => this.scanBarcode(line, line_index, ev)"/>
+                                                <input class="o_lesotho_barcode" t-att-disabled="state.readOnly" t-att-value="line.barcode" t-on-input="(ev) => this.updateLocal(line, 'barcode', ev.target.value)" t-on-keydown="(ev) => this.scanBarcode(line, line_index, ev)"/>
                                             </label>
                                             <label class="o_lesotho_field o_lesotho_checkbox_field">
                                                 <span>Served Internally</span>
-                                                <input type="checkbox" t-att-checked="line.served_internally" t-on-change="(ev) => this.onFieldChanged(line, 'served_internally', ev.target.checked)"/>
+                                                <input type="checkbox" t-att-disabled="state.readOnly" t-att-checked="line.served_internally" t-on-change="(ev) => this.onFieldChanged(line, 'served_internally', ev.target.checked)"/>
                                             </label>
                                         </div>
                                     </section>
@@ -169,11 +174,11 @@
                                         <div class="o_lesotho_group_grid o_lesotho_group_grid_directions">
                                             <label class="o_lesotho_field">
                                                 <span>Dose</span>
-                                                <input type="number" step="1" t-att-disabled="!line.is_pack_substituted" t-att-value="line.dose" t-on-change="(ev) => this.onFieldChanged(line, 'dose', ev.target.value)"/>
+                                                <input type="number" step="1" t-att-disabled="state.readOnly || !line.is_pack_substituted" t-att-value="line.dose" t-on-change="(ev) => this.onFieldChanged(line, 'dose', ev.target.value)"/>
                                             </label>
                                             <label class="o_lesotho_field">
                                                 <span>Dose Unit</span>
-                                                <select t-att-disabled="!line.is_pack_substituted" t-att-value="line.dose_unit" t-on-change="(ev) => this.onFieldChanged(line, 'dose_unit', ev.target.value)">
+                                                <select t-att-disabled="state.readOnly || !line.is_pack_substituted" t-att-value="line.dose_unit" t-on-change="(ev) => this.onFieldChanged(line, 'dose_unit', ev.target.value)">
                                                     <t t-foreach="state.directionOptions.dose_unit || []" t-as="option" t-key="option">
                                                         <option t-att-value="option" t-att-selected="option === line.dose_unit"><t t-esc="option"/></option>
                                                     </t>
@@ -181,7 +186,7 @@
                                             </label>
                                             <label class="o_lesotho_field">
                                                 <span>Frequency</span>
-                                                <select t-att-disabled="!line.is_pack_substituted" t-att-value="line.frequency" t-on-change="(ev) => this.onFieldChanged(line, 'frequency', ev.target.value)">
+                                                <select t-att-disabled="state.readOnly || !line.is_pack_substituted" t-att-value="line.frequency" t-on-change="(ev) => this.onFieldChanged(line, 'frequency', ev.target.value)">
                                                     <t t-foreach="state.directionOptions.frequency || []" t-as="option" t-key="option">
                                                         <option t-att-value="option" t-att-selected="option === line.frequency"><t t-esc="option"/></option>
                                                     </t>
@@ -189,7 +194,7 @@
                                             </label>
                                             <label class="o_lesotho_field">
                                                 <span>Route</span>
-                                                <select t-att-disabled="!line.is_pack_substituted" t-att-value="line.route" t-on-change="(ev) => this.onFieldChanged(line, 'route', ev.target.value)">
+                                                <select t-att-disabled="state.readOnly || !line.is_pack_substituted" t-att-value="line.route" t-on-change="(ev) => this.onFieldChanged(line, 'route', ev.target.value)">
                                                     <t t-foreach="state.directionOptions.route || []" t-as="option" t-key="option">
                                                         <option t-att-value="option" t-att-selected="option === line.route"><t t-esc="option"/></option>
                                                     </t>
@@ -197,11 +202,11 @@
                                             </label>
                                             <label class="o_lesotho_field">
                                                 <span>Duration</span>
-                                                <input type="number" step="1" t-att-disabled="!line.is_pack_substituted" t-att-value="line.duration" t-on-change="(ev) => this.onFieldChanged(line, 'duration', ev.target.value)"/>
+                                                <input type="number" step="1" t-att-disabled="state.readOnly || !line.is_pack_substituted" t-att-value="line.duration" t-on-change="(ev) => this.onFieldChanged(line, 'duration', ev.target.value)"/>
                                             </label>
                                             <label class="o_lesotho_field">
                                                 <span>Duration Unit</span>
-                                                <select t-att-disabled="!line.is_pack_substituted" t-att-value="line.duration_units" t-on-change="(ev) => this.onFieldChanged(line, 'duration_units', ev.target.value)">
+                                                <select t-att-disabled="state.readOnly || !line.is_pack_substituted" t-att-value="line.duration_units" t-on-change="(ev) => this.onFieldChanged(line, 'duration_units', ev.target.value)">
                                                     <t t-foreach="state.directionOptions.duration_units || []" t-as="option" t-key="option">
                                                         <option t-att-value="option" t-att-selected="option === line.duration_units"><t t-esc="option"/></option>
                                                     </t>
@@ -209,7 +214,7 @@
                                             </label>
                                             <label class="o_lesotho_field o_lesotho_field_wide">
                                                 <span>Instructions</span>
-                                                <select t-att-disabled="!line.is_pack_substituted" t-att-value="line.instructions" t-on-change="(ev) => this.onFieldChanged(line, 'instructions', ev.target.value)">
+                                                <select t-att-disabled="state.readOnly || !line.is_pack_substituted" t-att-value="line.instructions" t-on-change="(ev) => this.onFieldChanged(line, 'instructions', ev.target.value)">
                                                     <t t-foreach="state.directionOptions.instructions || []" t-as="option" t-key="option">
                                                         <option t-att-value="option" t-att-selected="option === line.instructions"><t t-esc="option"/></option>
                                                     </t>
@@ -217,7 +222,7 @@
                                             </label>
                                             <label class="o_lesotho_field o_lesotho_field_wide">
                                                 <span>Additional Instructions</span>
-                                                <input t-att-value="line.additional_instructions" t-on-change="(ev) => this.onFieldChanged(line, 'additional_instructions', ev.target.value)"/>
+                                                <input t-att-disabled="state.readOnly" t-att-value="line.additional_instructions" t-on-change="(ev) => this.onFieldChanged(line, 'additional_instructions', ev.target.value)"/>
                                             </label>
                                         </div>
                                     </section>
@@ -285,11 +290,14 @@
                 </section>
 
                 <div class="o_lesotho_footer">
-                    <label class="o_lesotho_explain">
-                        <input type="checkbox" t-att-checked="state.explanationConfirmed" t-on-change="(ev) => this.setExplanation(ev)"/>
+                    <label t-if="!state.readOnly" class="o_lesotho_explain">
+                        <input type="checkbox" t-att-disabled="state.readOnly" t-att-checked="state.explanationConfirmed" t-on-change="(ev) => this.setExplanation(ev)"/>
                         <span>I have explained how the medication should be taken to the patient and they understand</span>
                     </label>
-                    <button class="o_lesotho_serve" t-att-disabled="!state.explanationConfirmed" t-on-click="() => this.serve()">Serve</button>
+                    <div t-else="" class="o_lesotho_readonly_footer">
+                        This prescription is complete. Open the list to review other prescriptions.
+                    </div>
+                    <button t-if="!state.readOnly" class="o_lesotho_serve" t-att-disabled="!state.explanationConfirmed" t-on-click="() => this.serve()">Serve</button>
                 </div>
             </t>
         </div>

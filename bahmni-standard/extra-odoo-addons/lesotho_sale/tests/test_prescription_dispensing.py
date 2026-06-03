@@ -1,4 +1,5 @@
 from odoo import fields
+from odoo.exceptions import UserError
 from odoo.tests import SavepointCase, tagged
 
 
@@ -201,3 +202,165 @@ class TestPrescriptionDispensing(SavepointCase):
             line_payload["expiry_date"],
             self._format_expected_expiry(self.product_lot_1),
         )
+
+    def test_external_line_is_treated_as_fully_served_with_zero_quantity(self):
+        line = self._create_order_line(quantity=5.0)
+        line.with_context(skip_prescription_init=True).write(
+            {
+                "served_internally": False,
+            }
+        )
+
+        payload = line.order_id.fetch_prescription_dispensing()
+        line_payload = next(item for item in payload["lines"] if item["id"] == line.id)
+
+        line = self.env["sale.order.line"].browse(line.id)
+        order = self.env["sale.order"].browse(line.order_id.id)
+
+        self.assertFalse(line.served_internally)
+        self.assertTrue(line.dispensed)
+        self.assertEqual(line.product_uom_qty, 0.0)
+        self.assertEqual(line.prescription_status, "served_externally")
+        self.assertEqual(order.prescription_status, "awaiting_dispensing")
+        self.assertEqual(order.dispensed_line_count, 0)
+        self.assertEqual(line_payload["served_internally"], False)
+        self.assertEqual(line_payload["quantity_dispensed"], 0)
+        self.assertEqual(line_payload["prescription_status"], "served_externally")
+
+    def test_partial_internal_fulfillment_sets_partial_status(self):
+        line = self._create_order_line(quantity=5.0)
+        line.with_context(skip_prescription_init=True).write(
+            {
+                "prescribed_qty_base_units": 10.0,
+                "product_uom_qty": 4.0,
+            }
+        )
+
+        payload = line.order_id.fetch_prescription_dispensing()
+        line_payload = next(item for item in payload["lines"] if item["id"] == line.id)
+
+        line = self.env["sale.order.line"].browse(line.id)
+        order = self.env["sale.order"].browse(line.order_id.id)
+
+        self.assertTrue(line.served_internally)
+        self.assertEqual(line.product_uom_qty, 4.0)
+        self.assertEqual(line.prescription_status, "partially_fulfilled")
+        self.assertEqual(order.prescription_status, "awaiting_dispensing")
+        self.assertEqual(line_payload["quantity_dispensed"], 4.0)
+        self.assertEqual(line_payload["prescription_status"], "partially_fulfilled")
+
+    def test_zero_internal_quantity_stays_awaiting_dispensing(self):
+        line = self._create_order_line(quantity=5.0)
+        line.with_context(skip_prescription_init=True).write(
+            {
+                "prescribed_qty_base_units": 5.0,
+                "product_uom_qty": 0.0,
+                "served_internally": True,
+            }
+        )
+
+        payload = line.order_id.fetch_prescription_dispensing()
+        line_payload = next(item for item in payload["lines"] if item["id"] == line.id)
+
+        line = self.env["sale.order.line"].browse(line.id)
+        order = self.env["sale.order"].browse(line.order_id.id)
+
+        self.assertTrue(line.served_internally)
+        self.assertEqual(line.product_uom_qty, 0.0)
+        self.assertEqual(line.prescription_status, "awaiting_dispensing")
+        self.assertEqual(order.prescription_status, "awaiting_dispensing")
+        self.assertEqual(line_payload["quantity_dispensed"], 0.0)
+        self.assertEqual(line_payload["prescription_status"], "awaiting_dispensing")
+
+    def test_save_action_marks_prescription_on_hold(self):
+        line = self._create_order_line(quantity=5.0)
+        order = line.order_id
+
+        action = order.action_hold_prescription_from_ui()
+
+        order = self.env["sale.order"].browse(order.id)
+        self.assertTrue(order.is_on_hold)
+        self.assertEqual(order.prescription_status, "on_hold")
+        self.assertEqual(action["name"], "Prescriptions")
+
+    def test_evaluate_serving_summary_requires_backorder_for_partial_internal_lines(self):
+        line = self._create_order_line(quantity=5.0)
+        line.with_context(skip_prescription_init=True).write(
+            {
+                "prescribed_qty_base_units": 10.0,
+                "product_uom_qty": 4.0,
+            }
+        )
+
+        summary = line.order_id.evaluate_prescription_serving()
+
+        self.assertTrue(summary["has_internal_lines"])
+        self.assertTrue(summary["needs_backorder"])
+        self.assertEqual(summary["total_prescribed"], 10.0)
+        self.assertEqual(summary["total_dispensed"], 4.0)
+        self.assertTrue(summary["has_labels"])
+
+    def test_partial_serve_with_backorder_creates_new_order_for_balance(self):
+        line = self._create_order_line(quantity=5.0)
+        order = line.order_id
+        order.write({"medication_explanation_confirmed": True})
+        line.with_context(skip_prescription_init=True).write(
+            {
+                "prescribed_qty_base_units": 10.0,
+                "product_uom_qty": 4.0,
+            }
+        )
+
+        report_action = order.action_serve_prescription_from_ui(True)
+
+        order = self.env["sale.order"].browse(order.id)
+        backorder = self.env["sale.order"].search([("origin", "=", order.name)], limit=1)
+        backorder_line = backorder.order_line.filtered(lambda l: not l.display_type)[:1]
+
+        self.assertEqual(report_action["type"], "ir.actions.act_url")
+        self.assertIn("report/pdf/lesotho_sale.report_prescription_labels", report_action["url"])
+        self.assertEqual(report_action["target"], "new")
+        self.assertEqual(order.prescription_status, "partially_fulfilled")
+        self.assertTrue(backorder)
+        self.assertEqual(backorder.prescription_status, "awaiting_dispensing")
+        self.assertEqual(backorder_line.product_uom_qty, 6.0)
+        self.assertEqual(backorder_line.prescription_status, "awaiting_dispensing")
+
+    def test_hold_can_be_cleared_when_serving_resumes(self):
+        line = self._create_order_line(quantity=5.0)
+        order = line.order_id
+        order.write({"medication_explanation_confirmed": True})
+        order.action_hold_prescription_from_ui()
+
+        report_action = order.action_serve_prescription_from_ui()
+
+        order = self.env["sale.order"].browse(order.id)
+        line = self.env["sale.order.line"].browse(line.id)
+
+        self.assertFalse(order.is_on_hold)
+        self.assertEqual(order.prescription_status, "fully_served")
+        self.assertTrue(line.dispensed)
+        self.assertEqual(report_action["type"], "ir.actions.act_url")
+        self.assertIn("report/pdf/lesotho_sale.report_prescription_labels", report_action["url"])
+        self.assertEqual(report_action["target"], "new")
+
+    def test_fully_served_prescription_cannot_be_modified_again(self):
+        line = self._create_order_line(quantity=5.0)
+        order = line.order_id
+        order.write({"medication_explanation_confirmed": True})
+        order.action_serve_prescription_from_ui()
+
+        order = self.env["sale.order"].browse(order.id)
+        self.assertEqual(order.prescription_status, "fully_served")
+
+        with self.assertRaises(UserError):
+            order.add_prescription_dispensing_line()
+
+        with self.assertRaises(UserError):
+            order.update_prescription_dispensing_line(line.id, {"comments": "locked"})
+
+        with self.assertRaises(UserError):
+            order.remove_prescription_dispensing_line(line.id)
+
+        with self.assertRaises(UserError):
+            order.action_serve_prescription_from_ui()

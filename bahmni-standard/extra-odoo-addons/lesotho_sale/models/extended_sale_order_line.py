@@ -236,6 +236,20 @@ class ExtendedSaleOrderLine(models.Model):
         help="Short summary of prescription details",
     )
 
+    prescription_status = fields.Selection(
+        selection=[
+            ("awaiting_dispensing", "Awaiting Dispensing"),
+            ("partially_fulfilled", "Partially Served"),
+            ("fully_served", "Fully Served"),
+            ("served_externally", "served externally"),
+        ],
+        string="Prescription Status",
+        compute="_compute_prescription_status",
+        store=True,
+        readonly=True,
+        copy=False,
+    )
+
     @api.depends("external_order_uuid", "order_number")
     def _compute_is_existing_prescription(self):
         for line in self:
@@ -245,20 +259,61 @@ class ExtendedSaleOrderLine(models.Model):
 
     @api.model_create_multi
     def create(self, vals_list):
-        lines = super().create(vals_list)
+        normalized_vals_list = [
+            self._normalize_prescription_serving_vals(vals) for vals in vals_list
+        ]
+        lines = super().create(normalized_vals_list)
         if not self.env.context.get("skip_prescription_init"):
             lines._initialize_prescribed_metadata(force_missing_only=True)
         return lines
 
     def write(self, vals):
-        result = super().write(vals)
+        normalized_vals = vals
+        if "served_internally" in vals or "product_uom_qty" in vals:
+            normalized_vals = self._normalize_prescription_serving_vals(
+                vals, current_line=self[:1] if len(self) == 1 else None
+            )
+        result = super().write(normalized_vals)
         tracked_fields = {"product_id", "product_uom_qty", "product_uom"}
         if (
             not self.env.context.get("skip_prescription_init")
-            and tracked_fields.intersection(vals)
+            and tracked_fields.intersection(normalized_vals)
         ):
             self._initialize_prescribed_metadata(force_missing_only=True)
         return result
+
+    def _normalize_prescription_serving_vals(self, vals, current_line=None):
+        vals = dict(vals)
+        current_line = current_line or self[:1]
+        current_line = current_line[:1] if current_line else self.env["sale.order.line"]
+
+        incoming_served = vals.get("served_internally", None)
+        current_qty = current_line.product_uom_qty if current_line else 0.0
+        incoming_qty = vals.get("product_uom_qty", current_qty)
+        current_prescribed_qty = (
+            current_line.prescribed_qty_base_units if current_line else 0.0
+        )
+
+        if incoming_served is False:
+            if "prescribed_qty_base_units" not in vals and float_is_zero(
+                current_prescribed_qty, precision_digits=6
+            ):
+                vals["prescribed_qty_base_units"] = incoming_qty or current_qty or 0.0
+            vals["product_uom_qty"] = 0.0
+            vals["dispensed"] = True
+        elif incoming_served is True and current_line and not current_line.served_internally:
+            vals.setdefault("dispensed", False)
+        elif (
+            incoming_qty is not None
+            and float_compare(incoming_qty, 0.0, precision_digits=6) > 0
+            and incoming_served is not False
+            and current_line
+            and not current_line.served_internally
+        ):
+            vals.setdefault("served_internally", True)
+            vals.setdefault("dispensed", False)
+
+        return vals
 
     def _initialize_prescribed_metadata(self, force_missing_only=True):
         for line in self.filtered(lambda l: not l.display_type):
@@ -378,6 +433,77 @@ class ExtendedSaleOrderLine(models.Model):
                 parts.append(line.route)
 
             line.prescription_summary = " | ".join(parts) if parts else "-"
+
+    def _get_dosage_instruction_text(self):
+        self.ensure_one()
+        parts = []
+
+        if self.dose and self.dose_units:
+            parts.append(f"{self.dose} {self.dose_units}")
+        elif self.dose:
+            parts.append(str(self.dose))
+
+        if self.frequency:
+            parts.append(self.frequency)
+
+        if self.route:
+            parts.append(f"via {self.route}")
+
+        if self.duration and self.duration_units:
+            parts.append(f"for {self.duration} {self.duration_units}")
+
+        if self.as_needed:
+            parts.append("(as needed)")
+
+        if self.administration_instructions:
+            parts.append(self.administration_instructions)
+
+        return " ".join(parts) if parts else (self.full_prescription_text or "")
+
+    @api.depends(
+        "display_type",
+        "served_internally",
+        "product_uom_qty",
+        "prescribed_qty_base_units",
+    )
+    def _compute_prescription_status(self):
+        for line in self:
+            line.prescription_status = line._get_prescription_status()
+
+    def _get_prescription_quantities(self):
+        self.ensure_one()
+        prescribed_qty = self.prescribed_qty_base_units or self.product_uom_qty or 0.0
+        served_qty = self.product_uom_qty or 0.0
+        return prescribed_qty, served_qty
+
+    def _get_prescription_status(self):
+        self.ensure_one()
+        if self.display_type:
+            return False
+        if not self.served_internally:
+            return "served_externally"
+
+        prescribed_qty, served_qty = self._get_prescription_quantities()
+        qty_rounding = self.product_uom.rounding or 0.0001
+        if float_compare(served_qty, 0.0, precision_rounding=qty_rounding) <= 0:
+            return "awaiting_dispensing"
+        if float_compare(served_qty, prescribed_qty, precision_rounding=qty_rounding) < 0:
+            return "partially_fulfilled"
+        return "fully_served"
+
+    def _is_effectively_fully_served(self):
+        self.ensure_one()
+        if self.display_type:
+            return False
+        return self._get_prescription_status() in ("fully_served", "served_externally")
+
+    def _has_positive_internal_service(self):
+        self.ensure_one()
+        if self.display_type or not self.served_internally:
+            return False
+        _, served_qty = self._get_prescription_quantities()
+        qty_rounding = self.product_uom.rounding or 0.0001
+        return float_compare(served_qty, 0.0, precision_rounding=qty_rounding) > 0
     
     @api.depends('product_id', 'product_uom_qty')
     def _compute_out_of_stock(self):

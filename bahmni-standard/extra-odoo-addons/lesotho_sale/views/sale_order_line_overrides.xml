@@ -8,7 +8,7 @@
         <field name="view_id" ref="view_order_line_dispensing_tree" />
         <field
       name="domain"
-    >[('order_id', '=', active_id), ('dispensed', '=', False)]</field>
+    >[('order_id', '=', active_id), ('served_internally', '=', True), ('dispensed', '=', False)]</field>
         <field name="context">{
             'search_default_filter_undispensed': 1,
             'default_order_id': active_id
