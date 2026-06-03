@@ -134,7 +134,20 @@
                                             </label>
                                             <label class="o_lesotho_field">
                                                 <span>Batch Number</span>
-                                                <input t-att-value="line.batch_number" t-on-change="(ev) => this.onFieldChanged(line, 'batch_number', ev.target.value)"/>
+                                                <select
+                                                    t-att-value="line.batch_number || ''"
+                                                    t-att-disabled="!(line.batch_options || []).length"
+                                                    t-on-change="(ev) => this.onBatchChanged(line, ev.target.value)"
+                                                >
+                                                    <option value="">
+                                                        <t t-esc="(line.batch_options || []).length ? 'Select batch number' : 'No batch numbers available'"/>
+                                                    </option>
+                                                    <t t-foreach="line.batch_options || []" t-as="option" t-key="option.batch_number">
+                                                        <option t-att-value="option.batch_number" t-att-selected="option.batch_number === line.batch_number">
+                                                            <t t-esc="option.batch_number"/>
+                                                        </option>
+                                                    </t>
+                                                </select>
                                             </label>
                                             <label class="o_lesotho_field">
                                                 <span>Expiry Date</span>

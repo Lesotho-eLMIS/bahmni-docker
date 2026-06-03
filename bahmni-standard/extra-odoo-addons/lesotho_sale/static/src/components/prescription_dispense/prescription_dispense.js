@@ -147,24 +147,40 @@ export class PrescriptionDispense extends Component {
     }
 
     onProductChanged(line, value) {
-        const productId = value ? parseInt(value) : false;
+        const productId = value ? parseInt(value, 10) : false;
         if (productId) {
-            this.saveLine(line, 'product_id', productId);
+            const product = this.state.productOptions.find((item) => item.id === productId);
+            this.updateLocal(line, "product_id", productId);
+            this.updateLocal(line, "dispensed_product", product ? product.name : "");
+            this.updateLocal(line, "batch_number", "");
+            this.updateLocal(line, "expiry_date", "");
+            this.updateLocal(line, "batch_options", []);
+            this.saveLine(line, "product_id", productId, { skipLocalUpdate: true });
         }
+    }
+
+    onBatchChanged(line, value) {
+        const batchOptions = line.batch_options || [];
+        const selectedBatch = batchOptions.find((item) => item.batch_number === value);
+        this.updateLocal(line, "batch_number", value);
+        this.updateLocal(line, "expiry_date", selectedBatch ? selectedBatch.expiry_date : "");
+        this.saveLine(line, "batch_number", value, { skipLocalUpdate: true });
     }
 
     onFieldChanged(line, field, value) {
         if (field === 'quantity_dispensed') {
             this.saveLine(line, field, parseFloat(value || 0));
         } else if (field === 'dose' || field === 'duration') {
-            this.saveLine(line, field, parseInt(value || 0));
+            this.saveLine(line, field, parseInt(value || 0, 10));
         } else {
             this.saveLine(line, field, value);
         }
     }
 
-    saveLine(line, field, value) {
-        this.updateLocal(line, field, value);
+    saveLine(line, field, value, options = {}) {
+        if (!options.skipLocalUpdate) {
+            this.updateLocal(line, field, value);
+        }
         if (field === "product_id") {
             const product = this.state.productOptions.find((item) => item.id === value);
             this.updateLocal(line, "dispensed_product", product ? product.name : "");
@@ -192,6 +208,9 @@ export class PrescriptionDispense extends Component {
         this.updateLocal(line, "product_id", productId);
         const product = this.state.productOptions.find((item) => item.id === productId);
         this.updateLocal(line, "dispensed_product", product ? product.name : line.prescribed_product);
+        this.updateLocal(line, "batch_number", "");
+        this.updateLocal(line, "expiry_date", "");
+        this.updateLocal(line, "batch_options", []);
         
         // Fire and forget the ORM call
         this.orm.call(

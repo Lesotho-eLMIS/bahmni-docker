@@ -256,6 +256,7 @@ class ExtendedSaleOrder(models.Model):
             "barcode": line.barcode_scan or "",
             "batch_number": line.dispensing_batch_number or "",
             "expiry_date": expiry_date,
+            "batch_options": line._get_dispensing_batch_options(),
             "served_internally": line.served_internally,
             "stock_on_hand": line.stock_on_hand or 0,
             "out_of_stock": line.out_of_stock,
@@ -294,6 +295,13 @@ class ExtendedSaleOrder(models.Model):
         self.ensure_one()
         dispensing_lines = self.order_line.filtered(lambda l: not l.display_type)
         dispensing_lines.filtered(lambda l: not l.served_internally).write({"served_internally": True})
+        for line in dispensing_lines.filtered(lambda l: l.product_id and not l.dispensing_batch_number):
+            default_lot = line._get_default_dispensing_lot(
+                line.product_id,
+                line.product_uom_qty or 1.0,
+            )
+            if default_lot:
+                line._sync_dispensing_batch_selection(default_lot.name, product=line.product_id)
         return {
             "id": self.id,
             "name": self.name,
@@ -500,7 +508,6 @@ class ExtendedSaleOrder(models.Model):
             "duration_units": "duration_units",
             "instructions": "administration_instructions",
             "additional_instructions": "additional_instructions",
-            "batch_number": "dispensing_batch_number",
             "served_internally": "served_internally",
             "is_pack_substituted": "is_pack_substituted",
             "comments": "dispensing_comments",
@@ -508,18 +515,22 @@ class ExtendedSaleOrder(models.Model):
         for source, target in field_map.items():
             if source in vals:
                 write_vals[target] = vals[source]
+        product = False
+        requested_batch_number = vals["batch_number"] if "batch_number" in vals else None
         if vals.get("product_id"):
-            product = self.env["product.product"].browse(vals["product_id"])
-            write_vals.update(
-                {
-                    "product_id": product.id,
-                    "product_uom": product.uom_id.id,
-                }
-            )
-            if not write_vals.get("name"):
-                write_vals["name"] = product.display_name
+            product = self.env["product.product"].browse(vals["product_id"]).exists()
+            if not product:
+                raise UserError(_("Selected product was not found."))
+            write_vals.update(line._prepare_dispensing_product_change_vals(product))
         if write_vals:
             line.with_context(skip_prescription_init=True).write(write_vals)
+        if product:
+            if requested_batch_number is None:
+                default_lot = line._get_default_dispensing_lot(product, line.product_uom_qty or 1.0)
+                requested_batch_number = default_lot.name if default_lot else False
+            line._sync_dispensing_batch_selection(requested_batch_number, product=product)
+        elif requested_batch_number is not None:
+            line._sync_dispensing_batch_selection(requested_batch_number)
         return self._serialize_dispensing_line(line)
 
     def remove_prescription_dispensing_line(self, line_id):
