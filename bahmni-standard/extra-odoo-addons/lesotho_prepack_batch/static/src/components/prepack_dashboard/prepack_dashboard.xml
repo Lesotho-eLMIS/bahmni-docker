@@ -159,7 +159,9 @@
                     <div t-if="state.step === 2" id="view-create-prepack">
                         <div class="d-flex justify-content-between align-items-center mb-4 border-bottom pb-2">
                             <h2 class="m-0 fw-bold fs-3">Calculate Prepack Sizes</h2>
-
+                            <button class="btn btn-warning btn-lg px-4 shadow-sm fw-bold" t-att-disabled="state.batchItems.length === 0" t-on-click="() => this.recordDamagedProducts()">
+                                <i class="fa fa-exclamation-triangle me-2"></i>RECORD DAMAGED PRODUCTS
+                            </button>
                         </div>
                         <p class="lead text-muted mb-4 fw-semibold">Define one or more prepack sizes for each bulk commodity.</p>
 
@@ -322,7 +324,7 @@
                                         </t>
                                         <t t-else="">
                                             <button class="btn btn-primary btn-lg px-5 shadow-sm py-3 fw-bold me-2" t-on-click="() => this.printLabels()">
-                                                <i class="fa fa-barcode me-2"></i>PRINT ALL LABELS
+                                                <i class="fa fa-barcode me-2"></i>PRINT LABELS
                                             </button>
                                             <button class="btn btn-outline-success btn-lg px-4 border-2 fw-bold disabled">
                                                 <i class="fa fa-check-double me-2"></i>COMPLETED
@@ -505,7 +507,7 @@
                                             </button>
                                         </t>
                                         <button class="btn btn-primary btn-lg px-5 shadow-sm py-3 fw-bold" t-on-click="() => this.printLabels()">
-                                            <i class="fa fa-barcode me-2"></i>PRINT ALL LABELS
+                                            <i class="fa fa-barcode me-2"></i>PRINT LABELS
                                         </button>
                                     </div>
                                 </div>
