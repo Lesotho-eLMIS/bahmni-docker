@@ -42,7 +42,7 @@
                             <div class="col-md-5">
                                 <div class="card shadow-sm mb-4">
                                     <div class="card-header bg-primary text-white py-3">
-                                        <h5 class="m-0 fw-bold">Select Product from Store</h5>
+                                        <h5 class="m-0 fw-bold text-white" style="color: #fff !important;">Select Product from Store</h5>
                                     </div>
                                     <div class="card-body">
                                         <div class="form-group mb-4">
@@ -52,12 +52,19 @@
                                                     <label class="form-check-label fw-semibold" for="includePrepacks">Include Prepacks</label>
                                                 </div>
                                             </div>
-                                            <select class="form-select form-select-lg fw-semibold fs-5" t-on-change="(ev) => this.onProductSelect(ev)">
-                                                <option value="" disabled="disabled" t-att-selected="!state.selectedProductKey">-- Search / Select Product --</option>
+                                            <input
+                                                class="form-select form-select-lg fw-semibold fs-5"
+                                                list="prepackProductOptions"
+                                                placeholder="-- Search / Select Product --"
+                                                autocomplete="off"
+                                                t-att-value="state.productSearch"
+                                                t-on-input="(ev) => this.onProductSearch(ev)"
+                                            />
+                                            <datalist id="prepackProductOptions">
                                                 <t t-foreach="state.inventory" t-as="item" t-key="item.key">
-                                                    <option t-att-value="item.key"><t t-esc="item.name"/> (<t t-esc="item.batch"/>)</option>
+                                                    <option t-att-value="this.getProductLabel(item)"></option>
                                                 </t>
-                                            </select>
+                                            </datalist>
                                         </div>
 
                                         <div t-if="state.selectedProduct" class="product-meta p-3 rounded mb-4 animate__animated animate__fadeIn">
@@ -99,7 +106,7 @@
                             <div class="col-md-7">
                                 <div class="card shadow-sm h-100">
                                     <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
-                                        <h5 class="m-0 fw-bold fs-5">Prepacking List </h5>
+                                        <h5 class="m-0 fw-bold fs-5" style="font-weight: 700 !important;">Prepacking List </h5>
                                         <button t-if="state.batchItems.length > 0" class="btn btn-outline-danger btn-sm fw-semibold" t-on-click="() => this.clearBatch()">
                                             <i class="fa fa-trash-alt me-1"></i>Clear All
                                         </button>
@@ -301,7 +308,7 @@
                                     </div>
                                     <div class="text-end">
                                         <t t-if="state.mode === 'authorize' and state.batchId">
-                                             <button class="btn btn-outline-secondary btn-lg px-4 shadow-sm py-3 fw-bold me-2" t-on-click="() => { state.batchId = null; state.batchItems = []; }">
+                                             <button class="btn btn-outline-secondary btn-lg px-4 shadow-sm py-3 fw-bold me-2" t-on-click="() => this.clearSelectedBatch()">
                                                 <i class="fa fa-arrow-left me-2"></i>Back to List
                                             </button>
                                         </t>
@@ -489,7 +496,7 @@
                                         </div>
                                     </div>
                                     <div class="text-end">
-                                        <button class="btn btn-outline-secondary btn-lg px-4 shadow-sm py-3 fw-bold me-2" t-on-click="() => { state.batchId = null; state.batchItems = []; }">
+                                        <button class="btn btn-outline-secondary btn-lg px-4 shadow-sm py-3 fw-bold me-2" t-on-click="() => this.clearSelectedBatch()">
                                             <i class="fa fa-arrow-left me-2"></i>Back to History
                                         </button>
                                         <t t-if="!state.isAuthorized">

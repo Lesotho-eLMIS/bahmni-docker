@@ -18,6 +18,7 @@ export class PrepackDashboard extends Component {
       inventory: [],
       pendingBatches: [],
       historyBatches: [],
+      productSearch: "",
       selectedProductKey: null,
       selectedProduct: null,
       checks: { chk1: false, chk2: false, chk3: false },
@@ -83,6 +84,15 @@ export class PrepackDashboard extends Component {
       this.state.isAuthorized = details.isAuthorized;
       this.state.rejectComment = "";
     }
+    return details;
+  }
+
+  clearSelectedBatch() {
+    this.state.batchId = null;
+    this.state.batchName = "";
+    this.state.batchItems = [];
+    this.state.isAuthorized = false;
+    this.state.rejectComment = "";
   }
 
   async autoSave() {
@@ -93,10 +103,38 @@ export class PrepackDashboard extends Component {
 
   onProductSelect(ev) {
     const selectedKey = ev.target.value;
-    this.state.selectedProductKey = selectedKey;
-    this.state.selectedProduct = this.state.inventory.find(i => i.key === selectedKey);
+    this.selectProduct(this.state.inventory.find(i => i.key === selectedKey));
+  }
+
+  onProductSearch(ev) {
+    const searchValue = ev.target.value;
+    this.state.productSearch = searchValue;
+
+    const selectedProduct = this.state.inventory.find((item) => this.getProductLabel(item) === searchValue);
+    this.selectProduct(selectedProduct, { keepSearchValue: true });
+  }
+
+  selectProduct(product, options = {}) {
+    if (!product) {
+      this.state.selectedProductKey = null;
+      this.state.selectedProduct = null;
+      if (!options.keepSearchValue) {
+        this.state.productSearch = "";
+      }
+      this.state.checks = { chk1: false, chk2: false, chk3: false };
+      this.validateChecklist();
+      return;
+    }
+
+    this.state.selectedProductKey = product.key;
+    this.state.selectedProduct = product;
+    this.state.productSearch = this.getProductLabel(product);
     this.state.checks = { chk1: false, chk2: false, chk3: false };
     this.validateChecklist();
+  }
+
+  getProductLabel(item) {
+    return `${item.name} (${item.batch})`;
   }
 
   validateChecklist() {
@@ -120,6 +158,7 @@ export class PrepackDashboard extends Component {
     // Reset
     this.state.selectedProductKey = null;
     this.state.selectedProduct = null;
+    this.state.productSearch = "";
     this.state.checks = { chk1: false, chk2: false, chk3: false };
     this.state.canAddToBatch = false;
 
@@ -207,15 +246,15 @@ export class PrepackDashboard extends Component {
 
   async authorizeBatch() {
     const action = await this.orm.call("bahmni.prepack.batch", "action_authorize_batch", [[this.state.batchId]]);
-    this.state.isAuthorized = true;
     this.notification.add("Batch Authorized successfully!", { type: "success" });
 
-    // Refresh batch details to update all lines
-    await this.selectBatch(this.state.batchId);
-
-    // Refresh pending batches if in authorize mode
     if (this.state.mode === "authorize") {
       this.state.pendingBatches = await this.orm.call("bahmni.prepack.batch", "fetch_pending_batches", []);
+      this.clearSelectedBatch();
+    } else {
+      this.state.isAuthorized = true;
+      // Refresh batch details to update all lines
+      await this.selectBatch(this.state.batchId);
     }
 
     // If the server returned a print action, execute it immediately
@@ -231,11 +270,7 @@ export class PrepackDashboard extends Component {
     this.notification.add("Batch rejected and sent back to creator.", { type: "success" });
 
     // Refresh view
-    this.state.batchId = null;
-    this.state.batchName = "";
-    this.state.batchItems = [];
-    this.state.isAuthorized = false;
-    this.state.rejectComment = "";
+    this.clearSelectedBatch();
     if (this.state.mode === "authorize") {
       this.state.pendingBatches = await this.orm.call("bahmni.prepack.batch", "fetch_pending_batches", []);
     }
@@ -248,10 +283,7 @@ export class PrepackDashboard extends Component {
     }
     await this.orm.call("bahmni.prepack.batch", "unlink", [[this.state.batchId]]);
     this.notification.add("Prepacking batch deleted successfully.", { type: "success" });
-    this.state.batchId = null;
-    this.state.batchName = "";
-    this.state.batchItems = [];
-    this.state.isAuthorized = false;
+    this.clearSelectedBatch();
     if (this.state.mode === "authorize") {
       this.state.pendingBatches = await this.orm.call("bahmni.prepack.batch", "fetch_pending_batches", []);
     }
@@ -262,11 +294,14 @@ export class PrepackDashboard extends Component {
     this.notification.add("Item Authorized successfully!", { type: "success" });
 
     // Refresh batch details
-    await this.selectBatch(this.state.batchId);
+    const details = await this.selectBatch(this.state.batchId);
 
     // Refresh pending batches if in authorize mode
     if (this.state.mode === "authorize") {
       this.state.pendingBatches = await this.orm.call("bahmni.prepack.batch", "fetch_pending_batches", []);
+      if (details && details.isAuthorized) {
+        this.clearSelectedBatch();
+      }
     }
   }
 
