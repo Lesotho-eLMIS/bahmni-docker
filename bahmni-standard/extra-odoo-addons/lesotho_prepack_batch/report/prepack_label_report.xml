@@ -1,5 +1,21 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
+    <record id="paperformat_prepack_label" model="report.paperformat">
+        <field name="name">Prepack Label 100x55mm</field>
+        <field name="default" eval="False"/>
+        <field name="format">custom</field>
+        <field name="page_height">55</field>
+        <field name="page_width">100</field>
+        <field name="orientation">Landscape</field>
+        <field name="margin_top">2</field>
+        <field name="margin_bottom">2</field>
+        <field name="margin_left">2</field>
+        <field name="margin_right">2</field>
+        <field name="header_line" eval="False"/>
+        <field name="header_spacing">0</field>
+        <field name="dpi">90</field>
+    </record>
+
     <record id="action_report_prepack_labels" model="ir.actions.report">
         <field name="name">Prepack Labels</field>
         <field name="model">bahmni.prepack.batch</field>
@@ -7,111 +23,168 @@
         <field name="report_name">lesotho_prepack_batch.report_prepack_labels</field>
         <field name="report_file">lesotho_prepack_batch.report_prepack_labels</field>
         <field name="print_report_name">'Prepack Labels - %s' % (object.name)</field>
+        <field name="paperformat_id" ref="lesotho_prepack_batch.paperformat_prepack_label"/>
     </record>
 
     <template id="report_prepack_labels">
         <t t-call="web.html_container">
             <style>
+                @page {
+                    margin: 2mm;
+                }
                 .prepack-label-page {
                     font-family: Arial, sans-serif;
                     color: #111;
+                    width: 96mm;
+                    height: 51mm;
+                    padding: 0;
+                    margin: 0;
+                    page-break-after: always;
+                }
+                .prepack-label-page:last-child {
+                    page-break-after: auto;
                 }
                 .prepack-label {
-                    display: inline-block;
-                    width: 88mm;
-                    min-height: 55mm;
-                    margin: 3mm;
-                    padding: 4mm;
-                    vertical-align: top;
-                    border: 1px solid #111;
-                    page-break-inside: avoid;
+                    width: 94mm;
+                    height: 49mm;
+                    padding: 2.5mm 3.5mm;
+                    border: 1.2mm solid #129bd3;
+                    border-radius: 4mm;
                     box-sizing: border-box;
+                    overflow: hidden;
                 }
                 .prepack-label h3 {
-                    margin: 0 0 3mm;
-                    font-size: 14px;
-                    font-weight: 700;
-                    text-align: center;
+                    margin: 0 0 1.5mm;
+                    font-size: 11px;
+                    font-weight: 800;
                     text-transform: uppercase;
-                    border-bottom: 1px solid #111;
-                    padding-bottom: 2mm;
+                    letter-spacing: 0.4px;
+                    border-bottom: 0.3mm solid #111;
+                    padding-bottom: 1mm;
+                }
+                .prepack-label-facility {
+                    margin-bottom: 1mm;
+                    font-size: 8px;
+                    line-height: 1.15;
+                    white-space: nowrap;
+                }
+                .prepack-label-facility strong {
+                    font-weight: 800;
+                    text-transform: uppercase;
+                }
+                .prepack-label-facility span {
+                    display: inline-block;
+                    max-width: 70mm;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                    vertical-align: bottom;
+                    font-weight: 700;
                 }
                 .prepack-label-row {
-                    margin-bottom: 1.4mm;
-                    font-size: 11px;
-                    line-height: 1.2;
+                    margin-bottom: 0.7mm;
+                    font-size: 8.5px;
+                    line-height: 1.1;
+                    white-space: nowrap;
                 }
                 .prepack-label-row strong {
                     display: inline-block;
-                    min-width: 25mm;
+                    min-width: 20mm;
+                    font-weight: 800;
+                    text-transform: uppercase;
+                }
+                .prepack-label-row span {
                     font-weight: 700;
                 }
+                .prepack-label-row .prepack-value-long {
+                    display: inline-block;
+                    max-width: 62mm;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                    vertical-align: bottom;
+                    white-space: nowrap;
+                }
                 .prepack-label-barcode {
-                    margin-top: 2mm;
+                    margin-top: 0.6mm;
                     text-align: center;
                 }
                 .prepack-label-barcode img {
-                    width: 58mm;
-                    height: 13mm;
+                    width: 52mm;
+                    height: 8mm;
                 }
                 .prepack-label-code {
-                    margin-top: 1mm;
-                    font-size: 10px;
+                    margin-top: 0.3mm;
+                    font-size: 7px;
                     font-weight: 700;
-                    letter-spacing: 1px;
+                    letter-spacing: 0.5px;
                     text-align: center;
+                }
+                .prepack-label-footer {
+                    margin-top: 0.6mm;
+                    display: table;
+                    width: 100%;
+                    font-size: 7px;
+                    font-weight: 700;
+                }
+                .prepack-label-footer span {
+                    display: table-cell;
+                    width: 50%;
+                    max-width: 43mm;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                    white-space: nowrap;
+                }
+                .prepack-label-footer span:last-child {
+                    text-align: right;
                 }
             </style>
             <t t-foreach="docs" t-as="doc">
                 <t t-set="web_base_url" t-value="doc.env['ir.config_parameter'].sudo().get_param('web.base.url')"/>
-                <div class="page prepack-label-page">
-                    <t t-set="line_ids" t-value="doc.env.context.get('prepack_line_ids')"/>
-                    <t t-foreach="doc.line_ids" t-as="line">
-                        <t t-if="not line_ids or line.id in line_ids" t-foreach="line.get_prepack_label_copies()" t-as="label">
+                <t t-set="line_ids" t-value="doc.env.context.get('prepack_line_ids')"/>
+                <t t-foreach="doc.line_ids" t-as="line">
+                    <t t-if="not line_ids or line.id in line_ids" t-foreach="line.get_prepack_label_copies()" t-as="label">
+                        <div class="page prepack-label-page">
                             <div class="prepack-label">
                                 <h3>Prepack Medicine</h3>
-                                <div class="prepack-label-row">
-                                    <strong>Serial Ref:</strong>
-                                    <span t-esc="label['serial']"/>
-                                </div>
-                                <div class="prepack-label-row">
-                                    <strong>Generic Name:</strong>
-                                    <span t-esc="label['medicine']"/>
-                                </div>
-                                <div class="prepack-label-row">
-                                    <strong>Strength:</strong>
-                                    <span t-esc="label['strength']"/>
-                                </div>
-                                <div class="prepack-label-row">
-                                    <strong>Batch No:</strong>
-                                    <span t-esc="label['batch_number']"/>
-                                </div>
-                                <div class="prepack-label-row">
-                                    <strong>Expiry Date:</strong>
-                                    <span t-esc="label['expiry_date'] or 'N/A'"/>
-                                </div>
-                                <div class="prepack-label-row">
-                                    <strong>Qty/Prepack:</strong>
-                                    <span t-esc="label['quantity_per_pack']"/>
-                                </div>
-                                <div class="prepack-label-row">
+                                <div class="prepack-label-facility">
                                     <strong>Facility:</strong>
                                     <span t-esc="label['facility']"/>
                                 </div>
                                 <div class="prepack-label-row">
-                                    <strong>Prepacked On:</strong>
-                                    <span t-esc="label['prepacked_on']"/>
+                                    <strong>Serial No.</strong>
+                                    <span t-esc="label['serial']"/>
+                                </div>
+                                <div class="prepack-label-row">
+                                    <strong>Medicine</strong>
+                                    <span class="prepack-value-long" t-esc="label['medicine']"/>
+                                </div>
+                                <div class="prepack-label-row">
+                                    <strong>Strength</strong>
+                                    <span class="prepack-value-long" t-esc="label['strength']"/>
+                                </div>
+                                <div class="prepack-label-row">
+                                    <strong>Batch No.</strong>
+                                    <span t-esc="label['batch_number']"/>
+                                </div>
+                                <div class="prepack-label-row">
+                                    <strong>Expiry</strong>
+                                    <span t-esc="label['expiry_date'] or 'N/A'"/>
+                                </div>
+                                <div class="prepack-label-row">
+                                    <strong>Qty/Pack</strong>
+                                    <span t-esc="label['quantity_per_pack']"/>
                                 </div>
                                 <div class="prepack-label-barcode" t-if="label['barcode']">
-                                    <img t-att-src="'%s/report/barcode?type=Code128&amp;value=%s&amp;width=600&amp;height=120&amp;humanreadable=0' % (web_base_url, label['barcode'])"/>
-                                    <div class="prepack-label-code">Scan to Dispense</div>
-                                    <div class="prepack-label-code" t-esc="label['barcode']"/>
-                                    <div class="prepack-label-code" t-if="label['product_barcode']">Product: <span t-esc="label['product_barcode']"/></div>
+                                    <img t-att-src="'%s/report/barcode/Code128/%s?width=600&amp;height=120&amp;humanreadable=0' % (web_base_url, label['barcode'])"/>
+                                    <div class="prepack-label-code">Scan to Dispense | <span t-esc="label['barcode']"/></div>
+                                </div>
+                                <div class="prepack-label-footer">
+                                    <span>Prepacked By: <t t-esc="label['prepacked_by']"/></span>
+                                    <span>Prepacked: <t t-esc="label['prepacked_on']"/></span>
                                 </div>
                             </div>
-                        </t>
+                        </div>
                     </t>
-                </div>
+                </t>
             </t>
         </t>
     </template>

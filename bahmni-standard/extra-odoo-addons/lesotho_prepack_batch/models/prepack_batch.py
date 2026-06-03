@@ -291,15 +291,17 @@ class BahmniPrepackBatch(models.Model):
 
     def _ensure_prepack_product_barcode(self, prepack_product):
         if prepack_product.barcode:
-            return
-        barcode = f"PP{prepack_product.id:08d}"
-        existing_product = self.env["product.product"].search(
+            return prepack_product.barcode
+        barcode = f"PREPACK-{prepack_product.id}"
+        product_model = self.env["product.product"]
+        existing_product = product_model.search(
             [("barcode", "=", barcode), ("id", "!=", prepack_product.id)],
             limit=1,
         )
         if existing_product:
-            barcode = f"PP{prepack_product.id:08d}{self.env.company.id:03d}"
+            barcode = f"PREPACK-{prepack_product.id}-{self.env.company.id}"
         prepack_product.barcode = barcode
+        return barcode
 
     def _get_or_create_prepack_bom(self, prepack_product, bulk_product, size):
         bom = self.env["mrp.bom"].search(
@@ -668,9 +670,9 @@ class BahmniPrepackBatchLine(models.Model):
 
     def _ensure_label_barcodes(self):
         for line in self:
-            line.batch_id._ensure_prepack_product_barcode(line.product_id)
+            product_barcode = line.batch_id._ensure_prepack_product_barcode(line.product_id)
             if not line.label_barcode:
-                line.label_barcode = f"PPL{line.id:08d}"
+                line.label_barcode = product_barcode
 
     def get_prepack_label_copies(self):
         self.ensure_one()
@@ -695,8 +697,9 @@ class BahmniPrepackBatchLine(models.Model):
                     "batch_number": lot.name if lot else "",
                     "expiry_date": expiry_date,
                     "quantity_per_pack": f"{display_quantity} {bulk_product.uom_id.name}",
-                    "facility": self.company_id.name,
-                    "barcode": self.label_barcode or self.product_id.barcode or self.product_id.default_code or "",
+                    "facility": self.batch_id.location_src_id.display_name or self.company_id.name,
+                    "prepacked_by": self.batch_id.responsible_id.name or "",
+                    "barcode": self.product_id.barcode or self.label_barcode or self.product_id.default_code or "",
                     "product_barcode": self.product_id.barcode or self.product_id.default_code or "",
                     "prepack_product": self.product_id.display_name,
                     "prepacked_on": fields.Date.to_string(
