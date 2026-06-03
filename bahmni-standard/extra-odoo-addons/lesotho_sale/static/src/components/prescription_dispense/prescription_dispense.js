@@ -21,6 +21,7 @@ export class PrescriptionDispense extends Component {
             productOptions: [],
             explanationConfirmed: false,
             reviewExpanded: true,
+            readOnly: false,
         });
 
         onMounted(async () => {
@@ -41,7 +42,14 @@ export class PrescriptionDispense extends Component {
         this.state.directionOptions = data.direction_options || {};
         this.state.productOptions = data.product_options || [];
         this.state.explanationConfirmed = data.medication_explanation_confirmed;
+        this.state.readOnly = Boolean(data.is_readonly);
         this.state.loading = false;
+    }
+
+    async goToPrescriptionList() {
+        await this.action.doAction("sale.action_quotations_with_onboarding", {
+            clearBreadcrumbs: true,
+        });
     }
 
     selectLine(line) {
@@ -71,40 +79,31 @@ export class PrescriptionDispense extends Component {
 
     getLineStatus(line) {
         if (!line.served_internally) {
-            return "Serve externally";
-        }
-        if (!this.isLineComplete(line)) {
-            return "Pending";
+            return "served externally";
         }
         const prescribed = Number(line.quantity_prescribed || 0);
         const dispensed = Number(line.quantity_dispensed || 0);
         if (dispensed <= 0) {
-            return "Pending";
+            return "Awaiting Dispensing";
         }
-        if (Math.abs(prescribed - dispensed) < 0.0001) {
-            return "Fully served";
+        if (dispensed < prescribed) {
+            return "Partially Served";
         }
-        if (dispensed > 0 && dispensed < prescribed) {
-            return "Partially served";
-        }
-        return "Check quantity";
+        return "Fully Served";
     }
 
     getLineStatusClass(line) {
         const status = this.getLineStatus(line);
-        if (status === "Fully served") {
+        if (status === "Fully Served" || status === "served externally") {
             return "o_lesotho_tab_status served";
         }
-        if (status === "Partially served") {
+        if (status === "Partially Served") {
             return "o_lesotho_tab_status partial";
         }
-        if (status === "Serve externally") {
-            return "o_lesotho_tab_status external";
+        if (status === "Awaiting Dispensing") {
+            return "o_lesotho_tab_status pending";
         }
-        if (status === "Check quantity") {
-            return "o_lesotho_tab_status warning";
-        }
-        return "o_lesotho_tab_status pending";
+        return "o_lesotho_tab_status served";
     }
 
     toggleReview() {
@@ -112,12 +111,14 @@ export class PrescriptionDispense extends Component {
     }
 
     getOrderStatusClass(status) {
-        const orderState = this.state.order.state;
-        const activeStatus = orderState === "sent" ? "sent" : (["sale", "done"].includes(orderState) ? "sale" : "draft");
+        const activeStatus = this.state.order.prescription_status || "awaiting_dispensing";
         return `o_lesotho_status_step ${activeStatus === status ? "active" : ""}`;
     }
 
     focusBarcode(index) {
+        if (this.state.readOnly) {
+            return;
+        }
         setTimeout(() => {
             const inputs = this.root.el.querySelectorAll(".o_lesotho_barcode");
             const input = inputs[index];
@@ -129,6 +130,9 @@ export class PrescriptionDispense extends Component {
     }
 
     async addProduct() {
+        if (this.state.readOnly) {
+            return;
+        }
         const line = await this.orm.call("sale.order", "add_prescription_dispensing_line", [[this.state.orderId]]);
         this.state.lines.push(line);
         this.state.activeLineId = line.id;
@@ -136,6 +140,9 @@ export class PrescriptionDispense extends Component {
     }
 
     async removeLine(line) {
+        if (this.state.readOnly) {
+            return;
+        }
         if (line.is_existing_prescription) {
             return;
         }
@@ -160,6 +167,9 @@ export class PrescriptionDispense extends Component {
     }
 
     onProductChanged(line, value) {
+        if (this.state.readOnly) {
+            return;
+        }
         const productId = value ? parseInt(value, 10) : false;
         if (productId) {
             const product = this.state.productOptions.find((item) => item.id === productId);
@@ -173,6 +183,9 @@ export class PrescriptionDispense extends Component {
     }
 
     onBatchChanged(line, value) {
+        if (this.state.readOnly) {
+            return;
+        }
         const batchOptions = line.batch_options || [];
         const selectedBatch = batchOptions.find((item) => item.batch_number === value);
         this.updateLocal(line, "batch_number", value);
@@ -181,8 +194,18 @@ export class PrescriptionDispense extends Component {
     }
 
     onFieldChanged(line, field, value) {
+        if (this.state.readOnly) {
+            return;
+        }
+        if (field === "served_internally" && !value) {
+            this.updateLocal(line, "quantity_dispensed", 0);
+        }
         if (field === 'quantity_dispensed') {
-            this.saveLine(line, field, parseFloat(value || 0));
+            const numericValue = parseFloat(value || 0);
+            if (numericValue > 0 && !line.served_internally) {
+                this.updateLocal(line, "served_internally", true);
+            }
+            this.saveLine(line, field, numericValue);
         } else if (field === 'dose' || field === 'duration') {
             this.saveLine(line, field, parseInt(value || 0, 10));
         } else {
@@ -191,6 +214,9 @@ export class PrescriptionDispense extends Component {
     }
 
     saveLine(line, field, value, options = {}) {
+        if (this.state.readOnly) {
+            return;
+        }
         if (!options.skipLocalUpdate) {
             this.updateLocal(line, field, value);
         }
@@ -211,6 +237,9 @@ export class PrescriptionDispense extends Component {
     }
 
     setSubstitute(line, checked) {
+        if (this.state.readOnly) {
+            return;
+        }
         if (checked) {
             // When enabling substitute, mark it as pack substituted
             this.saveLine(line, "is_pack_substituted", true);
@@ -238,6 +267,9 @@ export class PrescriptionDispense extends Component {
     }
 
     async scanBarcode(line, index, ev) {
+        if (this.state.readOnly) {
+            return;
+        }
         if (ev.key !== "Enter") {
             return;
         }
@@ -260,6 +292,9 @@ export class PrescriptionDispense extends Component {
     }
 
     setExplanation(ev) {
+        if (this.state.readOnly) {
+            return;
+        }
         this.state.explanationConfirmed = ev.target.checked;
         const savePromise = this.orm.write("sale.order", [this.state.orderId], {
             medication_explanation_confirmed: this.state.explanationConfirmed,
@@ -270,29 +305,59 @@ export class PrescriptionDispense extends Component {
     }
 
     async cancel() {
-        await this.action.doAction({
-            type: "ir.actions.act_window",
-            res_model: "sale.order",
-            res_id: this.state.orderId,
-            views: [[false, "form"]],
-            target: "current",
-        });
+        await this.goToPrescriptionList();
+    }
+
+    async save() {
+        if (this.state.readOnly) {
+            await this.goToPrescriptionList();
+            return;
+        }
+        const listAction = await this.orm.call(
+            "sale.order",
+            "action_hold_prescription_from_ui",
+            [[this.state.orderId]]
+        );
+        await this.action.doAction(listAction);
     }
 
     async serve() {
+        if (this.state.readOnly) {
+            await this.goToPrescriptionList();
+            return;
+        }
         if (!this.state.explanationConfirmed) {
             return;
         }
         if (!window.confirm("Are you sure you want to dispense these products and update the prescription status?")) {
             return;
         }
+        const summary = await this.orm.call(
+            "sale.order",
+            "evaluate_prescription_serving",
+            [[this.state.orderId]]
+        );
+        if (summary.has_internal_lines && Number(summary.total_dispensed || 0) <= 0) {
+            this.notification.add(
+                "Enter a quantity to dispense for at least one internal prescription item before serving.",
+                { type: "warning" }
+            );
+            return;
+        }
+        let createBackorder = false;
+        if (summary.needs_backorder) {
+            createBackorder = window.confirm(
+                "Some quantities are still outstanding. Create a back order for the balance?"
+            );
+        }
         await this.waitForPendingSaves();
         const reportAction = await this.orm.call(
             "sale.order",
             "action_serve_prescription_from_ui",
-            [[this.state.orderId]]
+            [[this.state.orderId], createBackorder]
         );
         await this.action.doAction(reportAction);
+        await this.goToPrescriptionList();
     }
 }
 
