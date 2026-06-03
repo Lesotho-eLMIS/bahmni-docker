@@ -8,6 +8,8 @@
             <xpath expr="//field[@name='ref']" position="after">
                 <field name="elmis_lot_id"/>
                 <field name="elmis_lot_number"/>
+                <field name="prepack_source_lot_id"/>
+                <field name="prepack_source_product_id"/>
             </xpath>
         </field>
     </record>
@@ -20,6 +22,8 @@
             <xpath expr="//field[@name='name']" position="after">
                 <field name="elmis_lot_number" optional="show"/>
                 <field name="elmis_lot_id" optional="hide"/>
+                <field name="prepack_source_lot_id" optional="hide"/>
+                <field name="prepack_source_product_id" optional="hide"/>
             </xpath>
         </field>
     </record>

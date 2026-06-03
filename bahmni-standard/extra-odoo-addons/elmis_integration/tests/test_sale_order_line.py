@@ -1,4 +1,4 @@
-from odoo.exceptions import ValidationError
+from odoo.exceptions import UserError, ValidationError
 from odoo.tests import TransactionCase, tagged
 
 
@@ -49,6 +49,81 @@ class TestSaleOrderLineElmisSelection(TransactionCase):
             "LOT-AMX-001",
             cls.other_elmis_product,
             "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+        )
+        cls.prepack_template = cls.env["product.template"].create(
+            {
+                "name": "Paracetamol 500mg Pack of 30",
+                "detailed_type": "product",
+                "uom_id": cls.unit_uom.id,
+                "uom_po_id": cls.unit_uom.id,
+                "list_price": 30.0,
+                "is_prepack": True,
+                "bulk_product_id": cls.elmis_product.id,
+                "is_dispensing_pack": True,
+                "dispensing_pack_enabled": True,
+                "dispensing_base_product_id": cls.prescribed_product.id,
+                "pack_unit_qty": 30.0,
+            }
+        )
+        cls.prepack_product = cls.prepack_template.product_variant_id
+        cls.prepack_product.write(
+            {"prepack_parent_elmis_product_id": cls.elmis_product.id}
+        )
+        cls.prepack_lot = cls.env["stock.lot"].create(
+            {
+                "name": "PACK-LOT-PAR-001",
+                "product_id": cls.prepack_product.id,
+                "company_id": cls.env.company.id,
+                "prepack_source_lot_id": cls.elmis_lot.id,
+            }
+        )
+        cls.legacy_prepack_template = cls.env["product.template"].create(
+            {
+                "name": "Legacy Paracetamol 500mg Pack of 15",
+                "detailed_type": "product",
+                "uom_id": cls.unit_uom.id,
+                "uom_po_id": cls.unit_uom.id,
+                "list_price": 15.0,
+                "is_prepack": True,
+                "bulk_product_id": cls.elmis_product.id,
+                "is_dispensing_pack": True,
+                "dispensing_pack_enabled": True,
+                "dispensing_base_product_id": cls.prescribed_product.id,
+                "pack_unit_qty": 15.0,
+            }
+        )
+        cls.legacy_prepack_product = cls.legacy_prepack_template.product_variant_id
+        cls.legacy_prepack_lot = cls.env["stock.lot"].create(
+            {
+                "name": "PACK-LOT-PAR-LEGACY",
+                "product_id": cls.legacy_prepack_product.id,
+                "company_id": cls.env.company.id,
+                "prepack_source_lot_id": cls.elmis_lot.id,
+            }
+        )
+        cls.unmapped_prepack_template = cls.env["product.template"].create(
+            {
+                "name": "Unmapped Local Pack of 10",
+                "detailed_type": "product",
+                "uom_id": cls.unit_uom.id,
+                "uom_po_id": cls.unit_uom.id,
+                "list_price": 10.0,
+                "is_prepack": True,
+                "bulk_product_id": cls.prescribed_product.id,
+                "is_dispensing_pack": True,
+                "dispensing_pack_enabled": True,
+                "dispensing_base_product_id": cls.prescribed_product.id,
+                "pack_unit_qty": 10.0,
+            }
+        )
+        cls.unmapped_prepack_product = cls.unmapped_prepack_template.product_variant_id
+        cls.unmapped_prepack_lot = cls.env["stock.lot"].create(
+            {
+                "name": "PACK-LOT-LOCAL-001",
+                "product_id": cls.unmapped_prepack_product.id,
+                "company_id": cls.env.company.id,
+                "prepack_source_lot_id": cls.elmis_lot.id,
+            }
         )
 
     @classmethod
@@ -222,3 +297,78 @@ class TestSaleOrderLineElmisSelection(TransactionCase):
         )
         self.assertEqual(len(outbox), 1)
         self.assertEqual(outbox.quantity, 5)
+
+    def test_marking_prepack_line_dispensed_resolves_parent_elmis_product_and_lot(self):
+        line = self._create_line(
+            product_id=self.prepack_product.id,
+            product_uom=self.prepack_product.uom_id.id,
+            product_uom_qty=2,
+            dispensing_batch_number=self.prepack_lot.name,
+        )
+
+        line.write({"dispensed": True})
+
+        outbox = self.env["elmis.outbox"].search(
+            [("source_sale_order_line_id", "=", line.id)]
+        )
+        self.assertEqual(len(outbox), 1)
+        self.assertEqual(outbox.elmis_orderable_id, self.elmis_product)
+        self.assertEqual(outbox.lot_id, self.elmis_lot)
+        self.assertEqual(outbox.quantity, 60)
+        self.assertEqual(outbox.uom_id, self.elmis_product.uom_id)
+        self.assertEqual(outbox.consumption_mode, "prepack")
+        self.assertEqual(outbox.dispensed_product_id, self.prepack_product)
+        self.assertEqual(outbox.dispensed_lot_id, self.prepack_lot)
+        self.assertEqual(outbox.dispensed_quantity, 2)
+        self.assertEqual(outbox.dispensed_uom_id, self.prepack_product.uom_id)
+        self.assertEqual(outbox.source_bulk_product_id, self.elmis_product)
+        self.assertEqual(outbox.source_bulk_lot_id, self.elmis_lot)
+        self.assertEqual(outbox.prepack_conversion_factor, 30)
+
+    def test_marking_prepack_line_without_source_lot_raises(self):
+        untraced_lot = self.env["stock.lot"].create(
+            {
+                "name": "PACK-LOT-PAR-002",
+                "product_id": self.prepack_product.id,
+                "company_id": self.env.company.id,
+            }
+        )
+        line = self._create_line(
+            product_id=self.prepack_product.id,
+            product_uom=self.prepack_product.uom_id.id,
+            product_uom_qty=1,
+            dispensing_batch_number=untraced_lot.name,
+        )
+
+        with self.assertRaises(UserError):
+            line.write({"dispensed": True})
+
+    def test_marking_legacy_prepack_line_uses_bulk_product_fallback(self):
+        line = self._create_line(
+            product_id=self.legacy_prepack_product.id,
+            product_uom=self.legacy_prepack_product.uom_id.id,
+            product_uom_qty=2,
+            dispensing_batch_number=self.legacy_prepack_lot.name,
+        )
+
+        line.write({"dispensed": True})
+
+        outbox = self.env["elmis.outbox"].search(
+            [("source_sale_order_line_id", "=", line.id)]
+        )
+        self.assertEqual(len(outbox), 1)
+        self.assertEqual(outbox.elmis_orderable_id, self.elmis_product)
+        self.assertEqual(outbox.quantity, 30)
+        self.assertEqual(outbox.source_bulk_product_id, self.elmis_product)
+        self.assertEqual(outbox.source_bulk_lot_id, self.elmis_lot)
+
+    def test_marking_prepack_line_without_parent_elmis_mapping_raises(self):
+        line = self._create_line(
+            product_id=self.unmapped_prepack_product.id,
+            product_uom=self.unmapped_prepack_product.uom_id.id,
+            product_uom_qty=1,
+            dispensing_batch_number=self.unmapped_prepack_lot.name,
+        )
+
+        with self.assertRaises(UserError):
+            line.write({"dispensed": True})

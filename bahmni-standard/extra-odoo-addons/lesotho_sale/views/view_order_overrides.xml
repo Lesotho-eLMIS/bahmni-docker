@@ -459,7 +459,7 @@
                   string="Dispense Prescription"
                   class="oe_highlight lesotho_serve_button"
                   icon="fa-medkit"
-                  attrs="{'invisible': [('state', 'in', ['cancel'])]}"
+                  attrs="{'invisible': ['|', ('id', '=', False), ('state', 'in', ['cancel'])]}"
                 />
                 <button
                   name="action_view_dispensing_lines"
