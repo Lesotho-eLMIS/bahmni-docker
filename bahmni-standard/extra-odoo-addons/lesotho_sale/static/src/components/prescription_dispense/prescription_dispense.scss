@@ -106,6 +106,7 @@
 }
 
 .o_lesotho_cp_serve,
+.o_lesotho_cp_save,
 .o_lesotho_cp_cancel {
     display: inline-flex;
     align-items: center;
@@ -129,6 +130,15 @@
     background: #4b40c9;
 }
 
+.o_lesotho_cp_save {
+    background: #eef3f6;
+    color: #35506b;
+}
+
+.o_lesotho_cp_save:hover:not(:disabled) {
+    background: #dde7ee;
+}
+
 .o_lesotho_cp_serve:disabled {
     background: #b8b2f0;
     color: #ffffff;
@@ -142,6 +152,22 @@
 
 .o_lesotho_cp_cancel:hover {
     background: #f5f4fb;
+}
+
+.o_lesotho_readonly_notice {
+    padding: 10px 14px 12px;
+    border-top: 1px solid #ececec;
+    background: #f7f8fb;
+    color: #5b6270;
+    font-size: 13px;
+    line-height: 1.45;
+}
+
+.o_lesotho_readonly_footer {
+    padding: 10px 0;
+    color: #5b6270;
+    font-size: 13px;
+    line-height: 1.45;
 }
 
 .o_lesotho_statusbar {

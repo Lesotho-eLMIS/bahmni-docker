@@ -24,6 +24,33 @@ class TestElmisOutbox(TransactionCase):
                 "elmis_lot_number": "LOT-ART-001",
             }
         )
+        cls.prepack_template = cls.env["product.template"].create(
+            {
+                "name": "Tenofovir 300mg Pack of 30",
+                "detailed_type": "product",
+                "uom_id": cls.unit_uom.id,
+                "uom_po_id": cls.unit_uom.id,
+                "list_price": 30.0,
+                "is_prepack": True,
+                "bulk_product_id": cls.product.id,
+                "is_dispensing_pack": True,
+                "dispensing_base_product_id": cls.product.id,
+                "dispensing_pack_enabled": True,
+                "pack_unit_qty": 30.0,
+            }
+        )
+        cls.prepack_product = cls.prepack_template.product_variant_id
+        cls.prepack_product.write(
+            {"prepack_parent_elmis_product_id": cls.product.id}
+        )
+        cls.prepack_lot = cls.env["stock.lot"].create(
+            {
+                "name": "PACK-LOT-ART-001",
+                "product_id": cls.prepack_product.id,
+                "company_id": cls.env.company.id,
+                "prepack_source_lot_id": cls.lot.id,
+            }
+        )
 
     @classmethod
     def _create_elmis_product(cls):
@@ -122,6 +149,45 @@ class TestElmisOutbox(TransactionCase):
 
         with self.assertRaises(UserError):
             event.to_public_stock_event_payload()
+
+    def test_aggregate_consumption_groups_prepack_events_by_parent_product_and_lot(self):
+        first = self._create_outbox(
+            message_id="prepack-1",
+            prescription_ref="RX-PREPACK-1",
+            quantity=60,
+            consumption_mode="prepack",
+            dispensed_product_id=self.prepack_product.id,
+            dispensed_lot_id=self.prepack_lot.id,
+            dispensed_quantity=2,
+            dispensed_uom_id=self.prepack_product.uom_id.id,
+            source_bulk_product_id=self.product.id,
+            source_bulk_lot_id=self.lot.id,
+            prepack_conversion_factor=30,
+        )
+        second = self._create_outbox(
+            message_id="prepack-2",
+            prescription_ref="RX-PREPACK-2",
+            quantity=90,
+            consumption_mode="prepack",
+            dispensed_product_id=self.prepack_product.id,
+            dispensed_lot_id=self.prepack_lot.id,
+            dispensed_quantity=3,
+            dispensed_uom_id=self.prepack_product.uom_id.id,
+            source_bulk_product_id=self.product.id,
+            source_bulk_lot_id=self.lot.id,
+            prepack_conversion_factor=30,
+        )
+
+        aggregate = (first | second).aggregate_consumption()
+
+        self.assertEqual(len(aggregate), 1)
+        self.assertEqual(aggregate[0]["facility_code"], "A2681-cp")
+        self.assertEqual(aggregate[0]["elmis_orderable_id"], self.product.id)
+        self.assertEqual(aggregate[0]["lot_id"], self.lot.id)
+        self.assertEqual(aggregate[0]["quantity"], 150)
+        self.assertEqual(aggregate[0]["dispensed_quantity"], 5)
+        self.assertEqual(aggregate[0]["prepack_event_count"], 2)
+        self.assertEqual(set(aggregate[0]["event_ids"]), {first.id, second.id})
 
     def test_submit_to_elmis_posts_public_stock_event_and_marks_delivered(self):
         event = self._create_outbox()

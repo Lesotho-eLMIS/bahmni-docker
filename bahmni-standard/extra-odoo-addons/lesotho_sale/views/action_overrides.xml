@@ -87,7 +87,7 @@
                     <filter
             name="filter_undispensed"
             string="To Dispense"
-            domain="[('dispensed', '=', False)]"
+            domain="[('served_internally', '=', True), ('dispensed', '=', False)]"
           />
                     <filter
             name="filter_dispensed"

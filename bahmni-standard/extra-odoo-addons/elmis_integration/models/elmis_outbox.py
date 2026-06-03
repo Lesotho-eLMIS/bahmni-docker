@@ -77,6 +77,69 @@ class ElmisOutbox(models.Model):
         readonly=True,
         help="Inventory adjustment move that produced this outbox event.",
     )
+    consumption_mode = fields.Selection(
+        [
+            ("direct", "Direct"),
+            ("prepack", "Prepack Conversion"),
+        ],
+        required=True,
+        default="direct",
+        readonly=True,
+        copy=False,
+        help="Indicates whether this outbox row came directly from bulk stock or from a prepack conversion.",
+    )
+    dispensed_product_id = fields.Many2one(
+        "product.product",
+        string="Dispensed Product",
+        index=True,
+        copy=False,
+        readonly=True,
+        help="Actual Odoo product dispensed to the patient.",
+    )
+    dispensed_lot_id = fields.Many2one(
+        "stock.lot",
+        string="Dispensed Lot",
+        index=True,
+        copy=False,
+        readonly=True,
+        help="Actual Odoo lot selected for the dispensed product.",
+    )
+    dispensed_quantity = fields.Float(
+        string="Dispensed Quantity",
+        digits=(16, 4),
+        copy=False,
+        readonly=True,
+        help="Quantity dispensed in the original Odoo product/UoM before any prepack conversion.",
+    )
+    dispensed_uom_id = fields.Many2one(
+        "uom.uom",
+        string="Dispensed UoM",
+        copy=False,
+        readonly=True,
+    )
+    source_bulk_product_id = fields.Many2one(
+        "product.product",
+        string="Source Bulk Product",
+        index=True,
+        copy=False,
+        readonly=True,
+        help="Bulk Odoo product consumed to create the dispensed prepack, when applicable.",
+    )
+    source_bulk_lot_id = fields.Many2one(
+        "stock.lot",
+        string="Source Bulk Lot",
+        index=True,
+        copy=False,
+        readonly=True,
+        help="Source bulk lot consumed to create the dispensed prepack, when applicable.",
+    )
+    prepack_conversion_factor = fields.Float(
+        string="Prepack Conversion Factor",
+        digits=(16, 4),
+        copy=False,
+        readonly=True,
+        help="Number of bulk units represented by one dispensed prepack unit.",
+    )
     quantity = fields.Float(required=True, digits=(16, 4))
     uom_id = fields.Many2one("uom.uom", string="Unit of Measure", required=True)
     transaction_date = fields.Datetime(
@@ -140,6 +203,58 @@ class ElmisOutbox(models.Model):
 
     def unlink(self):
         raise UserError(_("eLMIS outbox records are permanent and cannot be deleted."))
+
+    def aggregate_consumption(self, include_prescription_ref=False):
+        aggregates = {}
+        ordered_events = self.sorted(
+            key=lambda event: (
+                event.facility_code or "",
+                event.program_id.id or 0,
+                event.elmis_orderable_id.id or 0,
+                event.lot_id.id or 0,
+                event._get_public_occurred_date() or "",
+                event.prescription_ref or "",
+                event.id,
+            )
+        )
+
+        for event in ordered_events:
+            key = (
+                event.facility_code,
+                event.program_id.id,
+                event.elmis_orderable_id.id,
+                event.lot_id.id or False,
+                event._get_public_occurred_date(),
+                event.prescription_ref if include_prescription_ref else False,
+                event.adjustment_reason or False,
+            )
+            aggregate = aggregates.setdefault(
+                key,
+                {
+                    "facility_code": event.facility_code,
+                    "program_id": event.program_id.id,
+                    "elmis_orderable_id": event.elmis_orderable_id.id,
+                    "lot_id": event.lot_id.id or False,
+                    "occurred_date": event._get_public_occurred_date(),
+                    "prescription_ref": event.prescription_ref
+                    if include_prescription_ref
+                    else False,
+                    "adjustment_reason": event.adjustment_reason or False,
+                    "quantity": 0.0,
+                    "dispensed_quantity": 0.0,
+                    "event_ids": [],
+                    "message_ids": [],
+                    "prepack_event_count": 0,
+                },
+            )
+            aggregate["quantity"] += event.quantity or 0.0
+            aggregate["dispensed_quantity"] += event.dispensed_quantity or event.quantity or 0.0
+            aggregate["event_ids"].append(event.id)
+            aggregate["message_ids"].append(event.message_id)
+            if event.consumption_mode == "prepack":
+                aggregate["prepack_event_count"] += 1
+
+        return list(aggregates.values())
 
     @api.model
     def drain_pending_to_elmis(self, limit=50):

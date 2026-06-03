@@ -236,6 +236,20 @@ class ExtendedSaleOrderLine(models.Model):
         help="Short summary of prescription details",
     )
 
+    prescription_status = fields.Selection(
+        selection=[
+            ("awaiting_dispensing", "Awaiting Dispensing"),
+            ("partially_fulfilled", "Partially Served"),
+            ("fully_served", "Fully Served"),
+            ("served_externally", "served externally"),
+        ],
+        string="Prescription Status",
+        compute="_compute_prescription_status",
+        store=True,
+        readonly=True,
+        copy=False,
+    )
+
     @api.depends("external_order_uuid", "order_number")
     def _compute_is_existing_prescription(self):
         for line in self:
@@ -245,20 +259,61 @@ class ExtendedSaleOrderLine(models.Model):
 
     @api.model_create_multi
     def create(self, vals_list):
-        lines = super().create(vals_list)
+        normalized_vals_list = [
+            self._normalize_prescription_serving_vals(vals) for vals in vals_list
+        ]
+        lines = super().create(normalized_vals_list)
         if not self.env.context.get("skip_prescription_init"):
             lines._initialize_prescribed_metadata(force_missing_only=True)
         return lines
 
     def write(self, vals):
-        result = super().write(vals)
+        normalized_vals = vals
+        if "served_internally" in vals or "product_uom_qty" in vals:
+            normalized_vals = self._normalize_prescription_serving_vals(
+                vals, current_line=self[:1] if len(self) == 1 else None
+            )
+        result = super().write(normalized_vals)
         tracked_fields = {"product_id", "product_uom_qty", "product_uom"}
         if (
             not self.env.context.get("skip_prescription_init")
-            and tracked_fields.intersection(vals)
+            and tracked_fields.intersection(normalized_vals)
         ):
             self._initialize_prescribed_metadata(force_missing_only=True)
         return result
+
+    def _normalize_prescription_serving_vals(self, vals, current_line=None):
+        vals = dict(vals)
+        current_line = current_line or self[:1]
+        current_line = current_line[:1] if current_line else self.env["sale.order.line"]
+
+        incoming_served = vals.get("served_internally", None)
+        current_qty = current_line.product_uom_qty if current_line else 0.0
+        incoming_qty = vals.get("product_uom_qty", current_qty)
+        current_prescribed_qty = (
+            current_line.prescribed_qty_base_units if current_line else 0.0
+        )
+
+        if incoming_served is False:
+            if "prescribed_qty_base_units" not in vals and float_is_zero(
+                current_prescribed_qty, precision_digits=6
+            ):
+                vals["prescribed_qty_base_units"] = incoming_qty or current_qty or 0.0
+            vals["product_uom_qty"] = 0.0
+            vals["dispensed"] = True
+        elif incoming_served is True and current_line and not current_line.served_internally:
+            vals.setdefault("dispensed", False)
+        elif (
+            incoming_qty is not None
+            and float_compare(incoming_qty, 0.0, precision_digits=6) > 0
+            and incoming_served is not False
+            and current_line
+            and not current_line.served_internally
+        ):
+            vals.setdefault("served_internally", True)
+            vals.setdefault("dispensed", False)
+
+        return vals
 
     def _initialize_prescribed_metadata(self, force_missing_only=True):
         for line in self.filtered(lambda l: not l.display_type):
@@ -378,6 +433,77 @@ class ExtendedSaleOrderLine(models.Model):
                 parts.append(line.route)
 
             line.prescription_summary = " | ".join(parts) if parts else "-"
+
+    def _get_dosage_instruction_text(self):
+        self.ensure_one()
+        parts = []
+
+        if self.dose and self.dose_units:
+            parts.append(f"{self.dose} {self.dose_units}")
+        elif self.dose:
+            parts.append(str(self.dose))
+
+        if self.frequency:
+            parts.append(self.frequency)
+
+        if self.route:
+            parts.append(f"via {self.route}")
+
+        if self.duration and self.duration_units:
+            parts.append(f"for {self.duration} {self.duration_units}")
+
+        if self.as_needed:
+            parts.append("(as needed)")
+
+        if self.administration_instructions:
+            parts.append(self.administration_instructions)
+
+        return " ".join(parts) if parts else (self.full_prescription_text or "")
+
+    @api.depends(
+        "display_type",
+        "served_internally",
+        "product_uom_qty",
+        "prescribed_qty_base_units",
+    )
+    def _compute_prescription_status(self):
+        for line in self:
+            line.prescription_status = line._get_prescription_status()
+
+    def _get_prescription_quantities(self):
+        self.ensure_one()
+        prescribed_qty = self.prescribed_qty_base_units or self.product_uom_qty or 0.0
+        served_qty = self.product_uom_qty or 0.0
+        return prescribed_qty, served_qty
+
+    def _get_prescription_status(self):
+        self.ensure_one()
+        if self.display_type:
+            return False
+        if not self.served_internally:
+            return "served_externally"
+
+        prescribed_qty, served_qty = self._get_prescription_quantities()
+        qty_rounding = self.product_uom.rounding or 0.0001
+        if float_compare(served_qty, 0.0, precision_rounding=qty_rounding) <= 0:
+            return "awaiting_dispensing"
+        if float_compare(served_qty, prescribed_qty, precision_rounding=qty_rounding) < 0:
+            return "partially_fulfilled"
+        return "fully_served"
+
+    def _is_effectively_fully_served(self):
+        self.ensure_one()
+        if self.display_type:
+            return False
+        return self._get_prescription_status() in ("fully_served", "served_externally")
+
+    def _has_positive_internal_service(self):
+        self.ensure_one()
+        if self.display_type or not self.served_internally:
+            return False
+        _, served_qty = self._get_prescription_quantities()
+        qty_rounding = self.product_uom.rounding or 0.0001
+        return float_compare(served_qty, 0.0, precision_rounding=qty_rounding) > 0
     
     @api.depends('product_id', 'product_uom_qty')
     def _compute_out_of_stock(self):
@@ -415,8 +541,13 @@ class ExtendedSaleOrderLine(models.Model):
             line.product_uom_qty = qty
             line.served_internally = True
 
-            lot = line._get_fefo_available_lot(product, qty)
-            line.dispensing_batch_number = lot.name if lot else False
+            lot = line._get_default_dispensing_lot(product, qty)
+            batch_vals = line._prepare_dispensing_batch_selection_vals(
+                lot.name if lot else False,
+                product=product,
+            )
+            for field_name, field_value in batch_vals.items():
+                line[field_name] = field_value
 
     def action_apply_barcode_scan(self, barcode):
         self.ensure_one()
@@ -440,17 +571,21 @@ class ExtendedSaleOrderLine(models.Model):
             if product.is_dispensing_pack and product.pack_unit_qty
             else 1.0
         )
-        lot = self._get_fefo_available_lot(product, qty)
-        self.with_context(skip_prescription_init=True).write(
-            {
-                "barcode_scan": barcode,
-                "product_id": product.id,
-                "product_uom": product.uom_id.id,
-                "product_uom_qty": qty,
-                "served_internally": True,
-                "dispensing_batch_number": lot.name if lot else False,
-            }
+        lot = self._get_default_dispensing_lot(product, qty)
+        write_vals = {
+            "barcode_scan": barcode,
+            "product_id": product.id,
+            "product_uom": product.uom_id.id,
+            "product_uom_qty": qty,
+            "served_internally": True,
+        }
+        write_vals.update(
+            self._prepare_dispensing_batch_selection_vals(
+                lot.name if lot else False,
+                product=product,
+            )
         )
+        self.with_context(skip_prescription_init=True).write(write_vals)
         return self.order_id._serialize_dispensing_line(self)
 
     def _get_prepack_line_from_barcode(self, barcode):
@@ -488,7 +623,62 @@ class ExtendedSaleOrderLine(models.Model):
         self.dispensing_batch_number = values["dispensing_batch_number"]
 
     def _get_fefo_available_lot(self, product, required_qty=1.0):
+    def _get_dispensing_batch_clear_vals(self):
         self.ensure_one()
+        vals = {"dispensing_batch_number": False}
+        for field_name in (
+            "lot_id",
+            "existing_lot_id",
+            "batch_id",
+            "prodlot_id",
+            "expire_date",
+            "expiry_date",
+            "expiration_date",
+        ):
+            if field_name in self._fields:
+                vals[field_name] = False
+        for field_name in ("elmis_product_id", "elmis_lot_id", "elmis_program_id"):
+            if field_name in self._fields:
+                vals[field_name] = False
+        return vals
+
+    def _prepare_dispensing_product_change_vals(self, product):
+        self.ensure_one()
+        vals = {
+            "product_id": product.id,
+            "product_uom": product.uom_id.id,
+            "name": product.get_product_multiline_description_sale() or product.display_name,
+        }
+        vals.update(self._get_dispensing_batch_clear_vals())
+        vals.update(self._prepare_elmis_dispensing_product_vals(product))
+        return vals
+
+    def _prepare_elmis_dispensing_product_vals(self, product):
+        self.ensure_one()
+        if "elmis_product_id" not in self._fields:
+            return {}
+        if not product or not product.is_elmis_product:
+            return {
+                "elmis_product_id": False,
+                "elmis_lot_id": False,
+                "elmis_program_id": False,
+            }
+
+        vals = {
+            "elmis_product_id": product.id,
+            "elmis_lot_id": False,
+            "elmis_program_id": False,
+        }
+        if len(product.elmis_program_ids) == 1:
+            vals["elmis_program_id"] = product.elmis_program_ids.id
+        return vals
+
+    def _get_available_lot_entries(self, product=None):
+        self.ensure_one()
+        product = product or self.product_id
+        if not product:
+            return []
+
         quant_domain = [
             ("product_id", "=", product.id),
             ("location_id.usage", "=", "internal"),
@@ -498,26 +688,150 @@ class ExtendedSaleOrderLine(models.Model):
         if warehouse and warehouse.lot_stock_id:
             quant_domain.append(("location_id", "child_of", warehouse.lot_stock_id.id))
 
-        candidates = []
+        lot_entries = {}
+        rounding = product.uom_id.rounding or 0.0001
         for quant in self.env["stock.quant"].search(quant_domain):
             available_qty = quant.quantity - quant.reserved_quantity
-            if float_compare(
-                available_qty,
-                required_qty,
-                precision_rounding=product.uom_id.rounding or 0.0001,
-            ) < 0:
+            if float_compare(available_qty, 0.0, precision_rounding=rounding) <= 0:
                 continue
-            candidates.append(
-                (
-                    self._get_lot_expiry_key(quant.lot_id),
-                    quant.lot_id.name or "",
-                    quant.lot_id,
-                )
+            lot = quant.lot_id
+            entry = lot_entries.setdefault(
+                lot.id,
+                {
+                    "lot": lot,
+                    "available_qty": 0.0,
+                },
             )
-        if not candidates:
+            entry["available_qty"] += available_qty
+
+        if not lot_entries:
+            for lot in self.env["stock.lot"].search([("product_id", "=", product.id)]):
+                lot_entries[lot.id] = {
+                    "lot": lot,
+                    "available_qty": 0.0,
+                }
+
+        return sorted(
+            lot_entries.values(),
+            key=lambda item: (
+                item["available_qty"] <= 0,
+                self._get_lot_expiry_key(item["lot"]),
+                item["lot"].name or "",
+            ),
+        )
+
+    def _find_dispensing_lot(self, product, batch_number):
+        self.ensure_one()
+        batch_number = (batch_number or "").strip()
+        if not product or not batch_number:
             return self.env["stock.lot"]
-        candidates.sort(key=lambda item: (item[0], item[1]))
-        return candidates[0][2]
+        return self.env["stock.lot"].search(
+            [
+                ("name", "=", batch_number),
+                ("product_id", "=", product.id),
+            ],
+            limit=1,
+        )
+
+    def _format_dispensing_lot_expiry(self, lot):
+        self.ensure_one()
+        for field_name in ("expiration_date", "use_date", "removal_date", "alert_date"):
+            if field_name in lot._fields and getattr(lot, field_name):
+                field = lot._fields[field_name]
+                value = getattr(lot, field_name)
+                if field.type == "date":
+                    return fields.Date.to_string(value)
+                return fields.Datetime.to_string(value)
+        return ""
+
+    def _get_dispensing_batch_options(self, product=None):
+        self.ensure_one()
+        product = product or self.product_id
+        if not product:
+            return []
+
+        options = []
+        seen_lot_ids = set()
+        for entry in self._get_available_lot_entries(product):
+            lot = entry["lot"]
+            options.append(
+                {
+                    "batch_number": lot.name or "",
+                    "expiry_date": self._format_dispensing_lot_expiry(lot),
+                    "available_qty": entry["available_qty"],
+                }
+            )
+            seen_lot_ids.add(lot.id)
+
+        current_lot = self._find_dispensing_lot(product, self.dispensing_batch_number)
+        if current_lot and current_lot.id not in seen_lot_ids:
+            options.append(
+                {
+                    "batch_number": current_lot.name or "",
+                    "expiry_date": self._format_dispensing_lot_expiry(current_lot),
+                    "available_qty": 0.0,
+                }
+            )
+            seen_lot_ids.add(current_lot.id)
+        current_batch_number = (self.dispensing_batch_number or "").strip()
+        if current_batch_number and current_batch_number not in [option["batch_number"] for option in options]:
+            options.append(
+                {
+                    "batch_number": current_batch_number,
+                    "expiry_date": "",
+                    "available_qty": 0.0,
+                }
+            )
+        return options
+
+    def _prepare_dispensing_batch_selection_vals(self, batch_number=False, product=None):
+        self.ensure_one()
+        product = product or self.product_id
+        batch_number = (batch_number or "").strip()
+        if not product or not batch_number:
+            return self._get_dispensing_batch_clear_vals()
+
+        lot = self._find_dispensing_lot(product, batch_number)
+        if not lot:
+            vals = self._get_dispensing_batch_clear_vals()
+            vals["dispensing_batch_number"] = batch_number
+            return vals
+
+        vals = self._prepare_batch_sync_vals(lot)
+        vals["dispensing_batch_number"] = lot.name
+        return vals
+
+    def _sync_dispensing_batch_selection(self, batch_number=False, product=None):
+        self.ensure_one()
+        vals = self._prepare_dispensing_batch_selection_vals(batch_number, product=product)
+        self.with_context(skip_prescription_init=True).write(vals)
+        return vals
+
+    def _get_fefo_available_lot(self, product, required_qty=1.0):
+        self.ensure_one()
+        rounding = product.uom_id.rounding or 0.0001
+        for entry in self._get_available_lot_entries(product):
+            if float_compare(
+                entry["available_qty"],
+                required_qty,
+                precision_rounding=rounding,
+            ) >= 0:
+                return entry["lot"]
+        return self.env["stock.lot"]
+
+    def _get_default_dispensing_lot(self, product, required_qty=1.0):
+        self.ensure_one()
+        lot = self._get_fefo_available_lot(product, required_qty=required_qty)
+        if lot:
+            return lot
+        for entry in self._get_available_lot_entries(product):
+            if float_compare(
+                entry["available_qty"],
+                0.0,
+                precision_rounding=product.uom_id.rounding or 0.0001,
+            ) > 0:
+                return entry["lot"]
+        return self.env["stock.lot"]
 
     @api.depends(
         "display_type",
@@ -863,6 +1177,10 @@ class ExtendedSaleOrderLine(models.Model):
                         expiry_value = getattr(lot, source_name)
                         break
                 vals[field_name] = expiry_value
+        if "elmis_product_id" in self._fields:
+            vals.update(self._prepare_elmis_dispensing_product_vals(lot.product_id))
+            if lot.product_id.is_elmis_product:
+                vals["elmis_lot_id"] = lot.id
         return vals
 
     def _sync_lot_from_reserved_stock(self, lot):
