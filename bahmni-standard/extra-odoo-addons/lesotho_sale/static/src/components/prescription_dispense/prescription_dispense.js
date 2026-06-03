@@ -11,6 +11,7 @@ export class PrescriptionDispense extends Component {
         this.notification = useService("notification");
         this.root = useRef("root");
         this.pendingSaves = new Set();
+        this.saveErrors = new Map();
         this.state = useState({
             loading: true,
             orderId: this.props.action.context.active_id,
@@ -164,6 +165,19 @@ export class PrescriptionDispense extends Component {
         while (this.pendingSaves.size) {
             await Promise.all([...this.pendingSaves]);
         }
+        if (this.saveErrors.size) {
+            throw new Error("Some prescription changes could not be saved.");
+        }
+    }
+
+    clearSaveError(key) {
+        this.saveErrors.delete(key);
+    }
+
+    recordSaveError(key, error, fallbackMessage) {
+        const message = error.message || fallbackMessage;
+        this.saveErrors.set(key, message);
+        this.notification.add(message, { type: "danger" });
     }
 
     onProductChanged(line, value) {
@@ -224,6 +238,8 @@ export class PrescriptionDispense extends Component {
             const product = this.state.productOptions.find((item) => item.id === value);
             this.updateLocal(line, "dispensed_product", product ? product.name : "");
         }
+        const saveKey = `${line.id}:${field}`;
+        this.clearSaveError(saveKey);
         const savePromise = this.orm.call(
             "sale.order",
             "update_prescription_dispensing_line",
@@ -231,7 +247,8 @@ export class PrescriptionDispense extends Component {
         ).then((updated) => {
             Object.assign(line, updated);
         }).catch((error) => {
-            this.notification.add(error.message || "Error updating prescription line.", { type: "danger" });
+            this.recordSaveError(saveKey, error, "Error updating prescription line.");
+            return false;
         });
         return this.trackSave(savePromise);
     }
@@ -253,7 +270,9 @@ export class PrescriptionDispense extends Component {
         this.updateLocal(line, "batch_number", "");
         this.updateLocal(line, "expiry_date", "");
         this.updateLocal(line, "batch_options", []);
-        
+
+        const saveKey = `${line.id}:substitution`;
+        this.clearSaveError(saveKey);
         const savePromise = this.orm.call(
             "sale.order",
             "update_prescription_dispensing_line",
@@ -261,7 +280,8 @@ export class PrescriptionDispense extends Component {
         ).then((updated) => {
             Object.assign(line, updated);
         }).catch((error) => {
-            this.notification.add(error.message || "Error updating prescription line.", { type: "danger" });
+            this.recordSaveError(saveKey, error, "Error updating prescription line.");
+            return false;
         });
         return this.trackSave(savePromise);
     }
@@ -296,10 +316,13 @@ export class PrescriptionDispense extends Component {
             return;
         }
         this.state.explanationConfirmed = ev.target.checked;
+        const saveKey = "order:medication_explanation_confirmed";
+        this.clearSaveError(saveKey);
         const savePromise = this.orm.write("sale.order", [this.state.orderId], {
             medication_explanation_confirmed: this.state.explanationConfirmed,
         }).catch((error) => {
-            this.notification.add(error.message || "Error updating explanation status.", { type: "danger" });
+            this.recordSaveError(saveKey, error, "Error updating explanation status.");
+            return false;
         });
         return this.trackSave(savePromise);
     }
@@ -329,6 +352,15 @@ export class PrescriptionDispense extends Component {
         if (!this.state.explanationConfirmed) {
             return;
         }
+        try {
+            await this.waitForPendingSaves();
+        } catch (error) {
+            this.notification.add(
+                "Prescription not served because some changes were not saved. Please correct the highlighted issue and try again.",
+                { type: "warning" }
+            );
+            return;
+        }
         if (!window.confirm("Are you sure you want to dispense these products and update the prescription status?")) {
             return;
         }
@@ -350,7 +382,6 @@ export class PrescriptionDispense extends Component {
                 "Some quantities are still outstanding. Create a back order for the balance?"
             );
         }
-        await this.waitForPendingSaves();
         const reportAction = await this.orm.call(
             "sale.order",
             "action_serve_prescription_from_ui",
