@@ -137,6 +137,48 @@ export class PrepackDashboard extends Component {
     return `${item.name} (${item.batch})`;
   }
 
+  preventNonNumericInput(ev, options = {}) {
+    const allowedKeys = [
+      "Backspace",
+      "Delete",
+      "Tab",
+      "Enter",
+      "Escape",
+      "ArrowLeft",
+      "ArrowRight",
+      "ArrowUp",
+      "ArrowDown",
+      "Home",
+      "End",
+    ];
+    if (
+      allowedKeys.includes(ev.key) ||
+      ((ev.ctrlKey || ev.metaKey) && ["a", "c", "v", "x"].includes(ev.key.toLowerCase()))
+    ) {
+      return;
+    }
+    if (options.allowDecimal && ["Decimal", "."].includes(ev.key) && !ev.target.value.includes(".")) {
+      return;
+    }
+    if (!/^\d$/.test(ev.key)) {
+      ev.preventDefault();
+    }
+  }
+
+  onNumericFieldInput(target, fieldName, ev, options = {}) {
+    const numericValue = options.allowDecimal
+      ? ev.target.value.replace(/[^\d.]/g, "").replace(/(\..*)\./g, "$1")
+      : ev.target.value.replace(/\D/g, "");
+    ev.target.value = numericValue;
+    if (numericValue === "") {
+      target[fieldName] = 0;
+    } else if (options.allowDecimal) {
+      target[fieldName] = numericValue;
+    } else {
+      target[fieldName] = parseInt(numericValue, 10);
+    }
+  }
+
   validateChecklist() {
     if (!this.state.selectedProduct) {
       this.state.canAddToBatch = false;

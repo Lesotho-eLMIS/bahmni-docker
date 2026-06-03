@@ -168,7 +168,7 @@
                                 <div class="card shadow-sm mb-4 border-0 border-start border-4 border-primary">
                                     <div class="card-header bg-white d-flex justify-content-between align-items-center py-3">
                                         <div>
-                                            <h4 class="m-0 text-primary fw-bold fs-5"><t t-esc="item.name"/></h4>
+                                            <h4 class="m-0 text-primary fw-bolder fs-5" style="font-weight: 800 !important;"><t t-esc="item.name"/></h4>
                                             <span class="text-muted fw-semibold">Batch: <t t-esc="item.batch"/> | Available: <strong class="fs-5"><t t-esc="item.soh"/> <t t-esc="item.uom"/></strong></span>
                                         </div>
                                         <button class="btn btn-primary fw-bold fw-semibold" t-on-click="() => this.addTarget(item)">
@@ -190,13 +190,13 @@
                                                     <tr class="align-middle border-bottom border-light">
                                                         <td class="ps-4 py-3">
                                                             <div class="input-group input-group-lg shadow-sm">
-                                                                <input type="number" class="form-control fw-bold fs-5 border-end-0" min="0" t-model="target.size" t-on-change="() => this.autoSave()"/>
+                                                                <input type="text" class="form-control fw-bold fs-5 border-end-0" inputmode="decimal" pattern="[0-9]*[.]?[0-9]*" t-att-value="target.size" t-on-keydown="(ev) => this.preventNonNumericInput(ev, { allowDecimal: true })" t-on-input="(ev) => this.onNumericFieldInput(target, 'size', ev, { allowDecimal: true })" t-on-change="() => this.autoSave()"/>
                                                                 <span class="input-group-text bg-white text-muted border-start-0 fw-bold fs-6"><t t-esc="item.uom"/></span>
                                                             </div>
                                                         </td>
                                                         <td class="py-3">
                                                             <div class="input-group input-group-lg shadow-sm">
-                                                                <input type="number" class="form-control fw-bold fs-5 border-end-0" min="0" t-model="target.qty" t-on-change="() => this.autoSave()"/>
+                                                                <input type="number" class="form-control fw-bold fs-5 border-end-0" min="0" inputmode="numeric" pattern="[0-9]*" t-att-value="target.qty" t-on-keydown="(ev) => this.preventNonNumericInput(ev)" t-on-input="(ev) => this.onNumericFieldInput(target, 'qty', ev)" t-on-change="() => this.autoSave()"/>
                                                                 <span class="input-group-text bg-white text-muted border-start-0 fw-bold fs-6">packs</span>
                                                             </div>
                                                         </td>
@@ -369,7 +369,7 @@
                                                             </t>
                                                             <t t-else="">
                                                                 <div class="input-group input-group-sm shadow-sm d-inline-flex">
-                                                                    <input type="number" class="form-control fw-bold fs-5 border-end-0" min="0" t-model="target.size" t-on-change="() => this.autoSave()" style="width: 80px;"/>
+                                                                    <input type="text" class="form-control fw-bold fs-5 border-end-0" inputmode="decimal" pattern="[0-9]*[.]?[0-9]*" t-att-value="target.size" t-on-keydown="(ev) => this.preventNonNumericInput(ev, { allowDecimal: true })" t-on-input="(ev) => this.onNumericFieldInput(target, 'size', ev, { allowDecimal: true })" t-on-change="() => this.autoSave()" style="width: 80px;"/>
                                                                     <span class="input-group-text bg-white text-muted border-start-0 fw-bold fs-6"><t t-esc="item.uom"/></span>
                                                                 </div>
                                                             </t>
@@ -380,7 +380,7 @@
                                                             </t>
                                                             <t t-else="">
                                                                 <div class="input-group input-group-sm shadow-sm d-inline-flex">
-                                                                    <input type="number" class="form-control fw-bold fs-5 border-end-0" min="0" t-model="target.qty" t-on-change="() => this.autoSave()" style="width: 80px;"/>
+                                                                    <input type="number" class="form-control fw-bold fs-5 border-end-0" min="0" inputmode="numeric" pattern="[0-9]*" t-att-value="target.qty" t-on-keydown="(ev) => this.preventNonNumericInput(ev)" t-on-input="(ev) => this.onNumericFieldInput(target, 'qty', ev)" t-on-change="() => this.autoSave()" style="width: 80px;"/>
                                                                     <span class="input-group-text bg-white text-muted border-start-0 fw-bold fs-6">packs</span>
                                                                 </div>
                                                             </t>
