@@ -301,6 +301,15 @@ export class PrepackDashboard extends Component {
     );
     await this.actionService.doAction(action);
   }
+
+  async printLineLabel(lineId) {
+    const action = await this.orm.call(
+      "bahmni.prepack.batch.line",
+      "action_print_prepack_label",
+      [[lineId]]
+    );
+    await this.actionService.doAction(action);
+  }
 }
 PrepackDashboard.template = "lesotho_prepack_batch.PrepackDashboard";
 

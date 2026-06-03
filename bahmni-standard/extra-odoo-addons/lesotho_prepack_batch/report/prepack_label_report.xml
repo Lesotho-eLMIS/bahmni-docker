@@ -64,8 +64,9 @@
             </style>
             <t t-foreach="docs" t-as="doc">
                 <div class="page prepack-label-page">
+                    <t t-set="line_ids" t-value="doc.env.context.get('prepack_line_ids')"/>
                     <t t-foreach="doc.line_ids" t-as="line">
-                        <t t-foreach="line.get_prepack_label_copies()" t-as="label">
+                        <t t-if="not line_ids or line.id in line_ids" t-foreach="line.get_prepack_label_copies()" t-as="label">
                             <div class="prepack-label">
                                 <h3>Prepack Medicine</h3>
                                 <div class="prepack-label-row">

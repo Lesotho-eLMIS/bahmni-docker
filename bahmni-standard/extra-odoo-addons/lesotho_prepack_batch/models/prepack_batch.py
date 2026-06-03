@@ -20,6 +20,7 @@ class BahmniPrepackBatch(models.Model):
         [
             ("draft", "Draft"),
             ("pending_auth", "Pending Authorization"),
+            ("rejected", "Rejected"),
             ("done", "Done"),
             ("cancel", "Cancelled"),
         ],
@@ -176,7 +177,10 @@ class BahmniPrepackBatch(models.Model):
     def fetch_draft_batch(self):
         """Fetch the current user's draft batch if one exists."""
         batch = self.search(
-            [("state", "=", "draft"), ("responsible_id", "=", self.env.user.id)],
+            [
+                ("state", "in", ["draft", "rejected"]),
+                ("responsible_id", "=", self.env.user.id),
+            ],
             limit=1,
         )
         if batch and batch.draft_data:
@@ -191,7 +195,10 @@ class BahmniPrepackBatch(models.Model):
     def save_prepack_batch(self, payload):
         """Save the current prepack list as a draft batch for the user."""
         batch = self.search(
-            [("state", "=", "draft"), ("responsible_id", "=", self.env.user.id)],
+            [
+                ("state", "in", ["draft", "rejected"]),
+                ("responsible_id", "=", self.env.user.id),
+            ],
             limit=1,
         )
 
@@ -349,11 +356,12 @@ class BahmniPrepackBatch(models.Model):
             for mo in batch.line_ids.mapped("mrp_production_id").filtered(
                 lambda m: m.state not in ("done", "cancel")
             ):
-                try:
-                    mo.action_cancel()
-                except Exception:
-                    # Best effort: ignore cancellation errors and continue
-                    pass
+                mo.sudo().action_cancel()
+
+            # Reconstruct draft_data so the creator can edit the rejected items
+            details = self.fetch_batch_details(batch.id)
+            if details:
+                batch.draft_data = json.dumps(details.get("items", []))
 
             # Post a message for the responsible user with the rejection comment
             body = _("Prepack batch rejected by %s: \n\n%s") % (self.env.user.name, comment or "")
@@ -365,7 +373,7 @@ class BahmniPrepackBatch(models.Model):
 
             # Save the comment to the note field and revert to draft
             batch.note = (batch.note or "") + "\n\nRejection comment: " + (comment or "")
-            batch.state = "draft"
+            batch.state = "rejected"
         return True
 
     @api.model
@@ -388,8 +396,11 @@ class BahmniPrepackBatch(models.Model):
     @api.model
     def fetch_batch_history(self):
         """Fetch all batches for the history UI."""
-        batches = self.search([], order="planned_date desc, id desc", limit=100)
+        # Use sudo() to ensure the history/audit trail is visible across users.
+        # We filter out 'draft' to keep history clean, but explicitly include 'rejected', 'done', and 'cancel'.
+        batches = self.sudo().search([("state", "!=", "draft")], order="planned_date desc, id desc", limit=100)
         result = []
+        selection_map = dict(self.fields_get(["state"])["state"]["selection"])
         for batch in batches:
             result.append(
                 {
@@ -398,7 +409,7 @@ class BahmniPrepackBatch(models.Model):
                     "date": batch.planned_date.strftime("%Y-%m-%d %H:%M"),
                     "responsible": batch.responsible_id.name,
                     "line_count": batch.line_count,
-                    "state": dict(self._fields["state"].selection).get(batch.state),
+                    "state": selection_map.get(batch.state, batch.state),
                     "state_raw": batch.state,
                 }
             )
@@ -501,7 +512,10 @@ class BahmniPrepackBatch(models.Model):
 
     def unlink(self):
         for batch in self:
-            if batch.state != "draft" or batch.line_ids.filtered("mrp_production_id"):
+            if (
+                batch.state not in ("draft", "rejected")
+                or batch.line_ids.filtered("mrp_production_id")
+            ):
                 raise UserError(
                     _(
                         "Only draft batches without generated manufacturing orders can be deleted."
@@ -638,6 +652,7 @@ class BahmniPrepackBatchLine(models.Model):
         [
             ("draft", "Draft"),
             ("pending_auth", "Pending Authorization"),
+            ("rejected", "Rejected"),
             ("done", "Done"),
             ("cancel", "Cancelled"),
         ],
@@ -754,12 +769,14 @@ class BahmniPrepackBatchLine(models.Model):
     def _compute_state(self):
         for line in self:
             mo = line.mrp_production_id
-            if not mo:
+            if line.batch_id.state == "rejected":
+                line.state = "rejected"
+            elif not mo:
                 line.state = line.batch_id.state
             elif mo.state == "done":
                 line.state = "done"
             elif mo.state == "cancel":
-                line.state = "cancel"
+                line.state = "rejected"
             else:
                 line.state = line.batch_id.state
 
@@ -876,13 +893,17 @@ class BahmniPrepackBatchLine(models.Model):
             if line.mrp_production_id:
                 mo = line.mrp_production_id
                 if mo.state not in ("done", "cancel"):
-                    try:
-                        mo.action_cancel()
-                    except Exception:
-                        pass
-            # Set line state to cancelled or draft
-            line.state = "cancel"
+                    mo.sudo().action_cancel()
         return True
+
+    def action_print_prepack_label(self):
+        self.ensure_one()
+        if self.state != "done":
+            raise UserError(_("Only authorized prepack lines can have labels printed."))
+        self._ensure_label_barcodes()
+        return self.env.ref(
+            "lesotho_prepack_batch.action_report_prepack_labels"
+        ).with_context(prepack_line_ids=self.ids).report_action(self.batch_id)
 
     def _get_finished_lot_name(self):
         self.ensure_one()
