@@ -8,14 +8,26 @@
             <xpath expr="//page[@name='general_information']" position="inside">
                 <group string="eLMIS Information">
                     <group>
+                        <field name="is_prepack" invisible="1"/>
                         <field name="is_elmis_product"/>
                         <field name="elmis_orderable_id" attrs="{'required': [('is_elmis_product', '=', True)]}"/>
                         <field name="elmis_product_code"/>
                         <field name="elmis_program_ids" widget="many2many_tags"/>
+                        <field name="openmrs_concept_uuid"/>
+                        <field name="openmrs_concept_code"/>
                         <field name="elmis_generic_name"/>
                         <field name="elmis_strength"/>
                     </group>
                     <group>
+                        <field
+                            name="prepack_parent_elmis_product_id"
+                            attrs="{'invisible': [('is_prepack', '=', False)]}"
+                        />
+                        <field
+                            name="prepack_parent_bulk_uom_id"
+                            attrs="{'invisible': [('is_prepack', '=', False)]}"
+                            readonly="1"
+                        />
                         <field name="elmis_dosage_form"/>
                         <field name="elmis_pack_size"/>
                         <field name="elmis_pack_size_unit"/>
@@ -51,6 +63,25 @@
             </xpath>
             <xpath expr="//filter[@name='services']" position="after">
                 <filter name="elmis_products" string="eLMIS Products" domain="[('is_elmis_product', '=', True)]"/>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="view_product_template_form_prepack_elmis_lineage" model="ir.ui.view">
+        <field name="name">product.template.form.prepack.elmis.lineage</field>
+        <field name="model">product.template</field>
+        <field name="inherit_id" ref="lesotho_base.view_product_template_form_add_prepack"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='pack_unit_qty']" position="after">
+                <field
+                    name="prepack_parent_elmis_product_id"
+                    attrs="{'invisible': [('is_dispensing_pack', '=', False)]}"
+                />
+                <field
+                    name="prepack_parent_bulk_uom_id"
+                    attrs="{'invisible': [('is_dispensing_pack', '=', False)]}"
+                    readonly="1"
+                />
             </xpath>
         </field>
     </record>
