@@ -222,3 +222,38 @@ class TestSaleOrderLineElmisSelection(TransactionCase):
         )
         self.assertEqual(len(outbox), 1)
         self.assertEqual(outbox.quantity, 5)
+
+    def test_dispensing_ui_product_and_batch_selection_populates_elmis_fields(self):
+        line = self._create_line(product_uom_qty=5)
+
+        line.order_id.update_prescription_dispensing_line(
+            line.id,
+            {
+                "product_id": self.elmis_product.id,
+                "batch_number": self.elmis_lot.name,
+            },
+        )
+
+        self.assertEqual(line.elmis_product_id, self.elmis_product)
+        self.assertEqual(line.elmis_lot_id, self.elmis_lot)
+        self.assertEqual(line.elmis_program_id, self.program_art)
+
+    def test_dispensing_ui_selection_creates_outbox_when_marked_dispensed(self):
+        line = self._create_line(product_uom_qty=5)
+        line.order_id.update_prescription_dispensing_line(
+            line.id,
+            {
+                "product_id": self.elmis_product.id,
+                "batch_number": self.elmis_lot.name,
+            },
+        )
+
+        line.write({"dispensed": True})
+
+        outbox = self.env["elmis.outbox"].search(
+            [("source_sale_order_line_id", "=", line.id)]
+        )
+        self.assertEqual(len(outbox), 1)
+        self.assertEqual(outbox.elmis_orderable_id, self.elmis_product)
+        self.assertEqual(outbox.lot_id, self.elmis_lot)
+        self.assertEqual(outbox.program_id, self.program_art)

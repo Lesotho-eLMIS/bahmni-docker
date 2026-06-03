@@ -84,6 +84,7 @@ class ResPartner(models.Model):
         help="Number of active (non-voided) allergies",
     )
 
+    @api.model
     def name_search(self, name="", args=None, operator="ilike", limit=100):
         if not self.env.context.get("show_patient_prescription_details"):
             return super().name_search(name=name, args=args, operator=operator, limit=limit)
