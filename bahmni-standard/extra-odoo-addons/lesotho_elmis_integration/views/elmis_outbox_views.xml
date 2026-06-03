@@ -98,6 +98,36 @@
         </field>
     </record>
 
+    <record id="elmis_outbox_dlq_view_tree" model="ir.ui.view">
+        <field name="name">elmis.outbox.dlq.view.tree</field>
+        <field name="model">elmis.outbox</field>
+        <field name="arch" type="xml">
+            <tree string="eLMIS Dead Letter Queue" create="false" edit="false" delete="false">
+                <field name="created_at"/>
+                <field name="message_id"/>
+                <field name="transaction_type"/>
+                <field name="facility_code"/>
+                <field name="program_id"/>
+                <field name="prescription_ref"/>
+                <field name="elmis_orderable_id"/>
+                <field name="lot_id"/>
+                <field name="quantity"/>
+                <field name="uom_id"/>
+                <field name="adjustment_reason"/>
+                <field name="source_sale_order_line_id" optional="hide"/>
+                <field name="source_stock_scrap_id" optional="hide"/>
+                <field name="source_stock_move_id" optional="hide"/>
+                <field name="consumption_mode" optional="hide"/>
+                <field name="dispensed_product_id" optional="hide"/>
+                <field name="dispensed_lot_id" optional="hide"/>
+                <field name="dispensed_quantity" optional="hide"/>
+                <field name="attempt_count"/>
+                <field name="sent_at"/>
+                <field name="error_message"/>
+            </tree>
+        </field>
+    </record>
+
     <record id="elmis_outbox_view_search" model="ir.ui.view">
         <field name="name">elmis.outbox.view.search</field>
         <field name="model">elmis.outbox</field>
@@ -109,6 +139,7 @@
                 <field name="elmis_orderable_id"/>
                 <filter name="pending" string="Pending" domain="[('status', '=', 'PENDING')]"/>
                 <filter name="failed" string="Failed" domain="[('status', '=', 'FAILED')]"/>
+                <filter name="dlq" string="DLQ" domain="[('status', '=', 'DLQ')]"/>
                 <filter name="delivered" string="Delivered" domain="[('status', '=', 'DELIVERED')]"/>
                 <separator/>
                 <filter name="retryable" string="Retryable" domain="[('status', 'in', ['PENDING', 'FAILED'])]"/>
@@ -128,6 +159,16 @@
         <field name="view_mode">tree,form</field>
         <field name="search_view_id" ref="elmis_outbox_view_search"/>
         <field name="context">{'search_default_retryable': 1}</field>
+    </record>
+
+    <record id="action_elmis_outbox_dlq" model="ir.actions.act_window">
+        <field name="name">eLMIS Dead Letter Queue</field>
+        <field name="res_model">elmis.outbox</field>
+        <field name="view_mode">tree,form</field>
+        <field name="view_id" ref="elmis_outbox_dlq_view_tree"/>
+        <field name="search_view_id" ref="elmis_outbox_view_search"/>
+        <field name="domain">[('status', '=', 'DLQ')]</field>
+        <field name="context">{'search_default_dlq': 1}</field>
     </record>
 
     <record id="action_elmis_outbox_drain_pending" model="ir.actions.server">
@@ -171,5 +212,13 @@
         parent="stock.menu_stock_warehouse_mgmt"
         action="action_elmis_outbox"
         sequence="82"
+        groups="stock.group_stock_manager"/>
+
+    <menuitem
+        id="menu_elmis_outbox_dlq"
+        name="eLMIS Dead Letter Queue"
+        parent="stock.menu_stock_warehouse_mgmt"
+        action="action_elmis_outbox_dlq"
+        sequence="83"
         groups="stock.group_stock_manager"/>
 </odoo>
