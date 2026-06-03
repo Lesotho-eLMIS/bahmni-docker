@@ -604,25 +604,26 @@ class ExtendedSaleOrderLine(models.Model):
             if product.is_dispensing_pack and product.pack_unit_qty
             else 1.0
         )
-        lot = self._get_fefo_available_lot(product, qty)
+        lot = prepack_line.finished_lot_id or self._get_default_dispensing_lot(product, qty)
         values = {
             "barcode_scan": barcode,
             "product_id": product.id,
             "product_uom": product.uom_id.id,
             "product_uom_qty": qty,
             "served_internally": True,
-            "dispensing_batch_number": lot.name if lot else False,
         }
+        values.update(
+            self._prepare_dispensing_batch_selection_vals(
+                lot.name if lot else False,
+                product=product,
+            )
+        )
         if use_write:
             self.with_context(skip_prescription_init=True).write(values)
             return
-        self.product_id = product
-        self.product_uom = product.uom_id
-        self.product_uom_qty = qty
-        self.served_internally = True
-        self.dispensing_batch_number = values["dispensing_batch_number"]
+        for field_name, field_value in values.items():
+            self[field_name] = field_value
 
-    def _get_fefo_available_lot(self, product, required_qty=1.0):
     def _get_dispensing_batch_clear_vals(self):
         self.ensure_one()
         vals = {"dispensing_batch_number": False}
