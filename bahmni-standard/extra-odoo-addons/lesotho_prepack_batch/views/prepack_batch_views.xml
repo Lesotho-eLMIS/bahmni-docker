@@ -49,7 +49,9 @@
                             <field name="line_ids" readonly="1">
                                 <tree>
                                     <field name="product_id"/>
+                                    <field name="parent_elmis_product_id" optional="show"/>
                                     <field name="bulk_lot_id"/>
+                                    <field name="source_elmis_lot_number" optional="show"/>
                                     <field name="package_qty"/>
                                     <field name="component_required_qty"/>
                                     <field name="finished_lot_id"/>

@@ -593,6 +593,9 @@ class ExtendedSaleOrderLine(models.Model):
         ):
             if field_name in self._fields:
                 vals[field_name] = False
+        for field_name in ("elmis_product_id", "elmis_lot_id", "elmis_program_id"):
+            if field_name in self._fields:
+                vals[field_name] = False
         return vals
 
     def _prepare_dispensing_product_change_vals(self, product):
@@ -603,6 +606,27 @@ class ExtendedSaleOrderLine(models.Model):
             "name": product.get_product_multiline_description_sale() or product.display_name,
         }
         vals.update(self._get_dispensing_batch_clear_vals())
+        vals.update(self._prepare_elmis_dispensing_product_vals(product))
+        return vals
+
+    def _prepare_elmis_dispensing_product_vals(self, product):
+        self.ensure_one()
+        if "elmis_product_id" not in self._fields:
+            return {}
+        if not product or not product.is_elmis_product:
+            return {
+                "elmis_product_id": False,
+                "elmis_lot_id": False,
+                "elmis_program_id": False,
+            }
+
+        vals = {
+            "elmis_product_id": product.id,
+            "elmis_lot_id": False,
+            "elmis_program_id": False,
+        }
+        if len(product.elmis_program_ids) == 1:
+            vals["elmis_program_id"] = product.elmis_program_ids.id
         return vals
 
     def _get_available_lot_entries(self, product=None):
@@ -1109,6 +1133,10 @@ class ExtendedSaleOrderLine(models.Model):
                         expiry_value = getattr(lot, source_name)
                         break
                 vals[field_name] = expiry_value
+        if "elmis_product_id" in self._fields:
+            vals.update(self._prepare_elmis_dispensing_product_vals(lot.product_id))
+            if lot.product_id.is_elmis_product:
+                vals["elmis_lot_id"] = lot.id
         return vals
 
     def _sync_lot_from_reserved_stock(self, lot):

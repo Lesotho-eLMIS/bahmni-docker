@@ -10,6 +10,7 @@
         "stock",
         "lesotho_manufacturing",
         "lesotho_base",
+        "elmis_integration",
     ],
     "data": [
         "security/ir.model.access.csv",

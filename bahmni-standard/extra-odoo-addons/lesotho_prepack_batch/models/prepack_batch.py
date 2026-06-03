@@ -2,6 +2,7 @@ import json
 
 from odoo import _, api, fields, models
 from odoo.exceptions import UserError, ValidationError
+from odoo.tools.float_utils import float_compare
 
 
 class BahmniPrepackBatch(models.Model):
@@ -247,16 +248,32 @@ class BahmniPrepackBatch(models.Model):
         return res
 
     def _get_or_create_prepack_product(self, bulk_product, size):
+        if bulk_product.is_prepack:
+            raise UserError(
+                _("Prepacks must be created from bulk products, not from another prepack.")
+            )
+
         bulk_uom = bulk_product.uom_id.name
         name = f"{bulk_product.name} - Pack of {int(size)} {bulk_uom}"
+        parent_elmis_product = self.env["product.product"]
+        resolver = getattr(bulk_product, "_get_elmis_accountability_product", None)
+        if resolver:
+            parent_elmis_product = resolver()
+        if not parent_elmis_product:
+            raise UserError(
+                _(
+                    "Bulk product %(product)s must be linked to an eLMIS product before it can be prepacked."
+                )
+                % {"product": bulk_product.display_name}
+            )
 
         # Use discrete 'Units' UoM for the prepack itself
         unit_uom = self.env.ref("uom.product_uom_unit")
 
         prepack_product = self.env["product.product"].search(
             [
-                ("name", "=", name),
                 ("is_prepack", "=", True),
+                ("bulk_product_id", "=", bulk_product.id),
                 ("pack_unit_qty", "=", size),
             ],
             limit=1,
@@ -267,6 +284,7 @@ class BahmniPrepackBatch(models.Model):
                 {
                     "name": name,
                     "is_prepack": True,
+                    "bulk_product_id": bulk_product.id,
                     "is_dispensing_pack": True,
                     "dispensing_base_product_id": bulk_product.id,
                     "pack_unit_qty": size,
@@ -278,6 +296,18 @@ class BahmniPrepackBatch(models.Model):
                 }
             )
             prepack_product = tmpl.product_variant_id
+        write_vals = {}
+        if prepack_product.name != name:
+            write_vals["name"] = name
+        if prepack_product.bulk_product_id != bulk_product:
+            write_vals["bulk_product_id"] = bulk_product.id
+        if (
+            "prepack_parent_elmis_product_id" in prepack_product._fields
+            and prepack_product.prepack_parent_elmis_product_id != parent_elmis_product
+        ):
+            write_vals["prepack_parent_elmis_product_id"] = parent_elmis_product.id
+        if write_vals:
+            prepack_product.write(write_vals)
 
         return prepack_product
 
@@ -571,6 +601,19 @@ class BahmniPrepackBatchLine(models.Model):
         related="bulk_lot_id.product_id",
         store=True,
     )
+    parent_elmis_product_id = fields.Many2one(
+        "product.product",
+        string="Parent eLMIS Product",
+        related="product_id.prepack_parent_elmis_product_id",
+        store=True,
+        readonly=True,
+    )
+    source_elmis_lot_number = fields.Char(
+        string="Source eLMIS Lot Number",
+        related="bulk_lot_id.elmis_lot_number",
+        store=True,
+        readonly=True,
+    )
     package_qty = fields.Integer(
         string="Number of Prepacks",
         required=True,
@@ -758,6 +801,10 @@ class BahmniPrepackBatchLine(models.Model):
         for line in self:
             if not line.product_id or line.product_id.detailed_type != "product":
                 raise ValidationError(_("Finished packs must use stockable products."))
+            if line.bulk_product_id and line.bulk_product_id.is_prepack:
+                raise ValidationError(
+                    _("The source bulk product must not itself be a prepack.")
+                )
             if not line.bom_id:
                 raise ValidationError(
                     _("A prepack template is required on every line.")
@@ -781,6 +828,44 @@ class BahmniPrepackBatchLine(models.Model):
                         "The source bulk lot product must exist on the selected prepack template."
                     )
                 )
+            parent_elmis_product = line._get_parent_elmis_product()
+            if not parent_elmis_product:
+                raise ValidationError(
+                    _(
+                        "Prepack lines require a bulk product that resolves to an eLMIS orderable."
+                    )
+                )
+            if line.bulk_lot_id and not line._get_parent_elmis_lot():
+                raise ValidationError(
+                    _(
+                        "Prepack lines require a source bulk lot that resolves to an eLMIS lot."
+                    )
+                )
+            if not line.parent_elmis_product_id:
+                raise ValidationError(
+                    _(
+                        "Finished prepack %(product)s must be linked to a parent eLMIS product before it can be authorized or dispensed."
+                    )
+                    % {"product": line.product_id.display_name}
+                )
+            if not (line.bulk_lot_id.elmis_lot_id or line.bulk_lot_id.elmis_lot_number):
+                raise ValidationError(
+                    _(
+                        "Source bulk lot %(lot)s is missing its eLMIS lot mapping."
+                    )
+                    % {"lot": line.bulk_lot_id.display_name}
+                )
+            if float_compare(
+                line.component_qty_per_pack,
+                line.product_id.pack_unit_qty,
+                precision_digits=6,
+            ) != 0:
+                raise ValidationError(
+                    _(
+                        "Finished prepack %(product)s has a conversion factor mismatch between its BoM and pack definition."
+                    )
+                    % {"product": line.product_id.display_name}
+                )
 
     def _validate_bulk_stock(self):
         for line in self:
@@ -801,6 +886,28 @@ class BahmniPrepackBatchLine(models.Model):
                         "available": line.bulk_qty_available,
                     }
                 )
+
+    def _get_parent_elmis_product(self):
+        self.ensure_one()
+        for candidate in (self.product_id, self.bulk_product_id):
+            if not candidate:
+                continue
+            resolver = getattr(candidate, "_get_elmis_accountability_product", None)
+            if not resolver:
+                continue
+            resolved = resolver()
+            if resolved:
+                return resolved
+        return self.env["product.product"]
+
+    def _get_parent_elmis_lot(self):
+        self.ensure_one()
+        if not self.bulk_lot_id:
+            return self.env["stock.lot"]
+        resolver = getattr(self.bulk_lot_id, "_get_elmis_accountability_lot", None)
+        if not resolver:
+            return self.env["stock.lot"]
+        return resolver()
 
     def action_authorize_line(self):
         """Authorize a single prepack line."""
@@ -831,6 +938,24 @@ class BahmniPrepackBatchLine(models.Model):
     def _ensure_finished_lot(self):
         self.ensure_one()
         if self.finished_lot_id:
+            if "prepack_source_lot_id" in self.finished_lot_id._fields:
+                if (
+                    self.finished_lot_id.prepack_source_lot_id
+                    and self.finished_lot_id.prepack_source_lot_id != self.bulk_lot_id
+                ):
+                    raise ValidationError(
+                        _(
+                            "Finished lot %(lot)s is already linked to source bulk lot %(source)s."
+                        )
+                        % {
+                            "lot": self.finished_lot_id.display_name,
+                            "source": self.finished_lot_id.prepack_source_lot_id.display_name,
+                        }
+                    )
+                if not self.finished_lot_id.prepack_source_lot_id:
+                    self.finished_lot_id.write(
+                        {"prepack_source_lot_id": self.bulk_lot_id.id}
+                    )
             return self.finished_lot_id
         finished_lot = self.env["stock.lot"].search(
             [
@@ -848,6 +973,8 @@ class BahmniPrepackBatchLine(models.Model):
                 "product_id": self.product_id.id,
                 "company_id": self.company_id.id,
             }
+            if "prepack_source_lot_id" in self.env["stock.lot"]._fields:
+                vals["prepack_source_lot_id"] = self.bulk_lot_id.id
             for field_name in (
                 "expiration_date",
                 "use_date",
@@ -860,6 +987,22 @@ class BahmniPrepackBatchLine(models.Model):
                 ):
                     vals[field_name] = self.bulk_lot_id[field_name]
             finished_lot = self.env["stock.lot"].create(vals)
+        elif "prepack_source_lot_id" in finished_lot._fields:
+            if (
+                finished_lot.prepack_source_lot_id
+                and finished_lot.prepack_source_lot_id != self.bulk_lot_id
+            ):
+                raise ValidationError(
+                    _(
+                        "Finished lot %(lot)s is already linked to source bulk lot %(source)s."
+                    )
+                    % {
+                        "lot": finished_lot.display_name,
+                        "source": finished_lot.prepack_source_lot_id.display_name,
+                    }
+                )
+            if not finished_lot.prepack_source_lot_id:
+                finished_lot.write({"prepack_source_lot_id": self.bulk_lot_id.id})
         self.finished_lot_id = finished_lot.id
         return finished_lot
 

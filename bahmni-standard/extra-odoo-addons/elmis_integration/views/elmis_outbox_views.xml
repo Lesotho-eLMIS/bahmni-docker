@@ -7,12 +7,16 @@
             <tree string="eLMIS Outbox" create="false" edit="false" delete="false">
                 <field name="created_at"/>
                 <field name="status"/>
+                <field name="consumption_mode" optional="hide"/>
                 <field name="transaction_type"/>
                 <field name="facility_code"/>
                 <field name="program_id"/>
                 <field name="elmis_orderable_id"/>
                 <field name="lot_id"/>
                 <field name="quantity"/>
+                <field name="dispensed_product_id" optional="hide"/>
+                <field name="dispensed_lot_id" optional="hide"/>
+                <field name="dispensed_quantity" optional="hide"/>
                 <field name="adjustment_reason"/>
                 <field name="attempt_count"/>
                 <field name="sent_at"/>
@@ -69,6 +73,14 @@
                         <field name="source_stock_scrap_id"/>
                         <field name="source_stock_move_id"/>
                         <field name="prescription_ref"/>
+                        <field name="consumption_mode"/>
+                        <field name="dispensed_product_id"/>
+                        <field name="dispensed_lot_id"/>
+                        <field name="dispensed_quantity"/>
+                        <field name="dispensed_uom_id"/>
+                        <field name="source_bulk_product_id"/>
+                        <field name="source_bulk_lot_id"/>
+                        <field name="prepack_conversion_factor"/>
                     </group>
                     <group string="Submission">
                         <group>

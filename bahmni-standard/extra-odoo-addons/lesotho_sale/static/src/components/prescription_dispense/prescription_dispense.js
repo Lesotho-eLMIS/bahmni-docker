@@ -10,6 +10,7 @@ export class PrescriptionDispense extends Component {
         this.action = useService("action");
         this.notification = useService("notification");
         this.root = useRef("root");
+        this.pendingSaves = new Set();
         this.state = useState({
             loading: true,
             orderId: this.props.action.context.active_id,
@@ -153,6 +154,18 @@ export class PrescriptionDispense extends Component {
         line[field] = value;
     }
 
+    trackSave(promise) {
+        this.pendingSaves.add(promise);
+        promise.finally(() => this.pendingSaves.delete(promise));
+        return promise;
+    }
+
+    async waitForPendingSaves() {
+        while (this.pendingSaves.size) {
+            await Promise.all([...this.pendingSaves]);
+        }
+    }
+
     onProductChanged(line, value) {
         if (this.state.readOnly) {
             return;
@@ -211,8 +224,7 @@ export class PrescriptionDispense extends Component {
             const product = this.state.productOptions.find((item) => item.id === value);
             this.updateLocal(line, "dispensed_product", product ? product.name : "");
         }
-        // Fire and forget the ORM call, but don't await in the event handler
-        this.orm.call(
+        const savePromise = this.orm.call(
             "sale.order",
             "update_prescription_dispensing_line",
             [[this.state.orderId], line.id, { [field]: value }]
@@ -221,6 +233,7 @@ export class PrescriptionDispense extends Component {
         }).catch((error) => {
             this.notification.add(error.message || "Error updating prescription line.", { type: "danger" });
         });
+        return this.trackSave(savePromise);
     }
 
     setSubstitute(line, checked) {
@@ -241,8 +254,7 @@ export class PrescriptionDispense extends Component {
         this.updateLocal(line, "expiry_date", "");
         this.updateLocal(line, "batch_options", []);
         
-        // Fire and forget the ORM call
-        this.orm.call(
+        const savePromise = this.orm.call(
             "sale.order",
             "update_prescription_dispensing_line",
             [[this.state.orderId], line.id, { is_pack_substituted: false, product_id: productId }]
@@ -251,6 +263,7 @@ export class PrescriptionDispense extends Component {
         }).catch((error) => {
             this.notification.add(error.message || "Error updating prescription line.", { type: "danger" });
         });
+        return this.trackSave(savePromise);
     }
 
     async scanBarcode(line, index, ev) {
@@ -283,11 +296,12 @@ export class PrescriptionDispense extends Component {
             return;
         }
         this.state.explanationConfirmed = ev.target.checked;
-        this.orm.write("sale.order", [this.state.orderId], {
+        const savePromise = this.orm.write("sale.order", [this.state.orderId], {
             medication_explanation_confirmed: this.state.explanationConfirmed,
         }).catch((error) => {
             this.notification.add(error.message || "Error updating explanation status.", { type: "danger" });
         });
+        return this.trackSave(savePromise);
     }
 
     async cancel() {
@@ -336,6 +350,7 @@ export class PrescriptionDispense extends Component {
                 "Some quantities are still outstanding. Create a back order for the balance?"
             );
         }
+        await this.waitForPendingSaves();
         const reportAction = await this.orm.call(
             "sale.order",
             "action_serve_prescription_from_ui",
