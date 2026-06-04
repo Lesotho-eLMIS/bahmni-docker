@@ -21,7 +21,7 @@
         <field name="arch" type="xml">
             <form string="Prepack Batch">
                 <header>
-                    <button name="action_authorize_batch" string="Authorize" type="object" class="btn-primary" states="pending_auth" groups="mrp.group_mrp_manager"/>
+                    <button name="action_release_batch" string="Release" type="object" class="btn-primary" states="pending_auth" groups="mrp.group_mrp_manager"/>
                     <button name="action_print_prepack_labels" string="Print Labels" type="object" class="btn-primary" states="done"/>
                     <button name="action_record_damaged_products" string="Record Damaged Products" type="object" class="btn-secondary" attrs="{'invisible': ['|', ('has_damaged_products', '=', False), ('state', 'not in', ('draft', 'rejected'))]}"/>
                     <button name="action_cancel" string="Cancel" type="object" states="draft,pending_auth"/>
@@ -41,6 +41,7 @@
                             <field name="planned_date"/>
                             <field name="responsible_id"/>
                             <field name="has_damaged_products"/>
+                            <field name="release_discrepancy_reason" readonly="1"/>
                         </group>
                         <group>
                             <field name="company_id" groups="base.group_multi_company"/>
@@ -56,6 +57,8 @@
                                     <field name="bulk_lot_id"/>
                                     <field name="source_elmis_lot_number" optional="show"/>
                                     <field name="package_qty"/>
+                                    <field name="packaging_material_id" optional="show"/>
+                                    <field name="packaging_material_qty" optional="show"/>
                                     <field name="component_required_qty"/>
                                     <field name="finished_lot_id"/>
                                     <field name="product_barcode"/>

@@ -52,6 +52,185 @@
     .bg-warning-light { background-color: rgba(255, 193, 7, 0.1) !important; }
     .text-monospace { font-family: 'Courier New', Courier, monospace; }
 
+    .prepack-location-context {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        width: 100%;
+        max-width: 860px;
+        margin: -16px auto 24px;
+        padding: 14px 16px;
+        background: #fff;
+        border: 1px solid #6366F1;
+        border-radius: 8px;
+        box-shadow: none;
+
+        .prepack-location-icon {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 44px;
+            height: 44px;
+            flex: 0 0 44px;
+            background: #f8f9fa;
+            border: 1px solid #6366F1;
+            border-radius: 8px;
+            color: #4b50df;
+            font-size: 1.1rem;
+        }
+
+        .prepack-location-copy {
+            min-width: 190px;
+            flex: 0 0 auto;
+        }
+
+        .prepack-location-label {
+            display: block;
+            margin-bottom: 8px;
+            color: #2c3e50;
+            font-size: 1.5rem;
+            font-weight: 700;
+            line-height: 1.2;
+        }
+
+        .prepack-location-control {
+            flex: 1;
+            min-width: 280px;
+
+            .form-select {
+                min-height: 44px;
+                background-color: #fff;
+                border: 1px solid #6366F1;
+                box-shadow: none;
+                font-size: 1.05rem;
+                font-weight: 800;
+            }
+        }
+
+        .prepack-location-readonly {
+            display: flex;
+            align-items: center;
+            min-height: 44px;
+            padding: 10px 14px;
+            background: #fff;
+            border: 1px solid #6366F1;
+            border-radius: 8px;
+            color: #1f2937;
+            font-size: 1.05rem;
+            font-weight: 800;
+        }
+
+        @media (max-width: 768px) {
+            align-items: flex-start;
+            flex-wrap: wrap;
+
+            .prepack-location-copy {
+                flex: 1 1 calc(100% - 60px);
+                min-width: 0;
+            }
+
+            .prepack-location-control {
+                flex: 1 1 100%;
+                min-width: 0;
+            }
+        }
+    }
+
+    .prepack-authorization-filter {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        width: 100%;
+        max-width: 860px;
+        margin-left: auto;
+        margin-right: auto;
+        padding: 14px 16px;
+        background: #fff;
+        border: 1px solid #6366F1;
+        border-radius: 8px;
+
+        .prepack-location-icon {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 44px;
+            height: 44px;
+            flex: 0 0 44px;
+            background: #f8f9fa;
+            border: 1px solid #6366F1;
+            border-radius: 8px;
+            color: #4b50df;
+            font-size: 1.1rem;
+        }
+
+        .prepack-location-copy {
+            min-width: 190px;
+            flex: 0 0 auto;
+        }
+
+        .prepack-location-label {
+            display: block;
+            margin-bottom: 8px;
+            color: #2c3e50;
+            font-size: 1.5rem;
+            font-weight: 700;
+            line-height: 1.2;
+        }
+
+        .prepack-location-control {
+            flex: 1;
+            min-width: 280px;
+
+            .form-select {
+                min-height: 44px;
+                background-color: #fff;
+                border: 1px solid #6366F1;
+                box-shadow: none;
+                font-size: 1.05rem;
+                font-weight: 800;
+            }
+        }
+
+        @media (max-width: 768px) {
+            align-items: flex-start;
+            flex-wrap: wrap;
+
+            .prepack-location-copy {
+                flex: 1 1 calc(100% - 60px);
+                min-width: 0;
+            }
+
+            .prepack-location-control {
+                flex: 1 1 100%;
+                min-width: 0;
+            }
+        }
+    }
+
+    .prepack-backbar {
+        display: flex;
+        justify-content: flex-start;
+        margin: 28px 0 0;
+        padding-top: 18px;
+        border-top: 1px solid #e2e6e9;
+
+        .prepack-back-button {
+            min-width: 180px;
+            padding: 12px 18px;
+            font-size: 0.95rem;
+        }
+    }
+
+    .packaging-material-stock {
+        line-height: 1.5;
+        font-weight: 800 !important;
+
+        .packaging-material-qty {
+            color: #008000;
+            font-weight: 800;
+        }
+    }
+
     /* Product Meta Polished */
     .product-meta {
         background: #f0f7fb;

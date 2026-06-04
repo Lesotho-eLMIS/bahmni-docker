@@ -225,6 +225,11 @@ USERNAME LINK STYLE: comment this block to show the default avatar/user menu aga
   width: 100%;
   background-color: #ffffff;
 }
+
+.lesotho_prepack_location_value {
+  font-size: 1.4rem !important;
+  font-weight: 700 !important;
+}
 /* end of prepacking placeholder pages block
    **************************** */
 

@@ -16,6 +16,11 @@ export class PrepackDashboard extends Component {
       currentUser: session.name,
       permissions: { can_create: false, can_authorize: false },
       inventory: [],
+      packagingMaterials: [],
+      prepackLocations: [],
+      selectedLocationId: null,
+      selectedLocationName: "",
+      authorizationLocationId: null,
       pendingBatches: [],
       historyBatches: [],
       productSearch: "",
@@ -28,7 +33,8 @@ export class PrepackDashboard extends Component {
       batchName: "",
       isAuthorized: false,
       includePrepacks: false,
-      rejectComment: "",
+      hasReleaseDiscrepancy: false,
+      releaseDiscrepancyReason: "",
     });
     onWillStart(async () => {
       this.state.permissions = await this.orm.call("bahmni.prepack.batch", "check_prepack_permissions", []);
@@ -38,23 +44,32 @@ export class PrepackDashboard extends Component {
 
       if (this.state.mode === "authorize") {
         this.state.step = 3;
-        this.state.pendingBatches = await this.orm.call("bahmni.prepack.batch", "fetch_pending_batches", []);
+        await this.loadPrepackLocations();
+        this.state.authorizationLocationId = this.state.selectedLocationId;
+        await this.loadPendingBatches();
       } else if (this.state.mode === "history") {
         this.state.step = 4; // History step
         this.state.historyBatches = await this.orm.call("bahmni.prepack.batch", "fetch_batch_history", []);
       } else {
         if (this.state.permissions.can_create) {
           this.state.step = 1;
+          await this.loadPrepackLocations();
+          await this.loadPackagingMaterials();
           await this.loadInventory();
 
           // Load draft if exists
           const draft = await this.orm.call("bahmni.prepack.batch", "fetch_draft_batch", []);
           if (draft) {
+            this.state.selectedLocationId = draft.location_id || this.state.selectedLocationId;
+            this.state.selectedLocationName = draft.location_src_name || this.getLocationName(this.state.selectedLocationId);
             this.state.batchItems = draft.items;
+            await this.loadInventory();
           }
         } else if (this.state.permissions.can_authorize) {
           this.state.step = 3;
-          this.state.pendingBatches = await this.orm.call("bahmni.prepack.batch", "fetch_pending_batches", []);
+          await this.loadPrepackLocations();
+          this.state.authorizationLocationId = this.state.selectedLocationId;
+          await this.loadPendingBatches();
         }
       }
 
@@ -67,8 +82,64 @@ export class PrepackDashboard extends Component {
   async loadInventory() {
     const inventory = await this.orm.call("bahmni.prepack.batch", "fetch_bulk_inventory", [], {
       include_prepacks: this.state.includePrepacks,
+      location_id: this.state.selectedLocationId,
     });
     this.state.inventory = inventory;
+  }
+
+  async loadPackagingMaterials() {
+    this.state.packagingMaterials = await this.orm.call("bahmni.prepack.batch", "fetch_packaging_materials", [], {
+      location_id: this.state.selectedLocationId,
+    });
+  }
+
+  async loadPrepackLocations() {
+    const result = await this.orm.call("bahmni.prepack.batch", "fetch_prepack_locations", []);
+    this.state.prepackLocations = result.locations;
+    this.state.selectedLocationId = result.default_location_id || (result.locations[0] && result.locations[0].id) || null;
+    this.state.selectedLocationName = this.getLocationName(this.state.selectedLocationId);
+  }
+
+  async loadPendingBatches() {
+    this.state.pendingBatches = await this.orm.call("bahmni.prepack.batch", "fetch_pending_batches", [], {
+      location_id: this.state.authorizationLocationId,
+    });
+  }
+
+  async onAuthorizationLocationChange(ev) {
+    this.state.authorizationLocationId = parseInt(ev.target.value, 10) || null;
+    await this.loadPendingBatches();
+  }
+
+  async onLocationChange(ev) {
+    const locationId = parseInt(ev.target.value, 10) || null;
+    if (!this.canEditLocation()) {
+      ev.target.value = this.state.selectedLocationId || "";
+      return;
+    }
+    if (this.state.batchItems.length > 0 && locationId !== this.state.selectedLocationId) {
+      if (!confirm("Changing the prepacking location will clear the current prepacking list. Continue?")) {
+        ev.target.value = this.state.selectedLocationId || "";
+        return;
+      }
+      this.state.batchItems = [];
+      this.state.step = 1;
+    }
+    this.state.selectedLocationId = locationId;
+    this.state.selectedLocationName = this.getLocationName(locationId);
+    this.resetSelectedProduct();
+    await this.loadPackagingMaterials();
+    await this.loadInventory();
+    await this.autoSave();
+  }
+
+  canEditLocation() {
+    return this.state.step === 1 && !this.state.batchId;
+  }
+
+  getLocationName(locationId) {
+    const location = this.state.prepackLocations.find(item => item.id === locationId);
+    return location ? location.name : "";
   }
 
   async onIncludePrepacksToggle() {
@@ -82,7 +153,10 @@ export class PrepackDashboard extends Component {
       this.state.batchName = details.name;
       this.state.batchItems = details.items;
       this.state.isAuthorized = details.isAuthorized;
-      this.state.rejectComment = "";
+      this.state.selectedLocationId = details.location_src_id || null;
+      this.state.selectedLocationName = details.location_src_name || "";
+      this.state.releaseDiscrepancyReason = details.release_discrepancy_reason || "";
+      this.state.hasReleaseDiscrepancy = Boolean(this.state.releaseDiscrepancyReason);
     }
     return details;
   }
@@ -92,12 +166,19 @@ export class PrepackDashboard extends Component {
     this.state.batchName = "";
     this.state.batchItems = [];
     this.state.isAuthorized = false;
-    this.state.rejectComment = "";
+    this.state.hasReleaseDiscrepancy = false;
+    this.state.releaseDiscrepancyReason = "";
+    if (this.state.mode === "authorize" || this.state.mode === "history") {
+      this.state.selectedLocationId = null;
+      this.state.selectedLocationName = "";
+    }
   }
 
   async autoSave() {
     if (this.state.mode === "create") {
-      await this.orm.call("bahmni.prepack.batch", "save_prepack_batch", [this.state.batchItems]);
+      await this.orm.call("bahmni.prepack.batch", "save_prepack_batch", [this.state.batchItems], {
+        location_id: this.state.selectedLocationId,
+      });
     }
   }
 
@@ -106,7 +187,9 @@ export class PrepackDashboard extends Component {
       this.notification.add("Add products to the prepacking list before recording damage.", { type: "warning" });
       return;
     }
-    const draft = await this.orm.call("bahmni.prepack.batch", "save_prepack_batch", [this.state.batchItems]);
+    const draft = await this.orm.call("bahmni.prepack.batch", "save_prepack_batch", [this.state.batchItems], {
+      location_id: this.state.selectedLocationId,
+    });
     this.state.batchId = draft.id;
     this.state.batchName = draft.name;
     await this.orm.write("bahmni.prepack.batch", [draft.id], {
@@ -136,6 +219,14 @@ export class PrepackDashboard extends Component {
 
     const selectedProduct = this.state.inventory.find((item) => this.getProductLabel(item) === searchValue);
     this.selectProduct(selectedProduct, { keepSearchValue: true });
+  }
+
+  resetSelectedProduct() {
+    this.state.selectedProductKey = null;
+    this.state.selectedProduct = null;
+    this.state.productSearch = "";
+    this.state.checks = { chk1: false, chk2: false, chk3: false };
+    this.state.canAddToBatch = false;
   }
 
   selectProduct(product, options = {}) {
@@ -218,15 +309,10 @@ export class PrepackDashboard extends Component {
       this.notification.add("This product lot is already in your batch list.", { type: "danger" });
       return;
     }
-    const item = { ...this.state.selectedProduct, targets: [{ size: 0, qty: 0 }] };
+    const item = { ...this.state.selectedProduct, targets: [{ size: 0, qty: 0, packaging_material_id: null, packaging_material_name: "", packaging_material_soh: 0, packaging_material_uom: "" }] };
     this.state.batchItems.push(item);
 
-    // Reset
-    this.state.selectedProductKey = null;
-    this.state.selectedProduct = null;
-    this.state.productSearch = "";
-    this.state.checks = { chk1: false, chk2: false, chk3: false };
-    this.state.canAddToBatch = false;
+    this.resetSelectedProduct();
 
     await this.autoSave();
   }
@@ -250,8 +336,48 @@ export class PrepackDashboard extends Component {
     }
     this.state.step = step;
   }
+
+  goBack() {
+    if (this.state.batchId) {
+      this.clearSelectedBatch();
+      return;
+    }
+    if (this.state.step === 2) {
+      this.goToStep(1);
+      return;
+    }
+    if (this.state.step === 3 && this.state.mode === "all" && this.state.permissions.can_create) {
+      this.goToStep(this.state.batchItems.length > 0 ? 2 : 1);
+      return;
+    }
+    window.history.back();
+  }
+
+  getBackLabel() {
+    if (this.state.batchId && this.state.mode === "history") {
+      return "Back to History";
+    }
+    if (this.state.batchId && this.state.mode === "authorize") {
+      return "Back to List";
+    }
+    if (this.state.step === 2) {
+      return "Back to Prepacking List";
+    }
+    return "Back";
+  }
+
   async addTarget(item) {
-    item.targets.push({ size: 0, qty: 0 });
+    item.targets.push({ size: 0, qty: 0, packaging_material_id: null, packaging_material_name: "", packaging_material_soh: 0, packaging_material_uom: "" });
+    await this.autoSave();
+  }
+
+  async onPackagingMaterialChange(target, ev) {
+    const productId = parseInt(ev.target.value, 10) || null;
+    const product = this.state.packagingMaterials.find(item => item.id === productId);
+    target.packaging_material_id = productId;
+    target.packaging_material_name = product ? product.name : "";
+    target.packaging_material_soh = product ? product.soh : 0;
+    target.packaging_material_uom = product ? product.uom : "";
     await this.autoSave();
   }
 
@@ -277,6 +403,10 @@ export class PrepackDashboard extends Component {
         isValid = false;
       }
       const validTargets = item.targets.filter(t => t.size > 0 && t.qty > 0);
+      if (validTargets.some(t => !t.packaging_material_id)) {
+        this.notification.add(`Select packaging material for ${item.name}.`, { type: "danger" });
+        isValid = false;
+      }
       if (validTargets.length > 0) {
         hasTargets = true;
         payload.push({
@@ -292,13 +422,19 @@ export class PrepackDashboard extends Component {
       this.notification.add("Please define at least one valid prepack size and quantity.", { type: "danger" });
       return;
     }
+    if (!this.state.selectedLocationId) {
+      this.notification.add("Please select a prepacking location before submitting for release.", { type: "danger" });
+      return;
+    }
 
-    const result = await this.orm.call("bahmni.prepack.batch", "submit_prepack_batch", [payload]);
+    const result = await this.orm.call("bahmni.prepack.batch", "submit_prepack_batch", [payload], {
+      location_id: this.state.selectedLocationId,
+    });
 
-    this.notification.add(`Batch ${result.name} submitted for authorization.`, { type: "success" });
+    this.notification.add(`Batch ${result.name} submitted for release.`, { type: "success" });
 
     if (this.state.mode === "create") {
-      // Switch to Authorize mode
+      // Switch to release validation mode
       await this.actionService.doAction("lesotho_base.action_authorise_prepacks_placeholder", {
         clearBreadcrumbs: true,
         additional_context: { active_id: result.id },
@@ -310,12 +446,20 @@ export class PrepackDashboard extends Component {
     }
   }
 
-  async authorizeBatch() {
-    await this.orm.call("bahmni.prepack.batch", "action_authorize_batch", [[this.state.batchId]]);
-    this.notification.add("Batch Authorized successfully!", { type: "success" });
+  async releaseBatch() {
+    if (this.state.hasReleaseDiscrepancy && !this.state.releaseDiscrepancyReason.trim()) {
+      this.notification.add("Please record the discrepancy reason before releasing.", { type: "danger" });
+      return;
+    }
+    await this.orm.call(
+      "bahmni.prepack.batch",
+      "action_release_batch",
+      [[this.state.batchId], this.state.hasReleaseDiscrepancy ? this.state.releaseDiscrepancyReason.trim() : ""]
+    );
+    this.notification.add("Batch released successfully!", { type: "success" });
 
     if (this.state.mode === "authorize") {
-      this.state.pendingBatches = await this.orm.call("bahmni.prepack.batch", "fetch_pending_batches", []);
+      await this.loadPendingBatches();
     }
     this.state.isAuthorized = true;
     // Refresh batch details to update all lines and show the print button.
@@ -331,7 +475,7 @@ export class PrepackDashboard extends Component {
     // Refresh view
     this.clearSelectedBatch();
     if (this.state.mode === "authorize") {
-      this.state.pendingBatches = await this.orm.call("bahmni.prepack.batch", "fetch_pending_batches", []);
+      await this.loadPendingBatches();
     }
   }
 
@@ -344,20 +488,20 @@ export class PrepackDashboard extends Component {
     this.notification.add("Prepacking batch deleted successfully.", { type: "success" });
     this.clearSelectedBatch();
     if (this.state.mode === "authorize") {
-      this.state.pendingBatches = await this.orm.call("bahmni.prepack.batch", "fetch_pending_batches", []);
+      await this.loadPendingBatches();
     }
   }
 
-  async authorizeLine(lineId) {
+  async releaseLine(lineId) {
     await this.orm.call("bahmni.prepack.batch.line", "action_authorize_line", [[lineId]]);
-    this.notification.add("Item Authorized successfully!", { type: "success" });
+    this.notification.add("Item validated for release successfully!", { type: "success" });
 
     // Refresh batch details
     await this.selectBatch(this.state.batchId);
 
     // Refresh pending batches if in authorize mode
     if (this.state.mode === "authorize") {
-      this.state.pendingBatches = await this.orm.call("bahmni.prepack.batch", "fetch_pending_batches", []);
+      await this.loadPendingBatches();
     }
   }
 
@@ -373,7 +517,7 @@ export class PrepackDashboard extends Component {
       
       // Refresh pending batches if in authorize mode
       if (this.state.mode === "authorize") {
-        this.state.pendingBatches = await this.orm.call("bahmni.prepack.batch", "fetch_pending_batches", []);
+        await this.loadPendingBatches();
       }
     } catch (error) {
       this.notification.add("Failed to reject item: " + error.message, { type: "danger" });
@@ -382,7 +526,7 @@ export class PrepackDashboard extends Component {
 
   async printLabels() {
     if (!this.state.batchId) {
-      this.notification.add("Select an authorized batch before printing labels.", { type: "warning" });
+      this.notification.add("Select a released batch before printing labels.", { type: "warning" });
       return;
     }
     const action = await this.orm.call(
@@ -392,7 +536,7 @@ export class PrepackDashboard extends Component {
     );
     await this.actionService.doAction(action);
     if (this.state.mode === "authorize" && this.state.isAuthorized) {
-      this.state.pendingBatches = await this.orm.call("bahmni.prepack.batch", "fetch_pending_batches", []);
+      await this.loadPendingBatches();
       this.clearSelectedBatch();
     }
   }
