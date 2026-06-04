@@ -4,6 +4,7 @@ from odoo.exceptions import UserError, ValidationError
 
 ELMIS_ADJUSTMENT_REASON_SELECTION = [
     ("Damaged", "Damaged"),
+    ("Damage", "Damage"),
     ("Expiry", "Expiry"),
     ("Stolen", "Stolen"),
     ("Lost", "Lost"),
@@ -88,24 +89,29 @@ class StockScrap(models.Model):
             return
 
         Outbox = self.env["elmis.outbox"].sudo()
-        existing_scrap_ids = set(
-            Outbox.search(
-                [
-                    ("source_stock_scrap_id", "in", done_scraps.ids),
-                    ("transaction_type", "=", "ADJUSTMENT"),
-                ]
-            ).mapped("source_stock_scrap_id").ids
+        existing = Outbox.search(
+            [
+                ("source_stock_scrap_id", "in", done_scraps.ids),
+                ("transaction_type", "=", "ADJUSTMENT"),
+                ("stock_scrap_side", "in", ["source", "destination"]),
+            ]
         )
+        existing_keys = {
+            (event.source_stock_scrap_id.id, event.stock_scrap_side)
+            for event in existing
+        }
 
-        for scrap in done_scraps.filtered(lambda item: item.id not in existing_scrap_ids):
-            Outbox.create(scrap._prepare_elmis_scrap_outbox_vals())
+        for scrap in done_scraps:
+            for side, vals in scrap._prepare_elmis_scrap_outbox_vals_by_side():
+                if (scrap.id, side) in existing_keys:
+                    continue
+                Outbox.create(vals)
 
-    def _prepare_elmis_scrap_outbox_vals(self):
+    def _prepare_elmis_scrap_outbox_vals_by_side(self):
         self.ensure_one()
         self._check_elmis_adjustment_ready()
-        return {
+        common_vals = {
             "transaction_type": "ADJUSTMENT",
-            "facility_code": self._get_elmis_scrap_facility_code(),
             "program_id": self.elmis_program_id.id,
             "elmis_orderable_id": self.product_id.id,
             "lot_id": self.lot_id.id,
@@ -113,11 +119,46 @@ class StockScrap(models.Model):
             "uom_id": self.product_uom_id.id,
             "transaction_date": self.date_done or fields.Datetime.now(),
             "prescription_ref": self.name,
-            "adjustment_reason": self.elmis_adjustment_reason,
             "source_stock_scrap_id": self.id,
         }
 
+        values = []
+        source_facility_code = self._get_elmis_scrap_source_facility_code()
+        if source_facility_code:
+            values.append(
+                (
+                    "source",
+                    dict(
+                        common_vals,
+                        facility_code=source_facility_code,
+                        adjustment_reason=self.elmis_adjustment_reason,
+                        stock_scrap_side="source",
+                    ),
+                )
+            )
+        if self.scrap_location_id.elmis_facility_code:
+            values.append(
+                (
+                    "destination",
+                    dict(
+                        common_vals,
+                        facility_code=self.scrap_location_id.elmis_facility_code,
+                        adjustment_reason="Transfer In",
+                        stock_scrap_side="destination",
+                    ),
+                )
+            )
+        return values
+
+    def _prepare_elmis_scrap_outbox_vals(self):
+        self.ensure_one()
+        vals_by_side = self._prepare_elmis_scrap_outbox_vals_by_side()
+        return vals_by_side[0][1] if vals_by_side else {}
+
     def _get_elmis_scrap_facility_code(self):
+        return self._get_elmis_scrap_source_facility_code()
+
+    def _get_elmis_scrap_source_facility_code(self):
         self.ensure_one()
         if self.location_id.elmis_facility_code:
             return self.location_id.elmis_facility_code

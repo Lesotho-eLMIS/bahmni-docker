@@ -21,6 +21,14 @@ class TestStockScrapElmisAdjustment(TransactionCase):
                 "elmis_facility_code": "A2681-cp",
             }
         )
+        cls.mapped_unserviceable_location = cls.env["stock.location"].create(
+            {
+                "name": "eLMIS Test Unserviceable",
+                "usage": "internal",
+                "location_id": cls.stock_location.id,
+                "elmis_facility_code": "A2681-uns",
+            }
+        )
         cls.env["ir.config_parameter"].sudo().set_param(
             "lesotho_elmis_integration.mirror_location_id",
             cls.mirror_location.id,
@@ -159,6 +167,46 @@ class TestStockScrapElmisAdjustment(TransactionCase):
         self.assertEqual(outbox.quantity, 4)
         self.assertEqual(outbox.uom_id, self.unit_uom)
         self.assertEqual(outbox.prescription_ref, scrap.name)
+        self.assertEqual(outbox.stock_scrap_side, "source")
+        self.assertFalse(
+            self.env["elmis.outbox"].search(
+                [
+                    ("source_stock_move_line_id", "in", scrap.move_id.move_line_ids.ids),
+                    ("stock_move_line_side", "!=", False),
+                ]
+            )
+        )
+
+    def test_elmis_scrap_to_mapped_unserviceable_creates_debit_and_credit(self):
+        self._seed_stock(quantity=10)
+        scrap = self._create_scrap(
+            scrap_qty=4,
+            scrap_location_id=self.mapped_unserviceable_location.id,
+            elmis_adjustment_reason="Damage",
+        )
+
+        scrap.action_validate()
+
+        outbox = self.env["elmis.outbox"].search(
+            [("source_stock_scrap_id", "=", scrap.id)]
+        )
+        self.assertEqual(len(outbox), 2)
+        source_event = outbox.filtered(lambda event: event.stock_scrap_side == "source")
+        destination_event = outbox.filtered(lambda event: event.stock_scrap_side == "destination")
+        self.assertEqual(source_event.facility_code, "A2681-cp")
+        self.assertEqual(source_event.adjustment_reason, "Damage")
+        self.assertEqual(destination_event.facility_code, "A2681-uns")
+        self.assertEqual(destination_event.adjustment_reason, "Transfer In")
+        self.assertEqual(source_event.quantity, 4)
+        self.assertEqual(destination_event.quantity, 4)
+        self.assertFalse(
+            self.env["elmis.outbox"].search(
+                [
+                    ("source_stock_move_line_id", "in", scrap.move_id.move_line_ids.ids),
+                    ("stock_move_line_side", "!=", False),
+                ]
+            )
+        )
 
     def test_validating_elmis_scrap_twice_does_not_duplicate_outbox(self):
         self._seed_stock(quantity=10)
@@ -173,6 +221,22 @@ class TestStockScrapElmisAdjustment(TransactionCase):
             ),
             1,
         )
+
+    def test_validating_mapped_unserviceable_scrap_twice_does_not_duplicate_sides(self):
+        self._seed_stock(quantity=10)
+        scrap = self._create_scrap(
+            scrap_qty=2,
+            scrap_location_id=self.mapped_unserviceable_location.id,
+        )
+
+        scrap.action_validate()
+        scrap._create_elmis_scrap_outbox_for_done_records()
+
+        outbox = self.env["elmis.outbox"].search(
+            [("source_stock_scrap_id", "=", scrap.id)]
+        )
+        self.assertEqual(len(outbox), 2)
+        self.assertEqual(set(outbox.mapped("stock_scrap_side")), {"source", "destination"})
 
     def test_non_elmis_scrap_does_not_create_outbox_or_require_reason(self):
         self.env["stock.quant"]._update_available_quantity(

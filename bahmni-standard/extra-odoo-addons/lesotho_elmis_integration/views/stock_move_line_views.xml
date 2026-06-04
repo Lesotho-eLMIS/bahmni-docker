@@ -1,0 +1,99 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+    <record id="view_stock_move_line_tree_elmis_transfer" model="ir.ui.view">
+        <field name="name">stock.move.line.tree.elmis.transfer</field>
+        <field name="model">stock.move.line</field>
+        <field name="inherit_id" ref="stock.view_move_line_tree"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='lot_id']" position="after">
+                <field name="elmis_transfer_program_id" optional="show"/>
+                <field name="elmis_transfer_debit_reason" optional="show"/>
+                <field name="elmis_transfer_credit_reason" optional="show"/>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="view_stock_move_line_tree_elmis_transfer_report" model="ir.ui.view">
+        <field name="name">stock.move.line.tree.elmis.transfer.report</field>
+        <field name="model">stock.move.line</field>
+        <field name="arch" type="xml">
+            <tree string="eLMIS Transfer Movement Sync" create="false" edit="false" delete="false">
+                <field name="date"/>
+                <field name="reference"/>
+                <field name="state"/>
+                <field name="product_id"/>
+                <field name="lot_id"/>
+                <field name="location_id"/>
+                <field name="location_dest_id"/>
+                <field name="qty_done"/>
+                <field name="product_uom_id"/>
+                <field name="elmis_transfer_program_id"/>
+                <field name="elmis_transfer_debit_reason"/>
+                <field name="elmis_transfer_credit_reason"/>
+                <field name="elmis_transfer_outbox_count"/>
+                <field name="elmis_transfer_sync_status"/>
+            </tree>
+        </field>
+    </record>
+
+    <record id="view_stock_move_line_search_elmis_transfer_report" model="ir.ui.view">
+        <field name="name">stock.move.line.search.elmis.transfer.report</field>
+        <field name="model">stock.move.line</field>
+        <field name="arch" type="xml">
+            <search string="eLMIS Transfer Movement Sync">
+                <field name="reference"/>
+                <field name="product_id"/>
+                <field name="lot_id"/>
+                <field name="location_id"/>
+                <field name="location_dest_id"/>
+                <filter name="done" string="Done" domain="[('state', '=', 'done')]"/>
+                <filter name="elmis_products" string="eLMIS Products" domain="[('product_id.is_elmis_product', '=', True)]"/>
+                <filter name="mapped_source" string="Mapped Source" domain="[('location_id.elmis_facility_code', '!=', False)]"/>
+                <filter name="mapped_destination" string="Mapped Destination" domain="[('location_dest_id.elmis_facility_code', '!=', False)]"/>
+                <separator/>
+                <group expand="0" string="Group By">
+                    <filter name="group_source" string="Source Location" context="{'group_by': 'location_id'}"/>
+                    <filter name="group_destination" string="Destination Location" context="{'group_by': 'location_dest_id'}"/>
+                    <filter name="group_product" string="Product" context="{'group_by': 'product_id'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <record id="view_stock_move_line_detailed_operation_tree_elmis_transfer" model="ir.ui.view">
+        <field name="name">stock.move.line.detailed.operation.tree.elmis.transfer</field>
+        <field name="model">stock.move.line</field>
+        <field name="inherit_id" ref="stock.view_stock_move_line_detailed_operation_tree"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='lot_name']" position="after">
+                <field name="elmis_transfer_program_id" optional="show"/>
+                <field name="elmis_transfer_debit_reason" optional="show"/>
+                <field name="elmis_transfer_credit_reason" optional="show"/>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="action_elmis_transfer_movement_sync" model="ir.actions.act_window">
+        <field name="name">eLMIS Transfer Movement Sync</field>
+        <field name="res_model">stock.move.line</field>
+        <field name="view_mode">tree</field>
+        <field name="view_id" ref="view_stock_move_line_tree_elmis_transfer_report"/>
+        <field name="search_view_id" ref="view_stock_move_line_search_elmis_transfer_report"/>
+        <field name="domain">[
+            ('product_id.is_elmis_product', '=', True),
+            '|',
+            ('location_id.elmis_facility_code', '!=', False),
+            ('location_dest_id.elmis_facility_code', '!=', False)
+        ]</field>
+        <field name="context">{'search_default_done': 1}</field>
+    </record>
+
+    <menuitem
+        id="menu_elmis_transfer_movement_sync"
+        name="eLMIS Transfer Movement Sync"
+        parent="stock.menu_stock_warehouse_mgmt"
+        action="action_elmis_transfer_movement_sync"
+        sequence="84"
+        groups="stock.group_stock_manager"/>
+
+</odoo>

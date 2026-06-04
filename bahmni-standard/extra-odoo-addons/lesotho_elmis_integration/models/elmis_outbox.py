@@ -69,6 +69,17 @@ class ElmisOutbox(models.Model):
         readonly=True,
         help="Move to unserviceable record that produced this outbox event.",
     )
+    stock_scrap_side = fields.Selection(
+        [
+            ("source", "Source Debit"),
+            ("destination", "Destination Credit"),
+        ],
+        string="Stock Scrap Side",
+        index=True,
+        copy=False,
+        readonly=True,
+        help="Side of a move to unserviceable represented by this outbox event.",
+    )
     source_stock_move_id = fields.Many2one(
         "stock.move",
         string="Source Stock Move",
@@ -76,6 +87,35 @@ class ElmisOutbox(models.Model):
         copy=False,
         readonly=True,
         help="Inventory adjustment move that produced this outbox event.",
+    )
+    source_stock_move_line_id = fields.Many2one(
+        "stock.move.line",
+        string="Source Stock Move Line",
+        index=True,
+        copy=False,
+        readonly=True,
+        help="Internal stock movement line that produced this outbox event.",
+    )
+    stock_move_line_side = fields.Selection(
+        [
+            ("source", "Source Debit"),
+            ("destination", "Destination Credit"),
+        ],
+        string="Stock Move Line Side",
+        index=True,
+        copy=False,
+        readonly=True,
+        help="Side of an internal stock movement represented by this outbox event.",
+    )
+    event_source_label = fields.Char(
+        string="Event Source",
+        compute="_compute_event_source_display",
+        help="Human-readable workflow that produced this outbox event.",
+    )
+    movement_side_label = fields.Char(
+        string="Movement Side",
+        compute="_compute_event_source_display",
+        help="Human-readable debit/credit side for movement-based events.",
     )
     consumption_mode = fields.Selection(
         [
@@ -181,14 +221,19 @@ class ElmisOutbox(models.Model):
             "Each sale order line can create only one eLMIS outbox event.",
         ),
         (
-            "source_stock_scrap_id_unique",
-            "UNIQUE(source_stock_scrap_id)",
-            "Each stock scrap can create only one eLMIS outbox event.",
+            "source_stock_scrap_side_unique",
+            "UNIQUE(source_stock_scrap_id, stock_scrap_side)",
+            "Each stock scrap side can create only one eLMIS outbox event.",
         ),
         (
             "source_stock_move_id_unique",
             "UNIQUE(source_stock_move_id)",
             "Each stock move can create only one eLMIS outbox event.",
+        ),
+        (
+            "source_stock_move_line_side_unique",
+            "UNIQUE(source_stock_move_line_id, stock_move_line_side)",
+            "Each stock move line side can create only one eLMIS outbox event.",
         ),
     ]
 
@@ -200,6 +245,47 @@ class ElmisOutbox(models.Model):
             if vals.get("transaction_type") == "DISPENSE" and not vals.get("adjustment_reason"):
                 vals["adjustment_reason"] = "Consumed"
         return super().create(vals_list)
+
+    @api.depends(
+        "transaction_type",
+        "source_sale_order_line_id",
+        "source_stock_scrap_id",
+        "source_stock_move_id",
+        "source_stock_move_line_id",
+        "stock_scrap_side",
+        "stock_move_line_side",
+    )
+    def _compute_event_source_display(self):
+        side_labels = {
+            "source": _("Source Debit"),
+            "destination": _("Destination Credit"),
+        }
+        for event in self:
+            if event.source_sale_order_line_id:
+                event.event_source_label = _("Dispense")
+            elif event.source_stock_scrap_id:
+                event.event_source_label = _("Move to Unserviceable")
+            elif event.source_stock_move_line_id:
+                event.event_source_label = _("Internal Transfer")
+            elif event.source_stock_move_id:
+                event.event_source_label = _("Inventory Adjustment")
+            elif event.transaction_type == "DISPENSE":
+                event.event_source_label = _("Dispense")
+            elif event.transaction_type == "ADJUSTMENT":
+                event.event_source_label = _("Adjustment")
+            else:
+                event.event_source_label = _("Other")
+
+            side = event.stock_scrap_side or event.stock_move_line_side
+            event.movement_side_label = side_labels.get(side)
+
+    def init(self):
+        self.env.cr.execute(
+            """
+            ALTER TABLE elmis_outbox
+            DROP CONSTRAINT IF EXISTS elmis_outbox_source_stock_scrap_id_unique
+            """
+        )
 
     def unlink(self):
         raise UserError(_("eLMIS outbox records are permanent and cannot be deleted."))
