@@ -16,7 +16,9 @@
                     <div class="o_lesotho_cp_bottom">
                         <div class="o_lesotho_cp_actions">
                             <button t-if="!state.readOnly" type="button" class="o_lesotho_cp_save" t-on-click="() => this.save()">Save</button>
-                            <button t-if="!state.readOnly" type="button" class="o_lesotho_cp_serve" t-att-disabled="!state.explanationConfirmed" t-on-click="() => this.serve()">Serve</button>
+                            <button t-if="!state.readOnly &amp;&amp; !this.isOnHold()" type="button" class="o_lesotho_cp_hold" t-on-click="() => this.putOnHold()">Put On Hold</button>
+                            <button t-if="!state.readOnly &amp;&amp; this.isOnHold()" type="button" class="o_lesotho_cp_resume" t-on-click="() => this.resumeDispensing()">Resume Dispensing</button>
+                            <button t-if="!state.readOnly" type="button" class="o_lesotho_cp_serve" t-att-disabled="!this.canServe()" t-on-click="() => this.serve()">Serve</button>
                             <button type="button" class="o_lesotho_cp_cancel" t-on-click="() => this.cancel()"><t t-esc="state.readOnly ? 'Close' : 'Cancel'"/></button>
                         </div>
                         <div class="o_lesotho_statusbar" aria-label="Prescription status">
@@ -28,6 +30,12 @@
                     </div>
                     <div t-if="state.readOnly" class="o_lesotho_readonly_notice">
                         This prescription has been fully served. You can review the details below, but the record is now read-only.
+                    </div>
+                    <div t-elif="this.isOnHold()" class="o_lesotho_readonly_notice">
+                        This prescription is on hold. Resume dispensing before serving.
+                        <t t-if="state.order.on_hold_reason">
+                            Reason: <t t-esc="state.order.on_hold_reason"/>
+                        </t>
                     </div>
                 </div>
 
@@ -166,6 +174,18 @@
                                                 <span>Served Internally</span>
                                                 <input type="checkbox" t-att-disabled="state.readOnly" t-att-checked="line.served_internally" t-on-change="(ev) => this.onFieldChanged(line, 'served_internally', ev.target.checked)"/>
                                             </label>
+                                            <label t-if="this.hasOutstandingBalance(line)" class="o_lesotho_field">
+                                                <span>Balance Resolution</span>
+                                                <select t-att-disabled="state.readOnly" t-att-value="line.balance_resolution || ''" t-on-change="(ev) => this.onFieldChanged(line, 'balance_resolution', ev.target.value)">
+                                                    <option value="">Select reason</option>
+                                                    <option value="external_referral" t-att-selected="line.balance_resolution === 'external_referral'">External referral</option>
+                                                    <option value="other" t-att-selected="line.balance_resolution === 'other'">Other</option>
+                                                </select>
+                                            </label>
+                                            <label t-if="this.hasOutstandingBalance(line) &amp;&amp; line.balance_resolution === 'other'" class="o_lesotho_field o_lesotho_field_full">
+                                                <span>Resolution Explanation</span>
+                                                <input t-att-disabled="state.readOnly" t-att-value="line.balance_resolution_note" t-on-change="(ev) => this.onFieldChanged(line, 'balance_resolution_note', ev.target.value)"/>
+                                            </label>
                                         </div>
                                     </section>
 
@@ -297,7 +317,7 @@
                     <div t-else="" class="o_lesotho_readonly_footer">
                         This prescription is complete. Open the list to review other prescriptions.
                     </div>
-                    <button t-if="!state.readOnly" class="o_lesotho_serve" t-att-disabled="!state.explanationConfirmed" t-on-click="() => this.serve()">Serve</button>
+                    <button t-if="!state.readOnly" class="o_lesotho_serve" t-att-disabled="!this.canServe()" t-on-click="() => this.serve()">Serve</button>
                 </div>
             </t>
         </div>

@@ -219,6 +219,14 @@
                             attrs="{'invisible': [('display_type', '!=', False)]}"
                         />
                         <field
+                            name="balance_resolution"
+                            attrs="{'invisible': [('display_type', '!=', False)]}"
+                        />
+                        <field
+                            name="balance_resolution_note"
+                            attrs="{'invisible': ['|', ('display_type', '!=', False), ('balance_resolution', '!=', 'other')]}"
+                        />
+                        <field
                             name="substitution_timestamp"
                             readonly="1"
                             attrs="{'invisible': [('display_type', '!=', False)]}"

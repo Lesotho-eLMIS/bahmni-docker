@@ -37,6 +37,11 @@ export class PrescriptionDispense extends Component {
             return;
         }
         const data = await this.orm.call("sale.order", "fetch_prescription_dispensing", [[this.state.orderId]]);
+        this.applyPrescriptionData(data);
+        this.state.loading = false;
+    }
+
+    applyPrescriptionData(data) {
         this.state.order = data;
         this.state.lines = data.lines;
         this.state.activeLineId = data.lines.length ? data.lines[0].id : false;
@@ -44,7 +49,6 @@ export class PrescriptionDispense extends Component {
         this.state.productOptions = data.product_options || [];
         this.state.explanationConfirmed = data.medication_explanation_confirmed;
         this.state.readOnly = Boolean(data.is_readonly);
-        this.state.loading = false;
     }
 
     async goToPrescriptionList() {
@@ -80,31 +84,83 @@ export class PrescriptionDispense extends Component {
 
     getLineStatus(line) {
         if (!line.served_internally) {
-            return "served externally";
+            return "Served Externally";
+        }
+        if (line.prescription_status === "balance_waived" || (this.hasOutstandingBalance(line) && line.balance_resolution)) {
+            return "Balance Waived";
         }
         const prescribed = Number(line.quantity_prescribed || 0);
         const dispensed = Number(line.quantity_dispensed || 0);
         if (dispensed <= 0) {
-            return "Awaiting Dispensing";
+            return "Not Dispensed";
         }
         if (dispensed < prescribed) {
-            return "Partially Served";
+            return "Partially Dispensed";
         }
-        return "Fully Served";
+        return "Fully Dispensed";
     }
 
     getLineStatusClass(line) {
         const status = this.getLineStatus(line);
-        if (status === "Fully Served" || status === "served externally") {
+        if (status === "Fully Dispensed" || status === "Served Externally" || status === "Balance Waived") {
             return "o_lesotho_tab_status served";
         }
-        if (status === "Partially Served") {
+        if (status === "Partially Dispensed") {
             return "o_lesotho_tab_status partial";
         }
-        if (status === "Awaiting Dispensing") {
+        if (status === "Not Dispensed") {
             return "o_lesotho_tab_status pending";
         }
         return "o_lesotho_tab_status served";
+    }
+
+    hasOutstandingBalance(line) {
+        if (!line.served_internally) {
+            return false;
+        }
+        const prescribed = Number(line.quantity_prescribed || 0);
+        const dispensed = Number(line.quantity_dispensed || 0);
+        return dispensed < prescribed;
+    }
+
+    collectBalanceResolution() {
+        const choice = window.prompt(
+            "No back order will be created. Enter balance resolution reason: external referral or other."
+        );
+        if (choice === null) {
+            return false;
+        }
+        const normalized = choice.trim().toLowerCase().replace(/[\s-]+/g, "_");
+        let balanceResolution = false;
+        if (["external", "referral", "external_referral"].includes(normalized)) {
+            balanceResolution = "external_referral";
+        } else if (normalized === "other") {
+            balanceResolution = "other";
+        }
+        if (!balanceResolution) {
+            this.notification.add(
+                "Choose either external referral or other before closing without a back order.",
+                { type: "warning" }
+            );
+            return false;
+        }
+
+        let balanceResolutionNote = "";
+        if (balanceResolution === "other") {
+            const note = window.prompt("Enter the other balance resolution explanation.");
+            if (note === null || !note.trim()) {
+                this.notification.add(
+                    "Enter an explanation for the other balance resolution reason.",
+                    { type: "warning" }
+                );
+                return false;
+            }
+            balanceResolutionNote = note.trim();
+        }
+        return {
+            balanceResolution,
+            balanceResolutionNote,
+        };
     }
 
     toggleReview() {
@@ -114,6 +170,14 @@ export class PrescriptionDispense extends Component {
     getOrderStatusClass(status) {
         const activeStatus = this.state.order.prescription_status || "awaiting_dispensing";
         return `o_lesotho_status_step ${activeStatus === status ? "active" : ""}`;
+    }
+
+    isOnHold() {
+        return this.state.order.prescription_status === "on_hold" || Boolean(this.state.order.is_on_hold);
+    }
+
+    canServe() {
+        return !this.state.readOnly && !this.isOnHold() && this.state.explanationConfirmed;
     }
 
     focusBarcode(index) {
@@ -213,6 +277,10 @@ export class PrescriptionDispense extends Component {
         }
         if (field === "served_internally" && !value) {
             this.updateLocal(line, "quantity_dispensed", 0);
+        }
+        if (field === "balance_resolution" && value !== "other") {
+            this.updateLocal(line, "balance_resolution_note", "");
+            this.saveLine(line, "balance_resolution_note", "");
         }
         if (field === 'quantity_dispensed') {
             const numericValue = parseFloat(value || 0);
@@ -336,17 +404,70 @@ export class PrescriptionDispense extends Component {
             await this.goToPrescriptionList();
             return;
         }
+        try {
+            await this.waitForPendingSaves();
+            await this.orm.call("sale.order", "action_save_prescription_from_ui", [[this.state.orderId]]);
+            this.notification.add("Prescription saved.", { type: "success" });
+        } catch (error) {
+            this.notification.add(
+                error.message || "Prescription not saved because some changes could not be persisted.",
+                { type: "danger" }
+            );
+        }
+    }
+
+    async putOnHold() {
+        if (this.state.readOnly) {
+            await this.goToPrescriptionList();
+            return;
+        }
+        const reason = window.prompt("Reason for putting this prescription on hold:");
+        if (!reason || !reason.trim()) {
+            this.notification.add("Enter a reason before putting the prescription on hold.", { type: "warning" });
+            return;
+        }
+        try {
+            await this.waitForPendingSaves();
+        } catch (error) {
+            this.notification.add(
+                "Prescription not put on hold because some changes were not saved. Please correct the highlighted issue and try again.",
+                { type: "warning" }
+            );
+            return;
+        }
         const listAction = await this.orm.call(
             "sale.order",
             "action_hold_prescription_from_ui",
-            [[this.state.orderId]]
+            [[this.state.orderId], reason.trim()]
         );
         await this.action.doAction(listAction);
+    }
+
+    async resumeDispensing() {
+        if (this.state.readOnly) {
+            await this.goToPrescriptionList();
+            return;
+        }
+        try {
+            const data = await this.orm.call(
+                "sale.order",
+                "action_resume_prescription_from_ui",
+                [[this.state.orderId]]
+            );
+            this.applyPrescriptionData(data);
+            this.notification.add("Dispensing resumed.", { type: "success" });
+        } catch (error) {
+            this.notification.add(error.message || "Prescription could not be resumed.", { type: "danger" });
+        }
     }
 
     async serve() {
         if (this.state.readOnly) {
             await this.goToPrescriptionList();
+            return;
+        }
+        if (this.isOnHold()) {
+            this.notification.add("Resume dispensing before serving an on-hold prescription.", { type: "warning" });
             return;
         }
         if (!this.state.explanationConfirmed) {
@@ -377,15 +498,25 @@ export class PrescriptionDispense extends Component {
             return;
         }
         let createBackorder = false;
+        let balanceResolution = false;
+        let balanceResolutionNote = false;
         if (summary.needs_backorder) {
             createBackorder = window.confirm(
                 "Some quantities are still outstanding. Create a back order for the balance?"
             );
+            if (!createBackorder) {
+                const resolution = this.collectBalanceResolution();
+                if (!resolution) {
+                    return;
+                }
+                balanceResolution = resolution.balanceResolution;
+                balanceResolutionNote = resolution.balanceResolutionNote;
+            }
         }
         const reportAction = await this.orm.call(
             "sale.order",
             "action_serve_prescription_from_ui",
-            [[this.state.orderId], createBackorder]
+            [[this.state.orderId], createBackorder, balanceResolution, balanceResolutionNote]
         );
         await this.action.doAction(reportAction);
         await this.goToPrescriptionList();

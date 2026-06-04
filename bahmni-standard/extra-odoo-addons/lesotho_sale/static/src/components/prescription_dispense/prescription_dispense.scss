@@ -107,6 +107,8 @@
 
 .o_lesotho_cp_serve,
 .o_lesotho_cp_save,
+.o_lesotho_cp_hold,
+.o_lesotho_cp_resume,
 .o_lesotho_cp_cancel {
     display: inline-flex;
     align-items: center;
@@ -137,6 +139,24 @@
 
 .o_lesotho_cp_save:hover:not(:disabled) {
     background: #dde7ee;
+}
+
+.o_lesotho_cp_hold {
+    background: #fff3d8;
+    color: #7a4b00;
+}
+
+.o_lesotho_cp_hold:hover:not(:disabled) {
+    background: #ffe6aa;
+}
+
+.o_lesotho_cp_resume {
+    background: #e4f6ea;
+    color: #24613d;
+}
+
+.o_lesotho_cp_resume:hover:not(:disabled) {
+    background: #ccebd8;
 }
 
 .o_lesotho_cp_serve:disabled {
