@@ -6,7 +6,7 @@
                 <i class="fa fa-map-marker"></i>
             </div>
             <div class="prepack-location-copy">
-                <label t-attf-class="prepack-location-label {{ this.canEditLocation() ? 'required-label' : '' }}" for="prepackLocation">Prepacking Location</label>
+                <label t-attf-class="prepack-location-label {{ this.canEditLocation() ? 'required-label' : '' }}" for="prepackLocation">Location</label>
             </div>
             <div class="prepack-location-control">
                 <t t-if="this.canEditLocation()">
@@ -16,7 +16,7 @@
                         t-att-value="state.selectedLocationId || ''"
                         t-on-change="(ev) => this.onLocationChange(ev)"
                     >
-                        <option value="">-- Select Prepacking Location --</option>
+                        <option value="">-- Select Location --</option>
                         <t t-foreach="state.prepackLocations" t-as="location" t-key="location.id">
                             <option t-att-value="location.id" t-att-selected="location.id === state.selectedLocationId" t-esc="location.name"></option>
                         </t>
@@ -211,7 +211,7 @@
                                     </div>
                                     <div class="card-body p-0">
                                         <table class="table table-borderless mb-0">
-                                            <thead class="bg-light text-uppercase fw-bold text-muted">
+                                            <thead class="bg-light fw-bold text-muted">
                                                 <tr>
                                                     <th class="ps-4 py-3 fs-5 required-label" width="22%">Prepack Size</th>
                                                     <th class="py-3 fs-5 required-label" width="22%">Number of Prepacks</th>
@@ -225,13 +225,13 @@
                                                     <tr class="align-middle border-bottom border-light">
                                                         <td class="ps-4 py-3">
                                                             <div class="input-group input-group-lg shadow-sm">
-                                                                <input type="text" class="form-control fw-bold fs-5 border-end-0" inputmode="decimal" pattern="[0-9]*[.]?[0-9]*" t-att-value="target.size" t-on-keydown="(ev) => this.preventNonNumericInput(ev, { allowDecimal: true })" t-on-input="(ev) => this.onNumericFieldInput(target, 'size', ev, { allowDecimal: true })" t-on-change="() => this.autoSave()"/>
+                                                                <input type="text" class="form-control fw-bold fs-5 border-end-0" inputmode="decimal" pattern="[0-9]*[.]?[0-9]*" t-att-value="this.getBlankZeroValue(target.size)" t-on-keydown="(ev) => this.preventNonNumericInput(ev, { allowDecimal: true })" t-on-input="(ev) => this.onNumericFieldInput(target, 'size', ev, { allowDecimal: true })" t-on-change="() => this.autoSave()"/>
                                                                 <span class="input-group-text bg-white text-muted border-start-0 fw-bold fs-6"><t t-esc="item.uom"/></span>
                                                             </div>
                                                         </td>
                                                         <td class="py-3">
                                                             <div class="input-group input-group-lg shadow-sm">
-                                                                <input type="number" class="form-control fw-bold fs-5 border-end-0" min="0" inputmode="numeric" pattern="[0-9]*" t-att-value="target.qty" t-on-keydown="(ev) => this.preventNonNumericInput(ev)" t-on-input="(ev) => this.onNumericFieldInput(target, 'qty', ev)" t-on-change="() => this.autoSave()"/>
+                                                                <input type="number" class="form-control fw-bold fs-5 border-end-0" min="0" inputmode="numeric" pattern="[0-9]*" t-att-value="this.getBlankZeroValue(target.qty)" t-on-keydown="(ev) => this.preventNonNumericInput(ev)" t-on-input="(ev) => this.onNumericFieldInput(target, 'qty', ev)" t-on-change="() => this.autoSave()"/>
                                                                 <span class="input-group-text bg-white text-muted border-start-0 fw-bold fs-6">packs</span>
                                                             </div>
                                                         </td>
@@ -239,20 +239,15 @@
                                                             <span class="text-dark fw-bold fs-5"><t t-esc="target.size * target.qty"/></span> <small class="text-muted fw-bold fs-6"><t t-esc="item.uom"/></small>
                                                         </td>
                                                         <td class="py-3">
-                                                            <div class="input-group input-group-lg shadow-sm">
-                                                                <input
-                                                                    type="text"
-                                                                    class="form-control fw-bold fs-5 border-end-0"
-                                                                    t-att-list="'packagingMaterialOptions-' + item.key + '-' + target_index"
-                                                                    t-att-value="target.packaging_material_search || ''"
-                                                                    placeholder="-- Select / Search Material --"
-                                                                    autocomplete="off"
-                                                                    t-on-input="(ev) => this.onPackagingMaterialSearchInput(target, ev)"
-                                                                />
-                                                                <button class="btn btn-primary px-3" type="button" t-on-click="() => this.searchPackagingMaterial(target)">
-                                                                    <i class="fa fa-search"></i>
-                                                                </button>
-                                                            </div>
+                                                            <input
+                                                                type="text"
+                                                                class="form-select form-select-lg fw-semibold fs-5 shadow-sm"
+                                                                t-att-list="'packagingMaterialOptions-' + item.key + '-' + target_index"
+                                                                t-att-value="target.packaging_material_search || ''"
+                                                                placeholder="-- Search / Select Material --"
+                                                                autocomplete="off"
+                                                                t-on-input="(ev) => this.onPackagingMaterialSearchInput(target, ev)"
+                                                            />
                                                             <datalist t-att-id="'packagingMaterialOptions-' + item.key + '-' + target_index">
                                                                 <t t-foreach="state.packagingMaterials" t-as="material" t-key="material.id">
                                                                     <option t-att-value="this.getPackagingMaterialLabel(material)"></option>
@@ -315,7 +310,7 @@
                                     <i class="fa fa-map-marker"></i>
                                 </div>
                                 <div class="prepack-location-copy">
-                                    <label class="prepack-location-label required-label" for="authorizationLocation">Prepacking Location</label>
+                                    <label class="prepack-location-label required-label" for="authorizationLocation">Location</label>
                                 </div>
                                 <div class="prepack-location-control">
                                     <select
@@ -324,7 +319,7 @@
                                         t-att-value="state.authorizationLocationId || ''"
                                         t-on-change="(ev) => this.onAuthorizationLocationChange(ev)"
                                     >
-                                        <option value="">-- Select Prepacking Location --</option>
+                                        <option value="">-- Select Location --</option>
                                         <t t-foreach="state.prepackLocations" t-as="location" t-key="location.id">
                                             <option t-att-value="location.id" t-att-selected="location.id === state.authorizationLocationId" t-esc="location.name"></option>
                                         </t>
@@ -335,12 +330,12 @@
                             <div class="card shadow-sm">
                                 <div class="card-body p-0">
                                     <table class="table table-hover align-middle mb-0">
-                                        <thead class="table-dark text-uppercase small fw-bold">
+                                        <thead class="table-dark small fw-bold">
                                             <tr>
                                                 <th class="ps-4 py-3">Batch Reference</th>
                                                 <th class="py-3">Date Created</th>
                                                 <th class="py-3">Responsible</th>
-                                                <th class="py-3">Prepacking Location</th>
+                                                <th class="py-3">Location</th>
                                                 <th class="py-3 text-center">Items</th>
                                                 <th class="pe-4 py-3 text-center">Action</th>
                                             </tr>
@@ -523,12 +518,12 @@
                             <div class="card shadow-sm">
                                 <div class="card-body p-0">
                                     <table class="table table-hover align-middle mb-0">
-                                        <thead class="table-dark text-uppercase small fw-bold">
+                                        <thead class="table-dark small fw-bold">
                                             <tr>
                                                 <th class="ps-4 py-3">Batch Reference</th>
                                                 <th class="py-3">Date Created</th>
                                                 <th class="py-3">Responsible</th>
-                                                <th class="py-3">Prepacking Location</th>
+                                                <th class="py-3">Location</th>
                                                 <th class="py-3 text-center">Status</th>
                                                 <th class="pe-4 py-3 text-center">Action</th>
                                             </tr>
@@ -598,7 +593,7 @@
                             <div class="card shadow-sm">
                                 <div class="card-body p-0">
                                     <table class="table table-hover align-middle mb-0">
-                                        <thead class="table-dark text-uppercase small fw-bold">
+                                        <thead class="table-dark small fw-bold">
                                             <tr>
                                                 <th class="ps-4 py-3">Product &amp; Batch</th>
                                                 <th class="py-3 text-center">Pack Size</th>

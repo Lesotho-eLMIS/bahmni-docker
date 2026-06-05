@@ -256,38 +256,12 @@ export class PrepackDashboard extends Component {
     return `${material.name} (${material.soh} ${material.uom})`;
   }
 
-  getDefaultPackagingMaterial(item = null) {
-    const preferredExactMaterial = this.state.packagingMaterials.find(material => {
-      const materialName = material.name.toLowerCase();
-      return (
-        materialName.includes("bag039-sup002-1000") ||
-        materialName.includes("bags tablet small 75*90 supplies 1000")
-      );
-    });
-    if (preferredExactMaterial) {
-      return preferredExactMaterial;
-    }
-
-    const productName = (item && item.name ? item.name : "").toLowerCase();
-    const preferredKeywords = [];
-    if (/(tablet|tab|capsule|cap|pill|dispersible)/.test(productName)) {
-      preferredKeywords.push("tablet", "tab", "capsule");
-    }
-    if (/(syrup|solution|suspension|liquid|ml)/.test(productName)) {
-      preferredKeywords.push("bottle", "liquid");
-    }
-    if (/(cream|ointment|gel|lotion)/.test(productName)) {
-      preferredKeywords.push("tube", "ointment", "cream");
-    }
-    const preferredMaterial = this.state.packagingMaterials.find(material => {
-      const materialName = material.name.toLowerCase();
-      return preferredKeywords.some(keyword => materialName.includes(keyword));
-    });
-    return preferredMaterial || (this.state.packagingMaterials.length ? this.state.packagingMaterials[0] : null);
-  }
-
   getPackagingMaterialById(materialId) {
     return this.state.packagingMaterials.find(item => item.id === materialId) || null;
+  }
+
+  getBlankZeroValue(value) {
+    return Number(value) === 0 ? "" : value;
   }
 
   normalizeBatchItems() {
@@ -298,8 +272,6 @@ export class PrepackDashboard extends Component {
           this.applyPackagingMaterial(target, material);
         } else if (target.packaging_material_name) {
           target.packaging_material_search = target.packaging_material_name;
-        } else if (!target.packaging_material_id) {
-          this.applyPackagingMaterial(target, this.getDefaultPackagingMaterial(item));
         }
         target.expected_qty = Number(target.expected_qty || target.qty || 0);
         target.actual_qty = Number(target.actual_qty || target.expected_qty || 0);
@@ -367,7 +339,7 @@ export class PrepackDashboard extends Component {
       return;
     }
     const item = { ...this.state.selectedProduct, targets: [] };
-    item.targets.push(this.getEmptyTarget(this.getDefaultPackagingMaterial(item)));
+    item.targets.push(this.getEmptyTarget());
     this.state.batchItems.push(item);
 
     this.resetSelectedProduct();
@@ -428,14 +400,14 @@ export class PrepackDashboard extends Component {
   }
 
   async addTarget(item) {
-    item.targets.push(this.getEmptyTarget(this.getDefaultPackagingMaterial(item)));
+    item.targets.push(this.getEmptyTarget());
     await this.autoSave();
   }
 
   getEmptyTarget(material = null) {
     const target = {
-      size: 0,
-      qty: 0,
+      size: "",
+      qty: "",
       packaging_material_id: null,
       packaging_material_name: "",
       packaging_material_search: "",
@@ -449,28 +421,13 @@ export class PrepackDashboard extends Component {
   async onPackagingMaterialSearchInput(target, ev) {
     target.packaging_material_search = ev.target.value;
     const material = this.state.packagingMaterials.find(
-      item => this.getPackagingMaterialLabel(item) === target.packaging_material_search || item.name === target.packaging_material_search
+      item => this.getPackagingMaterialLabel(item) === target.packaging_material_search
     );
     if (material) {
       await this.setPackagingMaterial(target, material);
+    } else {
+      this.clearPackagingMaterial(target);
     }
-  }
-
-  async searchPackagingMaterial(target) {
-    const searchValue = (target.packaging_material_search || "").trim().toLowerCase();
-    if (!searchValue) {
-      this.notification.add("Type a packaging material name before searching.", { type: "warning" });
-      return;
-    }
-    const material = this.state.packagingMaterials.find(item =>
-      this.getPackagingMaterialLabel(item).toLowerCase().includes(searchValue) ||
-      item.name.toLowerCase().includes(searchValue)
-    );
-    if (!material) {
-      this.notification.add("No packaging material found for that search.", { type: "warning" });
-      return;
-    }
-    await this.setPackagingMaterial(target, material);
   }
 
   async setPackagingMaterial(target, product) {
@@ -484,6 +441,13 @@ export class PrepackDashboard extends Component {
     target.packaging_material_search = product ? this.getPackagingMaterialLabel(product) : "";
     target.packaging_material_soh = product ? product.soh : 0;
     target.packaging_material_uom = product ? product.uom : "";
+  }
+
+  clearPackagingMaterial(target) {
+    target.packaging_material_id = null;
+    target.packaging_material_name = "";
+    target.packaging_material_soh = 0;
+    target.packaging_material_uom = "";
   }
 
   async removeTarget(item, index) {

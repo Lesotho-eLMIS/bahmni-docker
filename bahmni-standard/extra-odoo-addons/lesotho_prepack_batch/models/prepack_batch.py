@@ -249,7 +249,6 @@ class BahmniPrepackBatch(models.Model):
         product_domain = [
             ("active", "=", True),
             ("detailed_type", "in", ["product", "consu"]),
-            ("is_prepack", "=", False),
         ]
         if "company_id" in self.env["product.product"]._fields:
             product_domain.extend(
