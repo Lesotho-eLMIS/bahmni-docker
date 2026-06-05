@@ -190,6 +190,62 @@
     line-height: 1.45;
 }
 
+.o_lesotho_linked_backorders {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    align-items: center;
+    margin-top: 6px;
+    color: #35506b;
+    font-size: 12px;
+    line-height: 1.4;
+}
+
+.o_lesotho_linked_backorders span {
+    padding: 2px 6px;
+    border: 1px solid #d4dee7;
+    border-radius: 4px;
+    background: #f7fafc;
+}
+
+.o_lesotho_balance_resolution_modal,
+.o_lesotho_confirmation_modal {
+    color: #17202a;
+}
+
+.o_lesotho_dialog_hint {
+    margin: 0 0 12px;
+    color: #4f5f70;
+    font-size: 13px;
+    line-height: 1.4;
+}
+
+.o_lesotho_dialog_field {
+    display: grid;
+    gap: 6px;
+    margin-bottom: 12px;
+    color: #223247;
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.o_lesotho_dialog_field select,
+.o_lesotho_dialog_field textarea {
+    width: 100%;
+    min-height: 34px;
+    padding: 6px 8px;
+    border: 1px solid #c7d1db;
+    border-radius: 4px;
+    background: #ffffff;
+    color: #17202a;
+    font: inherit;
+    font-weight: 400;
+}
+
+.o_lesotho_dialog_error {
+    margin-bottom: 0;
+}
+
 .o_lesotho_statusbar {
     display: flex;
     align-items: center;

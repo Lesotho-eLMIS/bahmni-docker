@@ -139,6 +139,21 @@ class ExtendedSaleOrderLine(models.Model):
         copy=False,
         help="Free-text explanation for balance resolutions that need additional context.",
     )
+    prescription_backorder_origin_line_id = fields.Many2one(
+        "sale.order.line",
+        string="Original Prescription Line",
+        copy=False,
+        readonly=True,
+        index=True,
+        help="Original prescription line that created this back-order line.",
+    )
+    prescription_backorder_line_ids = fields.One2many(
+        "sale.order.line",
+        "prescription_backorder_origin_line_id",
+        string="Linked Back-Order Lines",
+        readonly=True,
+        help="Back-order lines created from this original prescription line.",
+    )
 
     is_existing_prescription = fields.Boolean(
         string="Existing Prescription",

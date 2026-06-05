@@ -358,9 +358,10 @@ class TestPrescriptionDispensing(SavepointCase):
         self.assertEqual(line.prescription_status, "fully_served")
         self.assertFalse(line_2.exists())
         self.assertEqual(backorder.prescription_status, "awaiting_dispensing")
+        self.assertEqual(backorder.prescription_backorder_origin_id.id, order.id)
         self.assertEqual(backorder_line.prescribed_qty_base_units, 5.0)
         self.assertEqual(backorder_line.product_uom_qty, 0.0)
-        self.assertEqual(order.prescription_status, "fully_served")
+        self.assertEqual(order.prescription_status, "partially_served_backorder_created")
 
     def test_save_action_keeps_prescription_status_unchanged(self):
         line = self._create_order_line(quantity=5.0)
@@ -428,14 +429,38 @@ class TestPrescriptionDispensing(SavepointCase):
         self.assertIn("report/pdf/lesotho_sale.report_prescription_labels", report_action["url"])
         self.assertEqual(report_action["target"], "new")
         line = self.env["sale.order.line"].browse(line.id)
-        self.assertEqual(order.prescription_status, "fully_served")
-        self.assertEqual(line.prescription_status, "fully_served")
-        self.assertEqual(line.prescribed_qty_base_units, 4.0)
+        self.assertEqual(order.prescription_status, "partially_served_backorder_created")
+        self.assertEqual(line.prescription_status, "partially_fulfilled")
+        self.assertEqual(line.prescribed_qty_base_units, 10.0)
+        self.assertEqual(line.product_uom_qty, 4.0)
+        self.assertEqual(order._get_dispensing_label_lines().ids, line.ids)
         self.assertTrue(backorder)
         self.assertEqual(backorder.prescription_status, "awaiting_dispensing")
+        self.assertEqual(backorder.prescription_backorder_origin_id.id, order.id)
         self.assertEqual(backorder_line.prescribed_qty_base_units, 6.0)
         self.assertEqual(backorder_line.product_uom_qty, 0.0)
         self.assertEqual(backorder_line.prescription_status, "awaiting_dispensing")
+        self.assertEqual(backorder_line.prescription_backorder_origin_line_id.id, line.id)
+        self.assertFalse(backorder._get_dispensing_label_lines())
+
+        original_payload = order.fetch_prescription_dispensing()
+        backorder_payload = backorder.fetch_prescription_dispensing()
+
+        self.assertTrue(original_payload["is_readonly"])
+        self.assertEqual(
+            original_payload["linked_backorders"][0]["id"],
+            backorder.id,
+        )
+        self.assertEqual(
+            backorder_payload["original_prescription"]["id"],
+            order.id,
+        )
+        self.assertEqual(
+            original_payload["lines"][0]["backorder_lines"][0]["id"],
+            backorder_line.id,
+        )
+        with self.assertRaises(UserError):
+            order.update_prescription_dispensing_line(line.id, {"comments": "closed"})
 
     def test_partial_serve_without_backorder_requires_balance_resolution(self):
         line = self._create_order_line(quantity=5.0)

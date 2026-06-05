@@ -23,6 +23,19 @@ export class PrescriptionDispense extends Component {
             explanationConfirmed: false,
             reviewExpanded: true,
             readOnly: false,
+            balanceResolutionDialog: {
+                visible: false,
+                reason: "external_referral",
+                note: "",
+                error: "",
+            },
+            confirmationDialog: {
+                visible: false,
+                title: "",
+                message: "",
+                confirmLabel: "Confirm",
+                cancelLabel: "Cancel",
+            },
         });
 
         onMounted(async () => {
@@ -124,43 +137,84 @@ export class PrescriptionDispense extends Component {
     }
 
     collectBalanceResolution() {
-        const choice = window.prompt(
-            "No back order will be created. Enter balance resolution reason: external referral or other."
-        );
-        if (choice === null) {
-            return false;
-        }
-        const normalized = choice.trim().toLowerCase().replace(/[\s-]+/g, "_");
-        let balanceResolution = false;
-        if (["external", "referral", "external_referral"].includes(normalized)) {
-            balanceResolution = "external_referral";
-        } else if (normalized === "other") {
-            balanceResolution = "other";
-        }
-        if (!balanceResolution) {
-            this.notification.add(
-                "Choose either external referral or other before closing without a back order.",
-                { type: "warning" }
-            );
-            return false;
-        }
+        this.state.balanceResolutionDialog.visible = true;
+        this.state.balanceResolutionDialog.reason = "external_referral";
+        this.state.balanceResolutionDialog.note = "";
+        this.state.balanceResolutionDialog.error = "";
+        return new Promise((resolve) => {
+            this.balanceResolutionResolver = resolve;
+        });
+    }
 
-        let balanceResolutionNote = "";
-        if (balanceResolution === "other") {
-            const note = window.prompt("Enter the other balance resolution explanation.");
-            if (note === null || !note.trim()) {
-                this.notification.add(
-                    "Enter an explanation for the other balance resolution reason.",
-                    { type: "warning" }
-                );
-                return false;
-            }
-            balanceResolutionNote = note.trim();
+    setBalanceResolutionReason(value) {
+        this.state.balanceResolutionDialog.reason = value;
+        this.state.balanceResolutionDialog.error = "";
+        if (value !== "other") {
+            this.state.balanceResolutionDialog.note = "";
         }
-        return {
-            balanceResolution,
-            balanceResolutionNote,
-        };
+    }
+
+    setBalanceResolutionNote(value) {
+        this.state.balanceResolutionDialog.note = value;
+        this.state.balanceResolutionDialog.error = "";
+    }
+
+    cancelBalanceResolutionDialog() {
+        this.state.balanceResolutionDialog.visible = false;
+        if (this.balanceResolutionResolver) {
+            this.balanceResolutionResolver(false);
+            this.balanceResolutionResolver = null;
+        }
+    }
+
+    confirmBalanceResolutionDialog() {
+        const reason = this.state.balanceResolutionDialog.reason;
+        const note = (this.state.balanceResolutionDialog.note || "").trim();
+        if (!["external_referral", "other"].includes(reason)) {
+            this.state.balanceResolutionDialog.error =
+                "Choose either external referral or other before closing without a back order.";
+            return;
+        }
+        if (reason === "other" && !note) {
+            this.state.balanceResolutionDialog.error =
+                "Enter an explanation for the other balance resolution reason.";
+            return;
+        }
+        this.state.balanceResolutionDialog.visible = false;
+        if (this.balanceResolutionResolver) {
+            this.balanceResolutionResolver({
+                balanceResolution: reason,
+                balanceResolutionNote: note,
+            });
+            this.balanceResolutionResolver = null;
+        }
+    }
+
+    confirmAction({ title, message, confirmLabel = "Confirm", cancelLabel = "Cancel" }) {
+        this.state.confirmationDialog.visible = true;
+        this.state.confirmationDialog.title = title;
+        this.state.confirmationDialog.message = message;
+        this.state.confirmationDialog.confirmLabel = confirmLabel;
+        this.state.confirmationDialog.cancelLabel = cancelLabel;
+        return new Promise((resolve) => {
+            this.confirmationResolver = resolve;
+        });
+    }
+
+    cancelConfirmationDialog() {
+        this.state.confirmationDialog.visible = false;
+        if (this.confirmationResolver) {
+            this.confirmationResolver(false);
+            this.confirmationResolver = null;
+        }
+    }
+
+    confirmConfirmationDialog() {
+        this.state.confirmationDialog.visible = false;
+        if (this.confirmationResolver) {
+            this.confirmationResolver(true);
+            this.confirmationResolver = null;
+        }
     }
 
     toggleReview() {
@@ -482,7 +536,13 @@ export class PrescriptionDispense extends Component {
             );
             return;
         }
-        if (!window.confirm("Are you sure you want to dispense these products and update the prescription status?")) {
+        const confirmedServe = await this.confirmAction({
+            title: "Confirm Dispensing",
+            message: "Are you sure you want to dispense these products and update the prescription status?",
+            confirmLabel: "Dispense",
+            cancelLabel: "Cancel",
+        });
+        if (!confirmedServe) {
             return;
         }
         const summary = await this.orm.call(
@@ -501,11 +561,14 @@ export class PrescriptionDispense extends Component {
         let balanceResolution = false;
         let balanceResolutionNote = false;
         if (summary.needs_backorder) {
-            createBackorder = window.confirm(
-                "Some quantities are still outstanding. Create a back order for the balance?"
-            );
+            createBackorder = await this.confirmAction({
+                title: "Outstanding Balance",
+                message: "Some quantities are still outstanding. Create a back order for the balance?",
+                confirmLabel: "Create Back Order",
+                cancelLabel: "Choose Resolution",
+            });
             if (!createBackorder) {
-                const resolution = this.collectBalanceResolution();
+                const resolution = await this.collectBalanceResolution();
                 if (!resolution) {
                     return;
                 }
