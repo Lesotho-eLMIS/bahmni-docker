@@ -322,6 +322,11 @@ export class PrescriptionDispense extends Component {
         const selectedBatch = batchOptions.find((item) => item.batch_number === value);
         this.updateLocal(line, "batch_number", value);
         this.updateLocal(line, "expiry_date", selectedBatch ? selectedBatch.expiry_date : "");
+        this.updateLocal(
+            line,
+            "selected_batch_available_qty",
+            selectedBatch ? selectedBatch.available_qty : 0
+        );
         this.saveLine(line, "batch_number", value, { skipLocalUpdate: true });
     }
 

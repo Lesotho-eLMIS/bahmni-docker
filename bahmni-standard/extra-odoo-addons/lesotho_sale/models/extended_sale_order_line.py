@@ -236,6 +236,11 @@ class ExtendedSaleOrderLine(models.Model):
         digits=(16, 4),
         compute="_compute_stock_on_hand",
     )
+    selected_batch_available_qty = fields.Float(
+        string="Selected Batch Available",
+        digits=(16, 4),
+        compute="_compute_selected_batch_available_qty",
+    )
 
     # ============ COMPUTED FIELDS ============
     out_of_stock = fields.Boolean(
@@ -565,11 +570,27 @@ class ExtendedSaleOrderLine(models.Model):
         qty_rounding = self.product_uom.rounding or 0.0001
         return float_compare(served_qty, 0.0, precision_rounding=qty_rounding) > 0
     
-    @api.depends('product_id', 'product_uom_qty')
+    @api.depends(
+        "product_id",
+        "product_uom_qty",
+        "order_id.shop_id",
+        "order_id.shop_id.location_id",
+        "order_id.warehouse_id",
+        "order_id.warehouse_id.lot_stock_id",
+    )
     def _compute_out_of_stock(self):
         for line in self:
             if line.product_id:
-                line.out_of_stock = line.product_id.qty_available < line.product_uom_qty
+                available_qty = line.stock_on_hand
+                required_qty = line.product_uom._compute_quantity(
+                    line.product_uom_qty or 0.0,
+                    line.product_id.uom_id,
+                )
+                line.out_of_stock = float_compare(
+                    available_qty,
+                    required_qty,
+                    precision_rounding=line.product_id.uom_id.rounding or 0.0001,
+                ) < 0
             else:
                 line.out_of_stock = False
 
@@ -740,14 +761,14 @@ class ExtendedSaleOrderLine(models.Model):
         if not product:
             return []
 
+        source_location = self._get_dispensing_source_location()
         quant_domain = [
             ("product_id", "=", product.id),
             ("location_id.usage", "=", "internal"),
             ("lot_id", "!=", False),
         ]
-        warehouse = self.order_id.warehouse_id
-        if warehouse and warehouse.lot_stock_id:
-            quant_domain.append(("location_id", "child_of", warehouse.lot_stock_id.id))
+        if source_location:
+            quant_domain.append(("location_id", "child_of", source_location.id))
 
         lot_entries = {}
         rounding = product.uom_id.rounding or 0.0001
@@ -764,13 +785,6 @@ class ExtendedSaleOrderLine(models.Model):
                 },
             )
             entry["available_qty"] += available_qty
-
-        if not lot_entries:
-            for lot in self.env["stock.lot"].search([("product_id", "=", product.id)]):
-                lot_entries[lot.id] = {
-                    "lot": lot,
-                    "available_qty": 0.0,
-                }
 
         return sorted(
             lot_entries.values(),
@@ -793,6 +807,32 @@ class ExtendedSaleOrderLine(models.Model):
             ],
             limit=1,
         )
+
+    def _get_dispensing_source_location(self):
+        self.ensure_one()
+        shop = self.order_id.shop_id
+        if shop and "location_id" in shop._fields and shop.location_id:
+            return shop.location_id
+        warehouse = self.order_id.warehouse_id
+        if warehouse and warehouse.lot_stock_id:
+            return warehouse.lot_stock_id
+        return self.env["stock.location"]
+
+    def _get_dispensing_lot_available_qty(self, product=None, lot=None):
+        self.ensure_one()
+        product = product or self.product_id
+        lot = lot or self._find_dispensing_lot(product, self.dispensing_batch_number)
+        source_location = self._get_dispensing_source_location()
+        if not product or not lot or not source_location:
+            return 0.0
+        quants = self.env["stock.quant"].search(
+            [
+                ("product_id", "=", product.id),
+                ("location_id", "child_of", source_location.id),
+                ("lot_id", "=", lot.id),
+            ]
+        )
+        return sum(quant.quantity - quant.reserved_quantity for quant in quants)
 
     def _format_dispensing_lot_expiry(self, lot):
         self.ensure_one()
@@ -844,6 +884,18 @@ class ExtendedSaleOrderLine(models.Model):
                 }
             )
         return options
+
+    @api.depends(
+        "product_id",
+        "dispensing_batch_number",
+        "order_id.shop_id",
+        "order_id.shop_id.location_id",
+        "order_id.warehouse_id",
+        "order_id.warehouse_id.lot_stock_id",
+    )
+    def _compute_selected_batch_available_qty(self):
+        for line in self:
+            line.selected_batch_available_qty = line._get_dispensing_lot_available_qty()
 
     def _prepare_dispensing_batch_selection_vals(self, batch_number=False, product=None):
         self.ensure_one()
@@ -913,7 +965,13 @@ class ExtendedSaleOrderLine(models.Model):
             line.dispensing_pack_candidate_count = count
             line.can_suggest_pack = bool(count)
 
-    @api.depends("product_id", "order_id.warehouse_id")
+    @api.depends(
+        "product_id",
+        "order_id.shop_id",
+        "order_id.shop_id.location_id",
+        "order_id.warehouse_id",
+        "order_id.warehouse_id.lot_stock_id",
+    )
     def _compute_stock_on_hand(self):
         Quant = self.env["stock.quant"]
         for line in self:
@@ -923,9 +981,9 @@ class ExtendedSaleOrderLine(models.Model):
                     ("product_id", "=", line.product_id.id),
                     ("location_id.usage", "=", "internal"),
                 ]
-                warehouse = line.order_id.warehouse_id
-                if warehouse and warehouse.lot_stock_id:
-                    domain.append(("location_id", "child_of", warehouse.lot_stock_id.id))
+                source_location = line._get_dispensing_source_location()
+                if source_location:
+                    domain.append(("location_id", "child_of", source_location.id))
                 quants = Quant.search(domain)
                 stock_on_hand = sum(quants.mapped("available_quantity"))
             line.stock_on_hand = stock_on_hand
@@ -1175,10 +1233,56 @@ class ExtendedSaleOrderLine(models.Model):
             ("location_id.usage", "=", "internal"),
             ("lot_id", "!=", False),
         ]
-        warehouse = self.order_id.warehouse_id
-        if warehouse and warehouse.lot_stock_id:
-            quant_domain.append(("location_id", "child_of", warehouse.lot_stock_id.id))
+        source_location = self._get_dispensing_source_location()
+        if source_location:
+            quant_domain.append(("location_id", "child_of", source_location.id))
         return self.env["stock.quant"].search(quant_domain)
+
+    def _check_dispensing_batch_available(self):
+        for line in self:
+            if (
+                line.display_type
+                or not line.served_internally
+                or not line.product_id
+                or line.product_id.tracking == "none"
+            ):
+                continue
+            required_qty = line.product_uom._compute_quantity(
+                line.product_uom_qty or 0.0,
+                line.product_id.uom_id,
+            )
+            if float_compare(
+                required_qty,
+                0.0,
+                precision_rounding=line.product_id.uom_id.rounding or 0.0001,
+            ) <= 0:
+                continue
+            lot = line._find_dispensing_lot(line.product_id, line.dispensing_batch_number)
+            if not lot:
+                raise UserError(
+                    _("Select an available batch before serving %(product)s.")
+                    % {"product": line.product_id.display_name}
+                )
+            available_qty = line._get_dispensing_lot_available_qty(line.product_id, lot)
+            if float_compare(
+                available_qty,
+                required_qty,
+                precision_rounding=line.product_id.uom_id.rounding or 0.0001,
+            ) < 0:
+                raise UserError(
+                    _(
+                        "Insufficient stock for %(product)s batch %(lot)s at %(location)s. "
+                        "Requested: %(requested).2f %(uom)s. Available: %(available).2f %(uom)s."
+                    )
+                    % {
+                        "product": line.product_id.display_name,
+                        "lot": lot.name,
+                        "location": line._get_dispensing_source_location().display_name,
+                        "requested": required_qty,
+                        "available": available_qty,
+                        "uom": line.product_id.uom_id.name,
+                    }
+                )
 
     def _get_lot_expiry_key(self, lot):
         self.ensure_one()

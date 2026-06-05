@@ -35,6 +35,11 @@ class TestStockMoveLineElmisTransfer(TransactionCase):
             cls.elmis_product,
             "cdcdcdcd-cdcd-cdcd-cdcd-cdcdcdcdcdcd",
         )
+        cls.other_elmis_lot = cls._create_lot(
+            "LOT-DTG-OTHER",
+            cls.elmis_product,
+            "eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee",
+        )
         cls.multi_program_lot = cls._create_lot(
             "LOT-MULTI-001",
             cls.multi_program_product,
@@ -105,15 +110,17 @@ class TestStockMoveLineElmisTransfer(TransactionCase):
         program=None,
         debit_reason="Transfer Out",
         credit_reason="Transfer In",
+        seed_quantity=None,
     ):
         product = product or self.elmis_product
         source = source or self.source_location
         destination = destination or self.destination_location
         lot = lot if lot is not None else self.elmis_lot
+        seed_quantity = quantity if seed_quantity is None else seed_quantity
         self.env["stock.quant"]._update_available_quantity(
             product,
             source,
-            quantity,
+            seed_quantity,
             lot_id=lot,
         )
         move = self.env["stock.move"].create(
@@ -144,6 +151,50 @@ class TestStockMoveLineElmisTransfer(TransactionCase):
         line = self.env["stock.move.line"].create(line_vals)
         move._action_done()
         return line
+
+    def test_available_lots_are_limited_to_source_location(self):
+        self.env["stock.quant"]._update_available_quantity(
+            self.elmis_product,
+            self.source_location,
+            5,
+            lot_id=self.elmis_lot,
+        )
+        self.env["stock.quant"]._update_available_quantity(
+            self.elmis_product,
+            self.destination_location,
+            7,
+            lot_id=self.other_elmis_lot,
+        )
+        move = self.env["stock.move"].create(
+            {
+                "name": "eLMIS availability check",
+                "product_id": self.elmis_product.id,
+                "product_uom_qty": 2,
+                "product_uom": self.unit_uom.id,
+                "location_id": self.source_location.id,
+                "location_dest_id": self.destination_location.id,
+            }
+        )
+        line = self.env["stock.move.line"].create(
+            {
+                "move_id": move.id,
+                "product_id": self.elmis_product.id,
+                "product_uom_id": self.unit_uom.id,
+                "qty_done": 2,
+                "location_id": self.source_location.id,
+                "location_dest_id": self.destination_location.id,
+                "lot_id": self.elmis_lot.id,
+            }
+        )
+
+        self.assertIn(self.elmis_lot, line.available_source_lot_ids)
+        self.assertNotIn(self.other_elmis_lot, line.available_source_lot_ids)
+        self.assertEqual(line.selected_lot_available_qty, 5)
+        self.assertTrue(line.selected_lot_has_enough_qty)
+
+    def test_transfer_blocks_when_selected_lot_has_insufficient_source_stock(self):
+        with self.assertRaises(UserError):
+            self._create_done_move_line(quantity=4, seed_quantity=2)
 
     def test_mapped_internal_transfer_creates_debit_and_credit_outbox(self):
         line = self._create_done_move_line(debit_reason="Unusable", credit_reason="Transfer In")

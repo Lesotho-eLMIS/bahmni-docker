@@ -5,7 +5,12 @@
         <field name="model">stock.move.line</field>
         <field name="inherit_id" ref="stock.view_move_line_tree"/>
         <field name="arch" type="xml">
+            <xpath expr="//field[@name='lot_id']" position="attributes">
+                <attribute name="domain">[('id', 'in', available_source_lot_ids)]</attribute>
+            </xpath>
             <xpath expr="//field[@name='lot_id']" position="after">
+                <field name="available_source_lot_ids" invisible="1"/>
+                <field name="selected_lot_available_qty" optional="show"/>
                 <field name="elmis_transfer_program_id" optional="show"/>
                 <field name="elmis_transfer_debit_reason" optional="show"/>
                 <field name="elmis_transfer_credit_reason" optional="show"/>
@@ -26,6 +31,7 @@
                 <field name="location_id"/>
                 <field name="location_dest_id"/>
                 <field name="qty_done"/>
+                <field name="selected_lot_available_qty"/>
                 <field name="product_uom_id"/>
                 <field name="elmis_transfer_program_id"/>
                 <field name="elmis_transfer_debit_reason"/>
@@ -65,7 +71,12 @@
         <field name="model">stock.move.line</field>
         <field name="inherit_id" ref="stock.view_stock_move_line_detailed_operation_tree"/>
         <field name="arch" type="xml">
+            <xpath expr="//field[@name='lot_id']" position="attributes">
+                <attribute name="domain">[('id', 'in', available_source_lot_ids)]</attribute>
+            </xpath>
             <xpath expr="//field[@name='lot_name']" position="after">
+                <field name="available_source_lot_ids" invisible="1"/>
+                <field name="selected_lot_available_qty" optional="show"/>
                 <field name="elmis_transfer_program_id" optional="show"/>
                 <field name="elmis_transfer_debit_reason" optional="show"/>
                 <field name="elmis_transfer_credit_reason" optional="show"/>
