@@ -621,6 +621,7 @@ class ExtendedSaleOrder(models.Model):
         lines_to_dispense = self.order_line.filtered(
             lambda l: not l.dispensed and not l.display_type
         )
+        lines_to_dispense._check_dispensing_batch_available()
         lines_to_dispense.write({"dispensed": True})
         return True
 
@@ -650,6 +651,7 @@ class ExtendedSaleOrder(models.Model):
                     "Enter a quantity to dispense for at least one internal prescription item before serving."
                 )
             )
+        internal_lines._check_dispensing_batch_available()
 
         backorder = self.env["sale.order"]
         target_status = summary["prescription_status"]
@@ -753,6 +755,7 @@ class ExtendedSaleOrder(models.Model):
             "batch_number": line.dispensing_batch_number or "",
             "expiry_date": expiry_date,
             "batch_options": line._get_dispensing_batch_options(),
+            "selected_batch_available_qty": line.selected_batch_available_qty or 0,
             "served_internally": line.served_internally,
             "prescription_status": line.prescription_status,
             "balance_resolution": line.balance_resolution or "",

@@ -185,9 +185,19 @@
                                                     <t t-foreach="line.batch_options || []" t-as="option" t-key="option.batch_number">
                                                         <option t-att-value="option.batch_number" t-att-selected="option.batch_number === line.batch_number">
                                                             <t t-esc="option.batch_number"/>
+                                                            <t t-if="option.available_qty !== undefined">
+                                                                - <t t-esc="option.available_qty"/> available
+                                                            </t>
+                                                            <t t-if="option.expiry_date">
+                                                                - Exp: <t t-esc="option.expiry_date"/>
+                                                            </t>
                                                         </option>
                                                     </t>
                                                 </select>
+                                            </label>
+                                            <label class="o_lesotho_field">
+                                                <span>Selected Batch Available</span>
+                                                <input readonly="readonly" t-att-value="line.selected_batch_available_qty || 0"/>
                                             </label>
                                             <label class="o_lesotho_field">
                                                 <span>Expiry Date</span>
