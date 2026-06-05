@@ -1635,6 +1635,66 @@ class BahmniPrepackBatchLine(models.Model):
             if "qty_producing" in mo._fields and mo.qty_producing != mo.product_qty:
                 mo.write({"qty_producing": mo.product_qty})
 
+    def _sync_mo_quantities_for_completion(self):
+        for line in self:
+            mo = line.mrp_production_id
+            if not mo or mo.state in ("done", "cancel"):
+                continue
+            actual_qty = line._get_release_actual_qty()
+            actual_bulk_usage = line.product_id.pack_unit_qty * actual_qty
+            source_location = line._get_component_source_location()
+            release_location = line.batch_id.location_dest_id
+            if float_compare(mo.product_qty, actual_qty, precision_digits=6) != 0:
+                mo.write({"product_qty": actual_qty})
+            if "qty_producing" in mo._fields and float_compare(
+                mo.qty_producing,
+                actual_qty,
+                precision_digits=6,
+            ) != 0:
+                mo.write({"qty_producing": actual_qty})
+            raw_moves = mo.move_raw_ids.filtered(
+                lambda move: (
+                    move.state not in ("done", "cancel")
+                    and move.product_id == line.bulk_lot_id.product_id
+                )
+            )
+            for move in raw_moves:
+                move_vals = {}
+                if float_compare(
+                    move.product_uom_qty,
+                    actual_bulk_usage,
+                    precision_rounding=move.product_uom.rounding,
+                ) != 0:
+                    move_vals["product_uom_qty"] = actual_bulk_usage
+                if source_location and move.location_id != source_location:
+                    move_vals["location_id"] = source_location.id
+                if move_vals:
+                    move.write(move_vals)
+                line._write_move_lines(move, line.bulk_lot_id, location=source_location)
+            finished_lot = line._ensure_finished_lot()
+            finished_moves = mo.move_finished_ids.filtered(
+                lambda move: (
+                    move.state not in ("done", "cancel")
+                    and move.product_id == line.product_id
+                )
+            )
+            for move in finished_moves:
+                move_vals = {}
+                if float_compare(
+                    move.product_uom_qty,
+                    actual_qty,
+                    precision_rounding=move.product_uom.rounding,
+                ) != 0:
+                    move_vals["product_uom_qty"] = actual_qty
+                if release_location and move.location_dest_id != release_location:
+                    move_vals["location_dest_id"] = release_location.id
+                if move_vals:
+                    move.write(move_vals)
+                line._write_move_lines(move, finished_lot)
+            line._sync_packaging_material_move()
+            line._apply_packaging_material_consumption()
+            line._log_mo_completion_quantities(mo)
+
     def _sync_packaging_material_move(self):
         for line in self:
             mo = line.mrp_production_id
@@ -1731,23 +1791,38 @@ class BahmniPrepackBatchLine(models.Model):
                 mo.location_dest_id.display_name,
                 mo.location_dest_id.id,
             )
-            if "qty_producing" in mo._fields and not mo.qty_producing:
-                mo.write({"qty_producing": mo.product_qty})
+            line._sync_mo_quantities_for_completion()
             result = mo.with_context(
                 skip_consumption=True,
                 skip_backorder=True,
                 cancel_backorder=True,
             ).button_mark_done()
-            if isinstance(result, dict) and not line._process_mo_completion_action(result):
-                action_name = result.get("name") or result.get("res_model") or _("Unknown action")
+            if isinstance(result, dict):
+                line._log_mo_completion_action(mo, result)
+                if not line._process_mo_completion_action(result):
+                    res_model = result.get("res_model") or _("unknown wizard")
+                    action_name = result.get("name") or _("Unknown action")
+                    raise UserError(
+                        _(
+                            "Manufacturing order %(order)s returned unexpected wizard %(wizard)s (%(action)s). "
+                            "Please open the manufacturing order and resolve the pending wizard."
+                        )
+                        % {
+                            "order": mo.display_name,
+                            "wizard": res_model,
+                            "action": action_name,
+                        }
+                    )
+            mo.invalidate_recordset(["state"])
+            if mo.state != "done":
                 raise UserError(
                     _(
-                        "Manufacturing order %(order)s returned %(action)s before completion. "
+                        "Manufacturing order %(order)s did not complete after processing %(wizard)s. "
                         "Please open the manufacturing order and resolve the pending wizard."
                     )
                     % {
                         "order": mo.display_name,
-                        "action": action_name,
+                        "wizard": result.get("res_model") if isinstance(result, dict) else _("completion"),
                     }
                 )
             line.finished_lot_id = mo.lot_producing_id
@@ -1771,12 +1846,59 @@ class BahmniPrepackBatchLine(models.Model):
                 )
         return True
 
+    def _log_mo_completion_quantities(self, mo):
+        self.ensure_one()
+        raw_moves = mo.move_raw_ids.filtered(
+            lambda move: move.product_id == self.bulk_lot_id.product_id
+        )
+        finished_moves = mo.move_finished_ids.filtered(
+            lambda move: move.product_id == self.product_id
+        )
+        _logger.info(
+            "Prepack MO %s synchronized before completion: product_qty=%s, qty_producing=%s, raw_move_qty=%s, raw_move_line_qty_done=%s, finished_move_qty=%s, finished_move_line_qty_done=%s",
+            mo.display_name,
+            mo.product_qty,
+            mo.qty_producing if "qty_producing" in mo._fields else False,
+            sum(raw_moves.mapped("product_uom_qty")),
+            sum(raw_moves.mapped("move_line_ids.qty_done")),
+            sum(finished_moves.mapped("product_uom_qty")),
+            sum(finished_moves.mapped("move_line_ids.qty_done")),
+        )
+
+    def _log_mo_completion_action(self, mo, action):
+        self.ensure_one()
+        _logger.warning(
+            "Prepack MO %s returned action before completion: name=%s, res_model=%s, context=%s",
+            mo.display_name,
+            action.get("name"),
+            action.get("res_model"),
+            action.get("context"),
+        )
+
     def _process_mo_completion_action(self, action):
         self.ensure_one()
         res_model = action.get("res_model")
         allowed_models = {
             "mrp.consumption.warning": ("action_confirm",),
             "mrp.immediate.production": ("process", "action_process"),
+            "mrp.production.backorder": (
+                "action_close_mo",
+                "action_cancel",
+                "process_cancel_backorder",
+                "action_cancel_backorder",
+            ),
+            "mrp.production.backorder.confirmation": (
+                "action_close_mo",
+                "action_cancel",
+                "process_cancel_backorder",
+                "action_cancel_backorder",
+            ),
+            "mrp.production.backorder_confirmation": (
+                "action_close_mo",
+                "action_cancel",
+                "process_cancel_backorder",
+                "action_cancel_backorder",
+            ),
         }
         if res_model not in allowed_models:
             return False
@@ -1891,6 +2013,7 @@ class BahmniPrepackBatchLine(models.Model):
         qty = move.product_uom_qty
         source_location = location or move.location_id
         vals = {
+            "product_id": move.product_id.id,
             "lot_id": lot.id,
             "location_id": source_location.id,
             "location_dest_id": move.location_dest_id.id,

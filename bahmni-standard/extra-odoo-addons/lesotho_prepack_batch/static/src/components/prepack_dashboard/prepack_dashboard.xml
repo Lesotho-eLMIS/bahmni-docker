@@ -407,89 +407,100 @@
                             </div>
 
                             <div class="card shadow-sm">
-                                <div class="card-body p-0">
-                                    <table class="table table-hover align-middle mb-0">
-                                        <thead class="table-dark text-uppercase fw-bold">
+                                <div class="card-body p-0 release-table-wrap">
+                                    <table class="table release-prepacks-table align-middle mb-0">
+                                        <thead>
                                             <tr>
-                                                <th class="ps-4 py-3 fs-6"><strong>Product &amp; Batch</strong></th>
-                                                <th class="py-3 text-center fs-6 required-label"><strong>Pack Size</strong></th>
-                                                <th class="py-3 text-center fs-6"><strong>Expected Prepacks</strong></th>
-                                                <th class="py-3 text-center fs-6 required-label"><strong>Actual Prepacks</strong></th>
-                                                <th class="py-3 text-center fs-6"><strong>Actual Bulk Usage</strong></th>
-                                                <th class="py-3 text-center fs-6"><strong>Discrepancy Explanation</strong></th>
-                                                <th class="py-3 text-center fs-6 required-label"><strong>Quality Check Completed</strong></th>
-                                                <th class="py-3 text-center fs-6"><strong>Status</strong></th>
-                                                <th class="pe-4 py-3 text-center fs-6"><strong>Action</strong></th>
+                                                <th class="product-col" rowspan="2">Product &amp; Batch</th>
+                                                <th class="text-center" rowspan="2">Pack Size</th>
+                                                <th class="text-center prepacks-group" colspan="2">Number of Prepacks</th>
+                                                <th class="text-center" rowspan="2">Bulk Used</th>
+                                                <th class="text-center" rowspan="2">Quality Check</th>
+                                                <th class="text-center" rowspan="2">Status</th>
+                                                <th class="text-center" rowspan="2">Action</th>
+                                            </tr>
+                                            <tr>
+                                                <th class="text-center">Expected</th>
+                                                <th class="text-center required-label">Actual</th>
                                             </tr>
                                         </thead>
                                         <tbody>
                                             <t t-foreach="state.batchItems" t-as="item" t-key="item.key">
                                                 <t t-foreach="item.targets" t-as="target" t-key="target_index">
-                                                    <tr t-if="target.line_id" class="animate__animated animate__fadeIn">
-                                                        <td class="ps-4 py-4">
-                                                            <div class="fw-bold text-primary fs-5 mb-2"><t t-esc="item.name"/></div>
-                                                            <small class="text-muted fw-bold fs-6">Batch: <t t-esc="item.batch"/> | Available: <t t-esc="item.soh"/> <t t-esc="item.uom"/></small>
+                                                    <tr t-if="target.line_id" class="release-line-row animate__animated animate__fadeIn">
+                                                        <td class="product-cell">
+                                                            <div class="release-product-name"><t t-esc="item.name"/></div>
+                                                            <div class="release-product-meta">
+                                                                Batch: <t t-esc="item.batch"/>
+                                                                <t t-if="item.exp and item.exp !== 'N/A'"> | Expiry: <t t-esc="item.exp"/></t>
+                                                                | Available: <t t-esc="item.soh"/> <t t-esc="item.uom"/>
+                                                            </div>
                                                         </td>
-                                                        <td class="text-center py-4">
+                                                        <td class="text-center">
+                                                            <span class="compact-text"><t t-esc="target.size"/> <t t-esc="item.uom"/></span>
+                                                        </td>
+                                                        <td class="text-center">
+                                                            <span class="badge release-count-badge"><t t-esc="target.expected_qty || target.qty"/> packs</span>
+                                                        </td>
+                                                        <td class="text-center">
                                                             <t t-if="target.state === 'done'">
-                                                                <span class="fs-5 fw-bold"><t t-esc="target.size"/></span> <small class="text-muted fw-bold fs-6"><t t-esc="item.uom"/></small>
+                                                                <span class="badge release-count-badge"><t t-esc="target.actual_qty || target.qty"/> packs</span>
                                                             </t>
                                                             <t t-else="">
-                                                                <div class="input-group input-group-sm shadow-sm d-inline-flex">
-                                                                    <input type="text" t-attf-class="form-control fw-bold fs-5 border-end-0 {{ this.isInvalidReleaseValue(target.size) ? 'is-invalid' : '' }}" inputmode="decimal" pattern="[0-9]*[.]?[0-9]*" t-att-value="target.size" t-on-keydown="(ev) => this.preventNonNumericInput(ev, { allowDecimal: true })" t-on-input="(ev) => this.onNumericFieldInput(target, 'size', ev, { allowDecimal: true })" t-on-change="() => this.saveReleaseTargetValues(target)" style="width: 80px;"/>
-                                                                    <span class="input-group-text bg-white text-muted border-start-0 fw-bold fs-6"><t t-esc="item.uom"/></span>
+                                                                <div class="input-group input-group-sm release-actual-input">
+                                                                    <input type="number" t-attf-class="form-control {{ this.isInvalidReleaseValue(target.actual_qty) ? 'is-invalid' : '' }}" min="0" inputmode="numeric" pattern="[0-9]*" t-att-value="target.actual_qty" t-on-keydown="(ev) => this.preventNonNumericInput(ev)" t-on-input="(ev) => this.onReleaseActualQtyInput(target, ev)" t-on-change="() => this.saveReleaseTargetValues(target)"/>
+                                                                    <span class="input-group-text">packs</span>
                                                                 </div>
                                                             </t>
                                                         </td>
-                                                        <td class="text-center py-4">
-                                                            <span class="badge rounded-pill bg-info-light text-info fs-5 px-3 py-2 border border-info-light fw-bold"><t t-esc="target.expected_qty || target.qty"/> packs</span>
+                                                        <td class="text-center">
+                                                            <span class="compact-text"><t t-esc="this.getReleaseBulkUsage(target)"/> <t t-esc="item.uom"/></span>
                                                         </td>
-                                                        <td class="text-center py-4">
+                                                        <td class="text-center">
+                                                            <label class="quality-check-inline" t-att-title="'Confirm that this prepack product has been checked and is suitable for release.'">
+                                                                <input class="form-check-input" type="checkbox" t-att-id="'qualityCheck-' + target.line_id" t-att-checked="target.quality_check_completed" t-att-disabled="target.state === 'done'" t-on-change="(ev) => this.onQualityCheckToggle(target, ev)"/>
+                                                                <span>Checked</span>
+                                                            </label>
+                                                        </td>
+                                                        <td class="text-center">
                                                             <t t-if="target.state === 'done'">
-                                                                <span class="badge rounded-pill bg-info-light text-info fs-5 px-3 py-2 border border-info-light fw-bold"><t t-esc="target.actual_qty || target.qty"/> packs</span>
-                                                            </t>
-                                                            <t t-else="">
-                                                                <div class="input-group input-group-sm shadow-sm d-inline-flex">
-                                                                    <input type="number" t-attf-class="form-control fw-bold fs-5 border-end-0 {{ this.isInvalidReleaseValue(target.actual_qty) ? 'is-invalid' : '' }}" min="0" inputmode="numeric" pattern="[0-9]*" t-att-value="target.actual_qty" t-on-keydown="(ev) => this.preventNonNumericInput(ev)" t-on-input="(ev) => this.onReleaseActualQtyInput(target, ev)" t-on-change="() => this.saveReleaseTargetValues(target)" style="width: 80px;"/>
-                                                                    <span class="input-group-text bg-white text-muted border-start-0 fw-bold fs-6">packs</span>
-                                                                </div>
-                                                            </t>
-                                                        </td>
-                                                        <td class="text-center py-4">
-                                                            <span class="fw-bold fs-5"><t t-esc="this.getReleaseBulkUsage(target)"/></span> <small class="text-muted fw-bold fs-6"><t t-esc="item.uom"/></small>
-                                                        </td>
-                                                        <td class="text-start py-4" style="width: 260px; max-width: 260px;">
-                                                            <textarea t-if="target.has_release_discrepancy" class="form-control fw-semibold" rows="2" required="required" t-att-value="target.release_discrepancy_reason || ''" t-att-disabled="target.state === 'done'" placeholder="Discrepancy Explanation *" t-on-input="(ev) => this.onLineDiscrepancyReasonInput(target, ev)" t-on-change="() => this.saveLineDiscrepancy(target)"></textarea>
-                                                            <span t-else="" class="text-muted fw-semibold">No discrepancy</span>
-                                                        </td>
-                                                        <td class="text-center py-4">
-                                                            <input class="form-check-input" type="checkbox" t-att-id="'qualityCheck-' + target.line_id" t-att-checked="target.quality_check_completed" t-att-disabled="target.state === 'done'" t-on-change="(ev) => this.onQualityCheckToggle(target, ev)"/>
-                                                        </td>
-                                                        <td class="text-center py-4">
-                                                            <t t-if="target.state === 'done'">
-                                                                <span class="badge bg-success text-white px-3 py-2 fs-6 fw-bold"><i class="fa fa-check me-1"></i>RELEASED</span>
+                                                                <span t-attf-class="badge release-status-badge {{ target.has_release_discrepancy ? 'status-discrepancy' : 'status-released' }}">
+                                                                    <t t-esc="target.has_release_discrepancy ? 'Released with discrepancy' : 'Released'"/>
+                                                                </span>
                                                             </t>
                                                             <t t-elif="target.state === 'rejected' or target.state === 'cancel'">
-                                                                <span class="badge bg-danger text-white px-3 py-2 fs-6 fw-bold"><i class="fa fa-times me-1"></i>NOT RELEASED</span>
+                                                                <span class="badge release-status-badge status-cancelled">Not Released</span>
                                                             </t>
                                                             <t t-else="">
-                                                                <span class="badge bg-warning text-dark px-3 py-2 fs-6 fw-bold"><i class="fa fa-clock me-1"></i>PENDING</span>
+                                                                <span class="badge release-status-badge status-pending">Pending</span>
                                                             </t>
                                                         </td>
-                                                        <td class="pe-4 py-4 text-center">
+                                                        <td class="text-center">
                                                             <t t-if="target.state === 'done'">
-                                                                <button class="btn btn-primary btn-sm fw-bold px-3 py-2 rounded-pill shadow-sm" t-on-click="() => this.printLineLabel(target.line_id)">
-                                                                    <i class="fa fa-barcode me-1"></i>Print Label
+                                                                <button class="btn btn-primary btn-sm release-action-button" t-on-click="() => this.printLineLabel(target.line_id)">
+                                                                    Print Label
                                                                 </button>
                                                             </t>
                                                             <t t-elif="target.state === 'rejected' or target.state === 'cancel'">
                                                                 <span class="text-danger fw-bold">Not Released</span>
                                                             </t>
                                                             <t t-else="">
-                                                                <button class="btn btn-primary btn-sm fw-bold px-3 py-2 rounded-pill shadow-sm" t-on-click="() => this.releaseLine(target.line_id)">
-                                                                    <i class="fa fa-check me-1"></i>Release
+                                                                <button class="btn btn-primary btn-sm release-action-button" t-att-disabled="this.isReleaseActionDisabled(target)" t-on-click="() => this.releaseLine(target.line_id)">
+                                                                    Release
                                                                 </button>
                                                             </t>
+                                                        </td>
+                                                    </tr>
+                                                    <tr t-if="target.line_id and target.has_release_discrepancy" class="release-discrepancy-row">
+                                                        <td colspan="8">
+                                                            <div class="release-discrepancy-panel">
+                                                                <div class="release-discrepancy-message">
+                                                                    <i class="fa fa-warning"></i>
+                                                                    <span>Actual quantity differs from expected quantity.</span>
+                                                                </div>
+                                                                <label class="form-label required-label" t-att-for="'discrepancyExplanation-' + target.line_id">Discrepancy Explanation</label>
+                                                                <textarea t-att-id="'discrepancyExplanation-' + target.line_id" class="form-control" rows="2" required="required" t-att-value="target.release_discrepancy_reason || ''" t-att-disabled="target.state === 'done'" t-on-input="(ev) => this.onLineDiscrepancyReasonInput(target, ev)" t-on-change="() => this.saveLineDiscrepancy(target)"></textarea>
+                                                            </div>
                                                         </td>
                                                     </tr>
                                                 </t>

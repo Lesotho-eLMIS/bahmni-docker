@@ -610,6 +610,13 @@ export class PrepackDashboard extends Component {
     return true;
   }
 
+  isReleaseActionDisabled(target) {
+    if (!target.quality_check_completed) {
+      return true;
+    }
+    return Boolean(target.has_release_discrepancy && !(target.release_discrepancy_reason || "").trim());
+  }
+
   isInvalidReleaseValue(value) {
     return Number(value) <= 0;
   }
