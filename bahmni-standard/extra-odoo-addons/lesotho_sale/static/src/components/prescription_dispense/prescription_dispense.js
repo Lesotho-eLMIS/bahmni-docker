@@ -36,6 +36,11 @@ export class PrescriptionDispense extends Component {
                 confirmLabel: "Confirm",
                 cancelLabel: "Cancel",
             },
+            labelReprintDialog: {
+                visible: false,
+                reason: "",
+                error: "",
+            },
         });
 
         onMounted(async () => {
@@ -136,6 +141,18 @@ export class PrescriptionDispense extends Component {
         return dispensed < prescribed;
     }
 
+    hasComponents(line) {
+        return Boolean(line.components && line.components.length);
+    }
+
+    replaceLine(updatedLine) {
+        const index = this.state.lines.findIndex((item) => item.id === updatedLine.id);
+        if (index >= 0) {
+            Object.assign(this.state.lines[index], updatedLine);
+            this.state.activeLineId = updatedLine.id;
+        }
+    }
+
     collectBalanceResolution() {
         this.state.balanceResolutionDialog.visible = true;
         this.state.balanceResolutionDialog.reason = "external_referral";
@@ -217,6 +234,41 @@ export class PrescriptionDispense extends Component {
         }
     }
 
+    collectLabelReprintReason() {
+        this.state.labelReprintDialog.visible = true;
+        this.state.labelReprintDialog.reason = "";
+        this.state.labelReprintDialog.error = "";
+        return new Promise((resolve) => {
+            this.labelReprintResolver = resolve;
+        });
+    }
+
+    setLabelReprintReason(value) {
+        this.state.labelReprintDialog.reason = value;
+        this.state.labelReprintDialog.error = "";
+    }
+
+    cancelLabelReprintDialog() {
+        this.state.labelReprintDialog.visible = false;
+        if (this.labelReprintResolver) {
+            this.labelReprintResolver(false);
+            this.labelReprintResolver = null;
+        }
+    }
+
+    confirmLabelReprintDialog() {
+        const reason = (this.state.labelReprintDialog.reason || "").trim();
+        if (!reason) {
+            this.state.labelReprintDialog.error = "Enter a reason before reprinting labels.";
+            return;
+        }
+        this.state.labelReprintDialog.visible = false;
+        if (this.labelReprintResolver) {
+            this.labelReprintResolver(reason);
+            this.labelReprintResolver = null;
+        }
+    }
+
     toggleReview() {
         this.state.reviewExpanded = !this.state.reviewExpanded;
     }
@@ -228,6 +280,17 @@ export class PrescriptionDispense extends Component {
 
     isOnHold() {
         return this.state.order.prescription_status === "on_hold" || Boolean(this.state.order.is_on_hold);
+    }
+
+    canRetryLabels() {
+        return this.state.order.label_status === "print_failed" && Boolean(this.state.order.has_label_lines);
+    }
+
+    canReprintLabels() {
+        return (
+            Boolean(this.state.order.has_label_lines) &&
+            ["generated", "printed", "reprinted"].includes(this.state.order.label_status)
+        );
     }
 
     canServe() {
@@ -302,6 +365,9 @@ export class PrescriptionDispense extends Component {
         if (this.state.readOnly) {
             return;
         }
+        if (this.hasComponents(line)) {
+            return;
+        }
         const productId = value ? parseInt(value, 10) : false;
         if (productId) {
             const product = this.state.productOptions.find((item) => item.id === productId);
@@ -318,6 +384,9 @@ export class PrescriptionDispense extends Component {
         if (this.state.readOnly) {
             return;
         }
+        if (this.hasComponents(line)) {
+            return;
+        }
         const batchOptions = line.batch_options || [];
         const selectedBatch = batchOptions.find((item) => item.batch_number === value);
         this.updateLocal(line, "batch_number", value);
@@ -332,6 +401,9 @@ export class PrescriptionDispense extends Component {
 
     onFieldChanged(line, field, value) {
         if (this.state.readOnly) {
+            return;
+        }
+        if (this.hasComponents(line) && ["product_id", "quantity_dispensed", "batch_number"].includes(field)) {
             return;
         }
         if (field === "served_internally" && !value) {
@@ -384,6 +456,9 @@ export class PrescriptionDispense extends Component {
         if (this.state.readOnly) {
             return;
         }
+        if (this.hasComponents(line)) {
+            return;
+        }
         if (checked) {
             // When enabling substitute, mark it as pack substituted
             this.saveLine(line, "is_pack_substituted", true);
@@ -417,6 +492,9 @@ export class PrescriptionDispense extends Component {
         if (this.state.readOnly) {
             return;
         }
+        if (this.hasComponents(line)) {
+            return;
+        }
         if (ev.key !== "Enter") {
             return;
         }
@@ -435,6 +513,124 @@ export class PrescriptionDispense extends Component {
             this.focusBarcode(0);
         } catch (error) {
             this.notification.add(error.message || "Barcode could not be applied.", { type: "danger" });
+        }
+    }
+
+    async addPrepack(line) {
+        if (this.state.readOnly) {
+            return;
+        }
+        try {
+            await this.waitForPendingSaves();
+            const updated = await this.orm.call(
+                "sale.order",
+                "add_prescription_dispensing_component",
+                [[this.state.orderId], line.id]
+            );
+            this.replaceLine(updated);
+        } catch (error) {
+            this.notification.add(error.message || "Prepack panel could not be added.", { type: "danger" });
+        }
+    }
+
+    updateComponentLocal(component, field, value) {
+        component[field] = value;
+    }
+
+    onComponentProductChanged(line, component, value) {
+        if (this.state.readOnly) {
+            return;
+        }
+        const productId = value ? parseInt(value, 10) : false;
+        if (!productId) {
+            return;
+        }
+        const product = this.state.productOptions.find((item) => item.id === productId);
+        this.updateComponentLocal(component, "product_id", productId);
+        this.updateComponentLocal(component, "dispensed_product", product ? product.name : "");
+        this.updateComponentLocal(component, "batch_number", "");
+        this.updateComponentLocal(component, "expiry_date", "");
+        this.updateComponentLocal(component, "batch_options", []);
+        this.saveComponent(line, component, "product_id", productId, { skipLocalUpdate: true });
+    }
+
+    onComponentBatchChanged(line, component, value) {
+        if (this.state.readOnly) {
+            return;
+        }
+        const batchOptions = component.batch_options || [];
+        const selectedBatch = batchOptions.find((item) => item.batch_number === value);
+        this.updateComponentLocal(component, "batch_number", value);
+        this.updateComponentLocal(component, "expiry_date", selectedBatch ? selectedBatch.expiry_date : "");
+        this.updateComponentLocal(
+            component,
+            "selected_batch_available_qty",
+            selectedBatch ? selectedBatch.available_qty : 0
+        );
+        this.saveComponent(line, component, "batch_number", value, { skipLocalUpdate: true });
+    }
+
+    onComponentFieldChanged(line, component, field, value) {
+        if (this.state.readOnly) {
+            return;
+        }
+        const numericFields = ["pack_count", "pack_unit_qty"];
+        const nextValue = numericFields.includes(field) ? parseFloat(value || 0) : value;
+        this.saveComponent(line, component, field, nextValue);
+    }
+
+    saveComponent(line, component, field, value, options = {}) {
+        if (this.state.readOnly) {
+            return;
+        }
+        if (!options.skipLocalUpdate) {
+            this.updateComponentLocal(component, field, value);
+        }
+        const saveKey = `${line.id}:${component.id}:${field}`;
+        this.clearSaveError(saveKey);
+        const savePromise = this.orm.call(
+            "sale.order",
+            "update_prescription_dispensing_component",
+            [[this.state.orderId], line.id, component.id, { [field]: value }]
+        ).then((updated) => {
+            this.replaceLine(updated);
+        }).catch((error) => {
+            this.recordSaveError(saveKey, error, "Error updating prepack panel.");
+            return false;
+        });
+        return this.trackSave(savePromise);
+    }
+
+    async scanComponentBarcode(line, component, ev) {
+        if (this.state.readOnly || ev.key !== "Enter") {
+            return;
+        }
+        ev.preventDefault();
+        try {
+            const updated = await this.orm.call(
+                "sale.order",
+                "apply_prescription_dispensing_component_barcode",
+                [[this.state.orderId], line.id, component.id, component.barcode]
+            );
+            this.replaceLine(updated);
+        } catch (error) {
+            this.notification.add(error.message || "Barcode could not be applied.", { type: "danger" });
+        }
+    }
+
+    async removePrepack(line, component) {
+        if (this.state.readOnly) {
+            return;
+        }
+        try {
+            const updated = await this.orm.call(
+                "sale.order",
+                "remove_prescription_dispensing_component",
+                [[this.state.orderId], line.id, component.id]
+            );
+            this.replaceLine(updated);
+        } catch (error) {
+            this.notification.add(error.message || "Prepack panel could not be removed.", { type: "danger" });
         }
     }
 
@@ -520,6 +716,60 @@ export class PrescriptionDispense extends Component {
         }
     }
 
+    async handleLabelActionResult(actionResult) {
+        if (actionResult && actionResult.type === "lesotho_sale.label_generation_failed") {
+            if (actionResult.data) {
+                this.applyPrescriptionData(actionResult.data);
+            } else {
+                await this.loadPrescription();
+            }
+            this.notification.add(
+                actionResult.message || "Label generation failed. Use Retry Label Generation when ready.",
+                { type: "danger" }
+            );
+            return false;
+        }
+        await this.action.doAction(actionResult);
+        await this.loadPrescription();
+        return true;
+    }
+
+    async retryLabelGeneration() {
+        try {
+            const labelAction = await this.orm.call(
+                "sale.order",
+                "action_retry_label_generation_from_ui",
+                [[this.state.orderId]]
+            );
+            const success = await this.handleLabelActionResult(labelAction);
+            if (success) {
+                this.notification.add("Label generation retried.", { type: "success" });
+            }
+        } catch (error) {
+            this.notification.add(error.message || "Label generation could not be retried.", { type: "danger" });
+        }
+    }
+
+    async reprintLabels() {
+        const reason = await this.collectLabelReprintReason();
+        if (!reason) {
+            return;
+        }
+        try {
+            const labelAction = await this.orm.call(
+                "sale.order",
+                "action_reprint_prescription_labels_from_ui",
+                [[this.state.orderId], reason]
+            );
+            const success = await this.handleLabelActionResult(labelAction);
+            if (success) {
+                this.notification.add("Labels reprinted.", { type: "success" });
+            }
+        } catch (error) {
+            this.notification.add(error.message || "Labels could not be reprinted.", { type: "danger" });
+        }
+    }
+
     async serve() {
         if (this.state.readOnly) {
             await this.goToPrescriptionList();
@@ -586,7 +836,10 @@ export class PrescriptionDispense extends Component {
             "action_serve_prescription_from_ui",
             [[this.state.orderId], createBackorder, balanceResolution, balanceResolutionNote]
         );
-        await this.action.doAction(reportAction);
+        const labelsReady = await this.handleLabelActionResult(reportAction);
+        if (!labelsReady) {
+            return;
+        }
         await this.goToPrescriptionList();
     }
 }

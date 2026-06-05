@@ -79,6 +79,8 @@
                             <field name="encounter_type" readonly="1" />
                             <field name="encounter_datetime" readonly="1" />
                             <field name="prescription_status" readonly="1" />
+                            <field name="label_status" readonly="1" />
+                            <field name="label_last_error" readonly="1" />
                             <field name="prescription_backorder_origin_id" readonly="1" />
                             <field name="prescription_backorder_ids" readonly="1" />
                         </group>

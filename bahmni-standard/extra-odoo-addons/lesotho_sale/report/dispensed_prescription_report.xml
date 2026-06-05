@@ -99,7 +99,7 @@
                 <t t-set="facility_name" t-value="doc._get_prescription_label_facility_name()"/>
                 <t t-set="facility_address_lines" t-value="doc._get_prescription_label_address_lines()"/>
                 <t t-set="dispenser_name" t-value="env.user.display_name or ''"/>
-                <t t-foreach="doc._get_dispensing_label_lines()" t-as="line">
+                <t t-foreach="doc._get_dispensing_label_items()" t-as="label_item">
                     <div class="page o_prescription_label_page">
                         <div class="o_prescription_label">
                             <div class="o_prescription_label_facility">
@@ -113,26 +113,26 @@
                             <div class="o_prescription_label_separator"/>
 
                             <div class="o_prescription_label_product">
-                                <span><t t-esc="line.product_id.display_name if line.product_id else (line.prescribed_product_id.display_name if line.prescribed_product_id else '')"/></span>
+                                <span><t t-esc="label_item.get('product_name') or ''"/></span>
                                 <span>
-                                    <t t-esc="line.product_uom_qty"/>
-                                    <t t-esc="line.product_uom.name or ''"/>
+                                    <t t-esc="label_item.get('quantity') or 0"/>
+                                    <t t-esc="label_item.get('uom_name') or ''"/>
                                 </span>
                             </div>
 
                             <div class="o_prescription_label_directions">
                                 <strong>Dosage Instructions</strong>
-                                <t t-esc="line._get_dosage_instruction_text()"/>
+                                <t t-esc="label_item.get('directions') or ''"/>
                             </div>
 
                             <div class="o_prescription_label_meta">
                                 <div>
                                     <strong>Batch Number:</strong>
-                                    <span t-esc="line.dispensing_batch_number or ''"/>
+                                    <span t-esc="label_item.get('batch_number') or ''"/>
                                 </div>
                                 <div>
                                     <strong>Expiry Date:</strong>
-                                    <span t-esc="doc._get_dispensing_line_expiry(line)"/>
+                                    <span t-esc="label_item.get('expiry_date') or ''"/>
                                 </div>
                             </div>
 
