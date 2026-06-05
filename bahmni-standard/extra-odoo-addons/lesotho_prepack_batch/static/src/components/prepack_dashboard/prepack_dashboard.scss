@@ -207,6 +207,12 @@
         }
     }
 
+    .required-label::after {
+        content: " *";
+        color: #dc3545;
+        font-weight: 800;
+    }
+
     .prepack-backbar {
         display: flex;
         justify-content: flex-start;
@@ -347,7 +353,7 @@
         padding: 10px 0;
         gap: 10px;
         position: sticky;
-        top: -40px; /* Adjusting for container padding */
+        top: 0;
         z-index: 100;
         border-bottom: 1px solid #f4f7f6;
 

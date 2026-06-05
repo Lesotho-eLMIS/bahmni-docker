@@ -6,7 +6,7 @@
                 <i class="fa fa-map-marker"></i>
             </div>
             <div class="prepack-location-copy">
-                <label class="prepack-location-label" for="prepackLocation">Prepacking Location</label>
+                <label t-attf-class="prepack-location-label {{ this.canEditLocation() ? 'required-label' : '' }}" for="prepackLocation">Prepacking Location</label>
             </div>
             <div class="prepack-location-control">
                 <t t-if="this.canEditLocation()">
@@ -45,7 +45,7 @@
                 </div>
 
                 <t t-else="">
-                    <div class="prepack-topbar">
+                    <div t-if="state.step !== 3" class="prepack-topbar">
                         <div class="prepack-breadcrumb">
                             <span>Prepacking</span>
                             <span class="separator">/</span>
@@ -82,7 +82,9 @@
                                                     <label class="form-check-label fw-semibold" for="includePrepacks">Include Prepacks</label>
                                                 </div>
                                             </div>
+                                            <label class="form-label fw-bold required-label" for="prepackProductSearch">Product</label>
                                             <input
+                                                id="prepackProductSearch"
                                                 class="form-select form-select-lg fw-semibold fs-5"
                                                 list="prepackProductOptions"
                                                 placeholder="-- Search / Select Product --"
@@ -114,15 +116,15 @@
                                             <h5 class="mb-3 text-dark fw-bold fs-5"><i class="fa fa-clipboard-check me-2 text-primary"></i>Quality Checklist</h5>
                                             <div class="form-check mb-2">
                                                 <input class="form-check-input" type="checkbox" id="chk1" t-model="state.checks.chk1" t-on-change="() => this.validateChecklist()"/>
-                                                <label class="form-check-label fw-semibold" for="chk1">Product packaging is intact and undamaged.</label>
+                                                <label class="form-check-label fw-semibold required-label" for="chk1">Product packaging is intact and undamaged.</label>
                                             </div>
                                             <div class="form-check mb-2">
                                                 <input class="form-check-input" type="checkbox" id="chk2" t-model="state.checks.chk2" t-on-change="() => this.validateChecklist()"/>
-                                                <label class="form-check-label fw-semibold" for="chk2">Expiry date is valid (> 6 months).</label>
+                                                <label class="form-check-label fw-semibold required-label" for="chk2">Expiry date is valid (> 6 months).</label>
                                             </div>
                                             <div t-if="state.selectedProduct and state.selectedProduct.reqLiquidCheck" class="form-check mb-2 text-warning">
                                                 <input class="form-check-input" type="checkbox" id="chk3" t-model="state.checks.chk3" t-on-change="() => this.validateChecklist()"/>
-                                                <label class="form-check-label fw-bold" for="chk3">No leaks, separation, or discoloration observed.</label>
+                                                <label class="form-check-label fw-bold required-label" for="chk3">No leaks, separation, or discoloration observed.</label>
                                             </div>
                                         </div>
 
@@ -211,10 +213,10 @@
                                         <table class="table table-borderless mb-0">
                                             <thead class="bg-light text-uppercase fw-bold text-muted">
                                                 <tr>
-                                                    <th class="ps-4 py-3 fs-5" width="22%">Prepack Size</th>
-                                                    <th class="py-3 fs-5" width="22%">Number of Prepacks</th>
+                                                    <th class="ps-4 py-3 fs-5 required-label" width="22%">Prepack Size</th>
+                                                    <th class="py-3 fs-5 required-label" width="22%">Number of Prepacks</th>
                                                     <th class="py-3 fs-5" width="20%">Bulk Units Required</th>
-                                                    <th class="py-3 fs-5" width="26%">Packaging Material</th>
+                                                    <th class="py-3 fs-5 required-label" width="26%">Packaging Material</th>
                                                     <th class="pe-4 py-3 text-end" width="10%"></th>
                                                 </tr>
                                             </thead>
@@ -237,12 +239,25 @@
                                                             <span class="text-dark fw-bold fs-5"><t t-esc="target.size * target.qty"/></span> <small class="text-muted fw-bold fs-6"><t t-esc="item.uom"/></small>
                                                         </td>
                                                         <td class="py-3">
-                                                            <select class="form-select fw-bold fs-5 shadow-sm" t-att-value="target.packaging_material_id || ''" t-on-change="(ev) => this.onPackagingMaterialChange(target, ev)">
-                                                                <option value="">-- Select Material --</option>
+                                                            <div class="input-group input-group-lg shadow-sm">
+                                                                <input
+                                                                    type="text"
+                                                                    class="form-control fw-bold fs-5 border-end-0"
+                                                                    t-att-list="'packagingMaterialOptions-' + item.key + '-' + target_index"
+                                                                    t-att-value="target.packaging_material_search || ''"
+                                                                    placeholder="-- Select / Search Material --"
+                                                                    autocomplete="off"
+                                                                    t-on-input="(ev) => this.onPackagingMaterialSearchInput(target, ev)"
+                                                                />
+                                                                <button class="btn btn-primary px-3" type="button" t-on-click="() => this.searchPackagingMaterial(target)">
+                                                                    <i class="fa fa-search"></i>
+                                                                </button>
+                                                            </div>
+                                                            <datalist t-att-id="'packagingMaterialOptions-' + item.key + '-' + target_index">
                                                                 <t t-foreach="state.packagingMaterials" t-as="material" t-key="material.id">
-                                                                    <option t-att-value="material.id" t-att-selected="material.id === target.packaging_material_id" t-esc="material.name"></option>
+                                                                    <option t-att-value="this.getPackagingMaterialLabel(material)"></option>
                                                                 </t>
-                                                            </select>
+                                                            </datalist>
                                                             <small t-if="target.packaging_material_id" class="text-muted fw-bold d-block mt-2 packaging-material-stock">
                                                                 <span>Available: <t t-esc="target.packaging_material_soh || 0"/> <t t-esc="target.packaging_material_uom || 'units'"/></span>
                                                                 <span class="ms-3 packaging-material-qty">Quantity Required: <t t-esc="target.qty || 0"/> <t t-esc="target.packaging_material_uom || 'units'"/></span>
@@ -259,7 +274,7 @@
                                             </tbody>
                                         </table>
                                     </div>
-                                    <div class="card-footer bg-light border-0 py-3 px-4 d-flex justify-content-center align-items-center prepack-balance-summary">
+                                    <div class="card-footer bg-light border-0 py-3 px-4 d-flex justify-content-start align-items-center prepack-balance-summary">
                                         <div class="me-4 pe-4 border-end border-2 border-white text-end">
                                             <small class="text-muted text-uppercase d-block fw-bold">Total Used</small>
                                             <h5 class="m-0 fw-bold fs-5"><t t-esc="this.getTotalUsed(item)"/> <t t-esc="item.uom"/></h5>
@@ -291,7 +306,7 @@
                     <div t-if="state.step === 3" id="view-authorize">
                         <t t-if="state.mode === 'authorize' and !state.batchId">
                             <div class="d-flex justify-content-between align-items-center mb-4 border-bottom pb-2">
-                                <h2 class="m-0">Pending Releases</h2>
+                                <h2 class="m-0">Pending Release</h2>
 
                             </div>
 
@@ -300,7 +315,7 @@
                                     <i class="fa fa-map-marker"></i>
                                 </div>
                                 <div class="prepack-location-copy">
-                                    <label class="prepack-location-label" for="authorizationLocation">Prepacking Location</label>
+                                    <label class="prepack-location-label required-label" for="authorizationLocation">Prepacking Location</label>
                                 </div>
                                 <div class="prepack-location-control">
                                     <select
@@ -358,7 +373,7 @@
                         </t>
                         <t t-else="">
                             <div class="d-flex justify-content-between align-items-center mb-4 border-bottom pb-2">
-                                <h2 class="m-0 fw-bold fs-3">Release Prepack Document</h2>
+                                <h2 class="m-0 fw-bold fs-3">Release Prepacks</h2>
 
                             </div>
 
@@ -376,7 +391,7 @@
                                     <div class="text-end">
                                         <t t-if="!state.isAuthorized">
                                             <button class="btn btn-primary btn-lg px-5 shadow py-3 fw-bold animate__animated animate__pulse animate__infinite" t-att-disabled="!state.batchId" t-on-click="() => this.releaseBatch()">
-                                                <i class="fa fa-check-double me-2"></i>VALIDATE &amp; RELEASE
+                                                <i class="fa fa-check-double me-2"></i>RELEASE ALL
                                             </button>
                                         </t>
                                         <t t-else="">
@@ -391,31 +406,18 @@
                                 </div>
                             </div>
 
-                            <div class="card shadow-sm mb-4">
-                                <div class="card-body">
-                                    <div class="mb-3">
-                                        <label class="form-label fw-bold fs-4">Release Validation</label>
-                                        <div class="form-check mb-3">
-                                            <input class="form-check-input" type="checkbox" id="releaseDiscrepancy" t-model="state.hasReleaseDiscrepancy"/>
-                                            <label class="form-check-label fw-bold fs-5" for="releaseDiscrepancy">
-                                                Physical prepack count does not tally with the recorded quantity
-                                            </label>
-                                        </div>
-                                        <textarea class="form-control fs-5 fw-semibold" rows="4" t-model="state.releaseDiscrepancyReason" t-att-disabled="!state.hasReleaseDiscrepancy" placeholder="Record discrepancy reason"></textarea>
-                                        <small class="text-muted fw-semibold">Use this only when the physical prepacks being released do not tally with the recorded prepacks.</small>
-                                    </div>
-                                </div>
-                            </div>
-
                             <div class="card shadow-sm">
                                 <div class="card-body p-0">
                                     <table class="table table-hover align-middle mb-0">
                                         <thead class="table-dark text-uppercase fw-bold">
                                             <tr>
                                                 <th class="ps-4 py-3 fs-6"><strong>Product &amp; Batch</strong></th>
-                                                <th class="py-3 text-center fs-6"><strong>Pack Size</strong></th>
-                                                <th class="py-3 text-center fs-6"><strong>Quantity</strong></th>
-                                                <th class="py-3 text-center fs-6"><strong>Bulk Usage</strong></th>
+                                                <th class="py-3 text-center fs-6 required-label"><strong>Pack Size</strong></th>
+                                                <th class="py-3 text-center fs-6"><strong>Expected Prepacks</strong></th>
+                                                <th class="py-3 text-center fs-6 required-label"><strong>Actual Prepacks</strong></th>
+                                                <th class="py-3 text-center fs-6"><strong>Actual Bulk Usage</strong></th>
+                                                <th class="py-3 text-center fs-6"><strong>Discrepancy Explanation</strong></th>
+                                                <th class="py-3 text-center fs-6 required-label"><strong>Quality Check Completed</strong></th>
                                                 <th class="py-3 text-center fs-6"><strong>Status</strong></th>
                                                 <th class="pe-4 py-3 text-center fs-6"><strong>Action</strong></th>
                                             </tr>
@@ -423,10 +425,10 @@
                                         <tbody>
                                             <t t-foreach="state.batchItems" t-as="item" t-key="item.key">
                                                 <t t-foreach="item.targets" t-as="target" t-key="target_index">
-                                                    <tr t-if="target.size > 0 and target.qty > 0" class="animate__animated animate__fadeIn">
+                                                    <tr t-if="target.line_id" class="animate__animated animate__fadeIn">
                                                         <td class="ps-4 py-4">
                                                             <div class="fw-bold text-primary fs-5 mb-2"><t t-esc="item.name"/></div>
-                                                            <small class="text-muted fw-bold fs-6">LOT: <t t-esc="item.batch"/></small>
+                                                            <small class="text-muted fw-bold fs-6">Batch: <t t-esc="item.batch"/> | Available: <t t-esc="item.soh"/> <t t-esc="item.uom"/></small>
                                                         </td>
                                                         <td class="text-center py-4">
                                                             <t t-if="target.state === 'done'">
@@ -434,24 +436,34 @@
                                                             </t>
                                                             <t t-else="">
                                                                 <div class="input-group input-group-sm shadow-sm d-inline-flex">
-                                                                    <input type="text" class="form-control fw-bold fs-5 border-end-0" inputmode="decimal" pattern="[0-9]*[.]?[0-9]*" t-att-value="target.size" t-on-keydown="(ev) => this.preventNonNumericInput(ev, { allowDecimal: true })" t-on-input="(ev) => this.onNumericFieldInput(target, 'size', ev, { allowDecimal: true })" t-on-change="() => this.autoSave()" style="width: 80px;"/>
+                                                                    <input type="text" t-attf-class="form-control fw-bold fs-5 border-end-0 {{ this.isInvalidReleaseValue(target.size) ? 'is-invalid' : '' }}" inputmode="decimal" pattern="[0-9]*[.]?[0-9]*" t-att-value="target.size" t-on-keydown="(ev) => this.preventNonNumericInput(ev, { allowDecimal: true })" t-on-input="(ev) => this.onNumericFieldInput(target, 'size', ev, { allowDecimal: true })" t-on-change="() => this.saveReleaseTargetValues(target)" style="width: 80px;"/>
                                                                     <span class="input-group-text bg-white text-muted border-start-0 fw-bold fs-6"><t t-esc="item.uom"/></span>
                                                                 </div>
                                                             </t>
                                                         </td>
                                                         <td class="text-center py-4">
+                                                            <span class="badge rounded-pill bg-info-light text-info fs-5 px-3 py-2 border border-info-light fw-bold"><t t-esc="target.expected_qty || target.qty"/> packs</span>
+                                                        </td>
+                                                        <td class="text-center py-4">
                                                             <t t-if="target.state === 'done'">
-                                                                <span class="badge rounded-pill bg-info-light text-info fs-5 px-3 py-2 border border-info-light fw-bold"><t t-esc="target.qty"/> packs</span>
+                                                                <span class="badge rounded-pill bg-info-light text-info fs-5 px-3 py-2 border border-info-light fw-bold"><t t-esc="target.actual_qty || target.qty"/> packs</span>
                                                             </t>
                                                             <t t-else="">
                                                                 <div class="input-group input-group-sm shadow-sm d-inline-flex">
-                                                                    <input type="number" class="form-control fw-bold fs-5 border-end-0" min="0" inputmode="numeric" pattern="[0-9]*" t-att-value="target.qty" t-on-keydown="(ev) => this.preventNonNumericInput(ev)" t-on-input="(ev) => this.onNumericFieldInput(target, 'qty', ev)" t-on-change="() => this.autoSave()" style="width: 80px;"/>
+                                                                    <input type="number" t-attf-class="form-control fw-bold fs-5 border-end-0 {{ this.isInvalidReleaseValue(target.actual_qty) ? 'is-invalid' : '' }}" min="0" inputmode="numeric" pattern="[0-9]*" t-att-value="target.actual_qty" t-on-keydown="(ev) => this.preventNonNumericInput(ev)" t-on-input="(ev) => this.onReleaseActualQtyInput(target, ev)" t-on-change="() => this.saveReleaseTargetValues(target)" style="width: 80px;"/>
                                                                     <span class="input-group-text bg-white text-muted border-start-0 fw-bold fs-6">packs</span>
                                                                 </div>
                                                             </t>
                                                         </td>
                                                         <td class="text-center py-4">
-                                                            <span class="fw-bold fs-5"><t t-esc="target.size * target.qty"/></span> <small class="text-muted fw-bold fs-6"><t t-esc="item.uom"/></small>
+                                                            <span class="fw-bold fs-5"><t t-esc="this.getReleaseBulkUsage(target)"/></span> <small class="text-muted fw-bold fs-6"><t t-esc="item.uom"/></small>
+                                                        </td>
+                                                        <td class="text-start py-4" style="width: 260px; max-width: 260px;">
+                                                            <textarea t-if="target.has_release_discrepancy" class="form-control fw-semibold" rows="2" required="required" t-att-value="target.release_discrepancy_reason || ''" t-att-disabled="target.state === 'done'" placeholder="Discrepancy Explanation *" t-on-input="(ev) => this.onLineDiscrepancyReasonInput(target, ev)" t-on-change="() => this.saveLineDiscrepancy(target)"></textarea>
+                                                            <span t-else="" class="text-muted fw-semibold">No discrepancy</span>
+                                                        </td>
+                                                        <td class="text-center py-4">
+                                                            <input class="form-check-input" type="checkbox" t-att-id="'qualityCheck-' + target.line_id" t-att-checked="target.quality_check_completed" t-att-disabled="target.state === 'done'" t-on-change="(ev) => this.onQualityCheckToggle(target, ev)"/>
                                                         </td>
                                                         <td class="text-center py-4">
                                                             <t t-if="target.state === 'done'">
@@ -475,7 +487,7 @@
                                                             </t>
                                                             <t t-else="">
                                                                 <button class="btn btn-primary btn-sm fw-bold px-3 py-2 rounded-pill shadow-sm" t-on-click="() => this.releaseLine(target.line_id)">
-                                                                    <i class="fa fa-check me-1"></i>Validate
+                                                                    <i class="fa fa-check me-1"></i>Release
                                                                 </button>
                                                             </t>
                                                         </td>

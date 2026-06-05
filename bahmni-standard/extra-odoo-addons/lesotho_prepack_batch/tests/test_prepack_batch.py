@@ -98,3 +98,85 @@ class TestPrepackBatchElmisTraceability(TransactionCase):
         finished_lot = line._ensure_finished_lot()
 
         self.assertEqual(finished_lot.prepack_source_lot_id, self.bulk_lot)
+
+    def test_release_consumes_bulk_and_receives_finished_prepacks(self):
+        source_location = self.env["stock.location"].create(
+            {
+                "name": "Prepack Source Test",
+                "usage": "internal",
+                "location_id": self.stock_location.id,
+                "company_id": self.env.company.id,
+            }
+        )
+        release_location = self.env["stock.location"].create(
+            {
+                "name": "Prepack Release Test",
+                "usage": "internal",
+                "location_id": self.stock_location.id,
+                "company_id": self.env.company.id,
+            }
+        )
+        packaging_material = self._create_product("Test Packaging Bag")
+        self.env["stock.quant"]._update_available_quantity(
+            self.bulk_product,
+            source_location,
+            500.0,
+            lot_id=self.bulk_lot,
+        )
+        self.env["stock.quant"]._update_available_quantity(
+            packaging_material,
+            source_location,
+            100.0,
+        )
+
+        batch_model = self.env["bahmni.prepack.batch"]
+        result = batch_model.submit_prepack_batch(
+            [
+                {
+                    "id": self.bulk_product.id,
+                    "lot_id": self.bulk_lot.id,
+                    "location_id": source_location.id,
+                    "targets": [
+                        {
+                            "size": 30,
+                            "qty": 10,
+                            "packaging_material_id": packaging_material.id,
+                        }
+                    ],
+                }
+            ],
+            location_src_id=source_location.id,
+        )
+        batch = batch_model.browse(result["id"])
+        batch.location_dest_id = release_location.id
+
+        self.assertEqual(batch.location_src_id, source_location)
+        batch.line_ids.write({"release_quality_check_completed": True})
+        batch.action_release_batch()
+
+        line = batch.line_ids[:1]
+        bulk_qty = self.env["stock.quant"]._get_available_quantity(
+            self.bulk_product,
+            source_location,
+            lot_id=self.bulk_lot,
+            strict=True,
+        )
+        finished_qty = self.env["stock.quant"]._get_available_quantity(
+            line.product_id,
+            release_location,
+            lot_id=line.finished_lot_id,
+            strict=True,
+        )
+
+        self.assertEqual(batch.location_src_id, source_location)
+        self.assertEqual(batch.location_dest_id, release_location)
+        self.assertEqual(bulk_qty, 200.0)
+        self.assertEqual(finished_qty, 10.0)
+        self.assertEqual(line.release_expected_qty, 10)
+        self.assertEqual(line.release_actual_qty, 10)
+        self.assertEqual(line.release_actual_bulk_usage, 300.0)
+        self.assertTrue(line.release_quality_check_completed)
+        self.assertEqual(line.released_by_id, self.env.user)
+        self.assertTrue(line.release_date)
+        self.assertTrue(line.mrp_production_id.move_raw_ids)
+        self.assertTrue(all(move.state == "done" for move in line.mrp_production_id.move_raw_ids))

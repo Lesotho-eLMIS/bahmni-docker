@@ -31,10 +31,9 @@ export class PrepackDashboard extends Component {
       batchItems: [],
       batchId: null,
       batchName: "",
+      batchState: null,
       isAuthorized: false,
       includePrepacks: false,
-      hasReleaseDiscrepancy: false,
-      releaseDiscrepancyReason: "",
     });
     onWillStart(async () => {
       this.state.permissions = await this.orm.call("bahmni.prepack.batch", "check_prepack_permissions", []);
@@ -63,7 +62,9 @@ export class PrepackDashboard extends Component {
             this.state.selectedLocationId = draft.location_id || this.state.selectedLocationId;
             this.state.selectedLocationName = draft.location_src_name || this.getLocationName(this.state.selectedLocationId);
             this.state.batchItems = draft.items;
+            await this.loadPackagingMaterials();
             await this.loadInventory();
+            this.normalizeBatchItems();
           }
         } else if (this.state.permissions.can_authorize) {
           this.state.step = 3;
@@ -82,7 +83,7 @@ export class PrepackDashboard extends Component {
   async loadInventory() {
     const inventory = await this.orm.call("bahmni.prepack.batch", "fetch_bulk_inventory", [], {
       include_prepacks: this.state.includePrepacks,
-      location_id: this.state.selectedLocationId,
+      location_src_id: this.state.selectedLocationId,
     });
     this.state.inventory = inventory;
   }
@@ -151,12 +152,15 @@ export class PrepackDashboard extends Component {
     if (details) {
       this.state.batchId = details.id;
       this.state.batchName = details.name;
+      this.state.batchState = details.state;
       this.state.batchItems = details.items;
+      this.normalizeBatchItems();
       this.state.isAuthorized = details.isAuthorized;
       this.state.selectedLocationId = details.location_src_id || null;
       this.state.selectedLocationName = details.location_src_name || "";
-      this.state.releaseDiscrepancyReason = details.release_discrepancy_reason || "";
-      this.state.hasReleaseDiscrepancy = Boolean(this.state.releaseDiscrepancyReason);
+      if (this.state.mode === "history" && details.state === "pending_auth" && this.state.permissions.can_authorize) {
+        this.state.step = 3;
+      }
     }
     return details;
   }
@@ -164,10 +168,9 @@ export class PrepackDashboard extends Component {
   clearSelectedBatch() {
     this.state.batchId = null;
     this.state.batchName = "";
+    this.state.batchState = null;
     this.state.batchItems = [];
     this.state.isAuthorized = false;
-    this.state.hasReleaseDiscrepancy = false;
-    this.state.releaseDiscrepancyReason = "";
     if (this.state.mode === "authorize" || this.state.mode === "history") {
       this.state.selectedLocationId = null;
       this.state.selectedLocationName = "";
@@ -177,7 +180,7 @@ export class PrepackDashboard extends Component {
   async autoSave() {
     if (this.state.mode === "create") {
       await this.orm.call("bahmni.prepack.batch", "save_prepack_batch", [this.state.batchItems], {
-        location_id: this.state.selectedLocationId,
+        location_src_id: this.state.selectedLocationId,
       });
     }
   }
@@ -188,13 +191,10 @@ export class PrepackDashboard extends Component {
       return;
     }
     const draft = await this.orm.call("bahmni.prepack.batch", "save_prepack_batch", [this.state.batchItems], {
-      location_id: this.state.selectedLocationId,
+      location_src_id: this.state.selectedLocationId,
     });
     this.state.batchId = draft.id;
     this.state.batchName = draft.name;
-    await this.orm.write("bahmni.prepack.batch", [draft.id], {
-      has_damaged_products: true,
-    });
     await this.actionService.doAction({
       type: "ir.actions.act_window",
       name: "Record Damaged Products",
@@ -249,7 +249,64 @@ export class PrepackDashboard extends Component {
   }
 
   getProductLabel(item) {
-    return `${item.name} (${item.batch})`;
+    return item.location_name ? `${item.name} (${item.batch}) - ${item.location_name}` : `${item.name} (${item.batch})`;
+  }
+
+  getPackagingMaterialLabel(material) {
+    return `${material.name} (${material.soh} ${material.uom})`;
+  }
+
+  getDefaultPackagingMaterial(item = null) {
+    const preferredExactMaterial = this.state.packagingMaterials.find(material => {
+      const materialName = material.name.toLowerCase();
+      return (
+        materialName.includes("bag039-sup002-1000") ||
+        materialName.includes("bags tablet small 75*90 supplies 1000")
+      );
+    });
+    if (preferredExactMaterial) {
+      return preferredExactMaterial;
+    }
+
+    const productName = (item && item.name ? item.name : "").toLowerCase();
+    const preferredKeywords = [];
+    if (/(tablet|tab|capsule|cap|pill|dispersible)/.test(productName)) {
+      preferredKeywords.push("tablet", "tab", "capsule");
+    }
+    if (/(syrup|solution|suspension|liquid|ml)/.test(productName)) {
+      preferredKeywords.push("bottle", "liquid");
+    }
+    if (/(cream|ointment|gel|lotion)/.test(productName)) {
+      preferredKeywords.push("tube", "ointment", "cream");
+    }
+    const preferredMaterial = this.state.packagingMaterials.find(material => {
+      const materialName = material.name.toLowerCase();
+      return preferredKeywords.some(keyword => materialName.includes(keyword));
+    });
+    return preferredMaterial || (this.state.packagingMaterials.length ? this.state.packagingMaterials[0] : null);
+  }
+
+  getPackagingMaterialById(materialId) {
+    return this.state.packagingMaterials.find(item => item.id === materialId) || null;
+  }
+
+  normalizeBatchItems() {
+    for (const item of this.state.batchItems) {
+      for (const target of item.targets) {
+        const material = this.getPackagingMaterialById(target.packaging_material_id);
+        if (material) {
+          this.applyPackagingMaterial(target, material);
+        } else if (target.packaging_material_name) {
+          target.packaging_material_search = target.packaging_material_name;
+        } else if (!target.packaging_material_id) {
+          this.applyPackagingMaterial(target, this.getDefaultPackagingMaterial(item));
+        }
+        target.expected_qty = Number(target.expected_qty || target.qty || 0);
+        target.actual_qty = Number(target.actual_qty || target.expected_qty || 0);
+        this.updateReleaseDiscrepancy(target);
+        this.markReleaseTargetValuesSaved(target);
+      }
+    }
   }
 
   preventNonNumericInput(ev, options = {}) {
@@ -286,7 +343,7 @@ export class PrepackDashboard extends Component {
       : ev.target.value.replace(/\D/g, "");
     ev.target.value = numericValue;
     if (numericValue === "") {
-      target[fieldName] = 0;
+      target[fieldName] = "";
     } else if (options.allowDecimal) {
       target[fieldName] = numericValue;
     } else {
@@ -309,7 +366,8 @@ export class PrepackDashboard extends Component {
       this.notification.add("This product lot is already in your batch list.", { type: "danger" });
       return;
     }
-    const item = { ...this.state.selectedProduct, targets: [{ size: 0, qty: 0, packaging_material_id: null, packaging_material_name: "", packaging_material_soh: 0, packaging_material_uom: "" }] };
+    const item = { ...this.state.selectedProduct, targets: [] };
+    item.targets.push(this.getEmptyTarget(this.getDefaultPackagingMaterial(item)));
     this.state.batchItems.push(item);
 
     this.resetSelectedProduct();
@@ -340,6 +398,9 @@ export class PrepackDashboard extends Component {
   goBack() {
     if (this.state.batchId) {
       this.clearSelectedBatch();
+      if (this.state.mode === "history") {
+        this.state.step = 4;
+      }
       return;
     }
     if (this.state.step === 2) {
@@ -367,18 +428,62 @@ export class PrepackDashboard extends Component {
   }
 
   async addTarget(item) {
-    item.targets.push({ size: 0, qty: 0, packaging_material_id: null, packaging_material_name: "", packaging_material_soh: 0, packaging_material_uom: "" });
+    item.targets.push(this.getEmptyTarget(this.getDefaultPackagingMaterial(item)));
     await this.autoSave();
   }
 
-  async onPackagingMaterialChange(target, ev) {
-    const productId = parseInt(ev.target.value, 10) || null;
-    const product = this.state.packagingMaterials.find(item => item.id === productId);
-    target.packaging_material_id = productId;
+  getEmptyTarget(material = null) {
+    const target = {
+      size: 0,
+      qty: 0,
+      packaging_material_id: null,
+      packaging_material_name: "",
+      packaging_material_search: "",
+      packaging_material_soh: 0,
+      packaging_material_uom: "",
+    };
+    this.applyPackagingMaterial(target, material);
+    return target;
+  }
+
+  async onPackagingMaterialSearchInput(target, ev) {
+    target.packaging_material_search = ev.target.value;
+    const material = this.state.packagingMaterials.find(
+      item => this.getPackagingMaterialLabel(item) === target.packaging_material_search || item.name === target.packaging_material_search
+    );
+    if (material) {
+      await this.setPackagingMaterial(target, material);
+    }
+  }
+
+  async searchPackagingMaterial(target) {
+    const searchValue = (target.packaging_material_search || "").trim().toLowerCase();
+    if (!searchValue) {
+      this.notification.add("Type a packaging material name before searching.", { type: "warning" });
+      return;
+    }
+    const material = this.state.packagingMaterials.find(item =>
+      this.getPackagingMaterialLabel(item).toLowerCase().includes(searchValue) ||
+      item.name.toLowerCase().includes(searchValue)
+    );
+    if (!material) {
+      this.notification.add("No packaging material found for that search.", { type: "warning" });
+      return;
+    }
+    await this.setPackagingMaterial(target, material);
+  }
+
+  async setPackagingMaterial(target, product) {
+    this.applyPackagingMaterial(target, product);
+    await this.autoSave();
+  }
+
+  applyPackagingMaterial(target, product) {
+    target.packaging_material_id = product ? product.id : null;
     target.packaging_material_name = product ? product.name : "";
+    target.packaging_material_search = product ? this.getPackagingMaterialLabel(product) : "";
     target.packaging_material_soh = product ? product.soh : 0;
     target.packaging_material_uom = product ? product.uom : "";
-    await this.autoSave();
   }
 
   async removeTarget(item, index) {
@@ -412,6 +517,7 @@ export class PrepackDashboard extends Component {
         payload.push({
           id: item.id,
           lot_id: item.lot_id,
+          location_id: item.location_id,
           targets: validTargets,
         });
       }
@@ -428,7 +534,7 @@ export class PrepackDashboard extends Component {
     }
 
     const result = await this.orm.call("bahmni.prepack.batch", "submit_prepack_batch", [payload], {
-      location_id: this.state.selectedLocationId,
+      location_src_id: this.state.selectedLocationId,
     });
 
     this.notification.add(`Batch ${result.name} submitted for release.`, { type: "success" });
@@ -447,14 +553,18 @@ export class PrepackDashboard extends Component {
   }
 
   async releaseBatch() {
-    if (this.state.hasReleaseDiscrepancy && !this.state.releaseDiscrepancyReason.trim()) {
-      this.notification.add("Please record the discrepancy reason before releasing.", { type: "danger" });
+    if (!this.validateReleaseValues()) {
       return;
     }
+    if (!this.validateReleaseDiscrepancies()) {
+      return;
+    }
+    await this.saveAllReleaseTargetValues();
+    await this.saveAllLineDiscrepancies();
     await this.orm.call(
       "bahmni.prepack.batch",
       "action_release_batch",
-      [[this.state.batchId], this.state.hasReleaseDiscrepancy ? this.state.releaseDiscrepancyReason.trim() : ""]
+      [[this.state.batchId]]
     );
     this.notification.add("Batch released successfully!", { type: "success" });
 
@@ -464,6 +574,131 @@ export class PrepackDashboard extends Component {
     this.state.isAuthorized = true;
     // Refresh batch details to update all lines and show the print button.
     await this.selectBatch(this.state.batchId);
+  }
+
+  getReleaseTargets() {
+    return this.state.batchItems.flatMap(item =>
+      item.targets.filter(target => target.line_id)
+    );
+  }
+
+  validateReleaseDiscrepancies(targets = this.getReleaseTargets()) {
+    for (const target of targets) {
+      this.updateReleaseDiscrepancy(target);
+    }
+    const missingReason = targets.some(
+      target => target.has_release_discrepancy && !(target.release_discrepancy_reason || "").trim()
+    );
+    if (missingReason) {
+      this.notification.add("Please enter a discrepancy explanation.", { type: "warning" });
+      return false;
+    }
+    const missingQualityCheck = targets.some(target => !target.quality_check_completed);
+    if (missingQualityCheck) {
+      this.notification.add("Please tick Quality Check Completed before releasing.", { type: "warning" });
+      return false;
+    }
+    return true;
+  }
+
+  validateReleaseValues(targets = this.getReleaseTargets()) {
+    const invalidTarget = targets.find(target => Number(target.size) <= 0 || Number(target.actual_qty) <= 0);
+    if (invalidTarget) {
+      this.notification.add("Pack size and actual prepacks must be greater than zero.", { type: "warning" });
+      return false;
+    }
+    return true;
+  }
+
+  isInvalidReleaseValue(value) {
+    return Number(value) <= 0;
+  }
+
+  getReleaseBulkUsage(target) {
+    return Number(target.size || 0) * Number(target.actual_qty || 0);
+  }
+
+  markReleaseTargetValuesSaved(target) {
+    target._saved_size = Number(target.size || 0);
+    target._saved_actual_qty = Number(target.actual_qty || target.expected_qty || target.qty || 0);
+    target._saved_quality_check_completed = Boolean(target.quality_check_completed);
+    target._saved_release_discrepancy_reason = target.release_discrepancy_reason || "";
+  }
+
+  hasReleaseTargetValueChanges(target) {
+    return (
+      Number(target.size || 0) !== Number(target._saved_size || 0) ||
+      Number(target.actual_qty || 0) !== Number(target._saved_actual_qty || 0) ||
+      Boolean(target.quality_check_completed) !== Boolean(target._saved_quality_check_completed) ||
+      (target.release_discrepancy_reason || "") !== (target._saved_release_discrepancy_reason || "")
+    );
+  }
+
+  updateReleaseDiscrepancy(target) {
+    const expectedQty = Number(target.expected_qty || target.qty || 0);
+    const actualQty = Number(target.actual_qty || 0);
+    target.has_release_discrepancy = expectedQty !== actualQty;
+    if (!target.has_release_discrepancy) {
+      target.release_discrepancy_reason = "";
+    }
+  }
+
+  onReleaseActualQtyInput(target, ev) {
+    this.onNumericFieldInput(target, "actual_qty", ev);
+    this.updateReleaseDiscrepancy(target);
+  }
+
+  async saveReleaseTargetValues(target) {
+    if (!target.line_id) {
+      return;
+    }
+    if (!this.validateReleaseValues([target])) {
+      return;
+    }
+    if (!this.hasReleaseTargetValueChanges(target)) {
+      return;
+    }
+    await this.orm.call(
+      "bahmni.prepack.batch.line",
+      "action_update_release_values",
+      [
+        [target.line_id],
+        target.size,
+        target.actual_qty,
+        Boolean(target.quality_check_completed),
+        target.release_discrepancy_reason || "",
+      ]
+    );
+    this.markReleaseTargetValuesSaved(target);
+  }
+
+  async saveAllReleaseTargetValues() {
+    for (const target of this.getReleaseTargets()) {
+      await this.saveReleaseTargetValues(target);
+    }
+  }
+
+  onLineDiscrepancyReasonInput(target, ev) {
+    target.release_discrepancy_reason = ev.target.value;
+  }
+
+  async onQualityCheckToggle(target, ev) {
+    target.quality_check_completed = ev.target.checked;
+    await this.saveReleaseTargetValues(target);
+  }
+
+  async saveLineDiscrepancy(target) {
+    if (!target.line_id) {
+      return;
+    }
+    this.updateReleaseDiscrepancy(target);
+    await this.saveReleaseTargetValues(target);
+  }
+
+  async saveAllLineDiscrepancies() {
+    for (const target of this.getReleaseTargets()) {
+      await this.saveLineDiscrepancy(target);
+    }
   }
 
   async rejectBatch() {
@@ -493,8 +728,19 @@ export class PrepackDashboard extends Component {
   }
 
   async releaseLine(lineId) {
+    const target = this.getReleaseTargets().find(item => item.line_id === lineId);
+    if (target && !this.validateReleaseValues([target])) {
+      return;
+    }
+    if (target && !this.validateReleaseDiscrepancies([target])) {
+      return;
+    }
+    if (target) {
+      await this.saveReleaseTargetValues(target);
+      await this.saveLineDiscrepancy(target);
+    }
     await this.orm.call("bahmni.prepack.batch.line", "action_authorize_line", [[lineId]]);
-    this.notification.add("Item validated for release successfully!", { type: "success" });
+    this.notification.add("Item released successfully!", { type: "success" });
 
     // Refresh batch details
     await this.selectBatch(this.state.batchId);
@@ -535,10 +781,9 @@ export class PrepackDashboard extends Component {
       [[this.state.batchId]]
     );
     await this.actionService.doAction(action);
-    if (this.state.mode === "authorize" && this.state.isAuthorized) {
-      await this.loadPendingBatches();
-      this.clearSelectedBatch();
-    }
+    await this.actionService.doAction("lesotho_base.action_view_prepacks_placeholder", {
+      clearBreadcrumbs: true,
+    });
   }
 
   async printLineLabel(lineId) {
