@@ -11,6 +11,7 @@ class TestPrescriptionDispensing(SavepointCase):
         cls.unit_uom = cls.env.ref("uom.product_uom_unit")
         cls.stock_location = cls.env.ref("stock.stock_location_stock")
         cls.partner = cls.env["res.partner"].create({"name": "Dispense Patient"})
+        cls.shop = cls.env["sale.shop"].search([], limit=1)
         cls.lot_expiry_field = cls._get_lot_expiry_field()
 
         cls.product = cls._create_tracked_product("Dispensed Product A")
@@ -101,7 +102,12 @@ class TestPrescriptionDispensing(SavepointCase):
         return lot
 
     def _create_order_line(self, product=None, quantity=5.0):
-        order = self.env["sale.order"].create({"partner_id": self.partner.id})
+        order = self.env["sale.order"].create(
+            {
+                "partner_id": self.partner.id,
+                "shop_id": self.shop.id,
+            }
+        )
         return self.env["sale.order.line"].create(
             {
                 "order_id": order.id,
@@ -272,15 +278,116 @@ class TestPrescriptionDispensing(SavepointCase):
         self.assertEqual(line_payload["quantity_dispensed"], 0.0)
         self.assertEqual(line_payload["prescription_status"], "awaiting_dispensing")
 
-    def test_save_action_marks_prescription_on_hold(self):
+    def test_overdispensing_is_treated_as_fully_dispensed(self):
         line = self._create_order_line(quantity=5.0)
         order = line.order_id
 
-        action = order.action_hold_prescription_from_ui()
+        updated = order.update_prescription_dispensing_line(
+            line.id,
+            {"quantity_dispensed": 6.0},
+        )
+
+        line = self.env["sale.order.line"].browse(line.id)
+        self.assertTrue(order.action_save_prescription_from_ui())
+        self.assertEqual(line.prescription_status, "fully_served")
+        self.assertEqual(updated["prescription_status"], "fully_served")
+
+    def test_overdispensing_can_be_served_normally(self):
+        line = self._create_order_line(quantity=5.0)
+        order = line.order_id
+        order.write({"medication_explanation_confirmed": True})
+
+        order.update_prescription_dispensing_line(
+            line.id,
+            {"quantity_dispensed": 6.0},
+        )
+        order.fetch_prescription_dispensing()
+        report_action = order.action_serve_prescription_from_ui(False)
+
+        order = self.env["sale.order"].browse(order.id)
+        line = self.env["sale.order.line"].browse(line.id)
+        self.assertEqual(report_action["type"], "ir.actions.act_url")
+        self.assertEqual(line.prescription_status, "fully_served")
+        self.assertEqual(order.prescription_status, "fully_served")
+
+    def test_serving_uses_per_line_status_not_aggregate_totals(self):
+        line = self._create_order_line(quantity=5.0)
+        order = line.order_id
+        line_2 = self.env["sale.order.line"].create(
+            {
+                "order_id": order.id,
+                "product_id": self.alt_product.id,
+                "name": self.alt_product.display_name,
+                "product_uom_qty": 5.0,
+                "product_uom": self.unit_uom.id,
+                "price_unit": 0.0,
+            }
+        )
+        order.write({"medication_explanation_confirmed": True})
+        line.with_context(skip_prescription_init=True).write(
+            {
+                "prescribed_qty_base_units": 5.0,
+                "product_uom_qty": 10.0,
+            }
+        )
+        line_2.with_context(skip_prescription_init=True).write(
+            {
+                "prescribed_qty_base_units": 5.0,
+                "product_uom_qty": 0.0,
+                "served_internally": True,
+            }
+        )
+
+        summary = order.evaluate_prescription_serving()
+
+        self.assertEqual(summary["total_prescribed"], 10.0)
+        self.assertEqual(summary["total_dispensed"], 10.0)
+        self.assertTrue(summary["needs_backorder"])
+        self.assertEqual(summary["prescription_status"], "partially_fulfilled")
+
+        order.fetch_prescription_dispensing()
+        report_action = order.action_serve_prescription_from_ui(True)
+
+        order = self.env["sale.order"].browse(order.id)
+        line = self.env["sale.order.line"].browse(line.id)
+        line_2 = self.env["sale.order.line"].browse(line_2.id)
+        backorder = self.env["sale.order"].search([("origin", "=", order.name)], limit=1)
+        backorder_line = backorder.order_line.filtered(lambda l: not l.display_type)[:1]
+
+        self.assertEqual(report_action["type"], "ir.actions.act_url")
+        self.assertEqual(line.prescription_status, "fully_served")
+        self.assertFalse(line_2.exists())
+        self.assertEqual(backorder.prescription_status, "awaiting_dispensing")
+        self.assertEqual(backorder.prescription_backorder_origin_id.id, order.id)
+        self.assertEqual(backorder_line.prescribed_qty_base_units, 5.0)
+        self.assertEqual(backorder_line.product_uom_qty, 0.0)
+        self.assertEqual(order.prescription_status, "partially_served_backorder_created")
+
+    def test_save_action_keeps_prescription_status_unchanged(self):
+        line = self._create_order_line(quantity=5.0)
+        order = line.order_id
+
+        saved = order.action_save_prescription_from_ui()
+
+        order = self.env["sale.order"].browse(order.id)
+        self.assertTrue(saved)
+        self.assertFalse(order.is_on_hold)
+        self.assertEqual(order.prescription_status, "awaiting_dispensing")
+
+    def test_hold_action_requires_reason_and_stores_previous_status(self):
+        line = self._create_order_line(quantity=5.0)
+        order = line.order_id
+
+        with self.assertRaises(UserError):
+            order.action_hold_prescription_from_ui("")
+
+        action = order.action_hold_prescription_from_ui("Awaiting stock verification")
 
         order = self.env["sale.order"].browse(order.id)
         self.assertTrue(order.is_on_hold)
         self.assertEqual(order.prescription_status, "on_hold")
+        self.assertEqual(order.previous_status, "awaiting_dispensing")
+        self.assertEqual(order.on_hold_reason, "Awaiting stock verification")
         self.assertEqual(action["name"], "Prescriptions")
 
     def test_evaluate_serving_summary_requires_backorder_for_partial_internal_lines(self):
@@ -310,6 +417,7 @@ class TestPrescriptionDispensing(SavepointCase):
                 "product_uom_qty": 4.0,
             }
         )
+        order.fetch_prescription_dispensing()
 
         report_action = order.action_serve_prescription_from_ui(True)
 
@@ -320,34 +428,124 @@ class TestPrescriptionDispensing(SavepointCase):
         self.assertEqual(report_action["type"], "ir.actions.act_url")
         self.assertIn("report/pdf/lesotho_sale.report_prescription_labels", report_action["url"])
         self.assertEqual(report_action["target"], "new")
-        self.assertEqual(order.prescription_status, "partially_fulfilled")
+        line = self.env["sale.order.line"].browse(line.id)
+        self.assertEqual(order.prescription_status, "partially_served_backorder_created")
+        self.assertEqual(line.prescription_status, "partially_fulfilled")
+        self.assertEqual(line.prescribed_qty_base_units, 10.0)
+        self.assertEqual(line.product_uom_qty, 4.0)
+        self.assertEqual(order._get_dispensing_label_lines().ids, line.ids)
         self.assertTrue(backorder)
         self.assertEqual(backorder.prescription_status, "awaiting_dispensing")
-        self.assertEqual(backorder_line.product_uom_qty, 6.0)
+        self.assertEqual(backorder.prescription_backorder_origin_id.id, order.id)
+        self.assertEqual(backorder_line.prescribed_qty_base_units, 6.0)
+        self.assertEqual(backorder_line.product_uom_qty, 0.0)
         self.assertEqual(backorder_line.prescription_status, "awaiting_dispensing")
+        self.assertEqual(backorder_line.prescription_backorder_origin_line_id.id, line.id)
+        self.assertFalse(backorder._get_dispensing_label_lines())
 
-    def test_hold_can_be_cleared_when_serving_resumes(self):
+        original_payload = order.fetch_prescription_dispensing()
+        backorder_payload = backorder.fetch_prescription_dispensing()
+
+        self.assertTrue(original_payload["is_readonly"])
+        self.assertEqual(
+            original_payload["linked_backorders"][0]["id"],
+            backorder.id,
+        )
+        self.assertEqual(
+            backorder_payload["original_prescription"]["id"],
+            order.id,
+        )
+        self.assertEqual(
+            original_payload["lines"][0]["backorder_lines"][0]["id"],
+            backorder_line.id,
+        )
+        with self.assertRaises(UserError):
+            order.update_prescription_dispensing_line(line.id, {"comments": "closed"})
+
+    def test_partial_serve_without_backorder_requires_balance_resolution(self):
         line = self._create_order_line(quantity=5.0)
         order = line.order_id
         order.write({"medication_explanation_confirmed": True})
-        order.action_hold_prescription_from_ui()
+        line.with_context(skip_prescription_init=True).write(
+            {
+                "prescribed_qty_base_units": 10.0,
+                "product_uom_qty": 4.0,
+            }
+        )
+        order.fetch_prescription_dispensing()
 
+        with self.assertRaises(UserError):
+            order.action_serve_prescription_from_ui(False)
+
+        with self.assertRaises(UserError):
+            order.action_serve_prescription_from_ui(False, "other", "")
+
+        report_action = order.action_serve_prescription_from_ui(
+            False,
+            "external_referral",
+            "",
+        )
+
+        order = self.env["sale.order"].browse(order.id)
+        line = self.env["sale.order.line"].browse(line.id)
+
+        self.assertEqual(report_action["type"], "ir.actions.act_url")
+        self.assertEqual(order.prescription_status, "fully_served")
+        self.assertEqual(line.prescription_status, "balance_waived")
+        self.assertEqual(line.balance_resolution, "external_referral")
+
+    def test_on_hold_prescription_cannot_be_served_until_resumed(self):
+        line = self._create_order_line(quantity=5.0)
+        order = line.order_id
+        order.write({"medication_explanation_confirmed": True})
+        order.action_hold_prescription_from_ui("Patient counselling interrupted")
+
+        with self.assertRaises(UserError):
+            order.action_serve_prescription_from_ui()
+
+        payload = order.action_resume_prescription_from_ui()
+        order.fetch_prescription_dispensing()
         report_action = order.action_serve_prescription_from_ui()
 
         order = self.env["sale.order"].browse(order.id)
         line = self.env["sale.order.line"].browse(line.id)
 
         self.assertFalse(order.is_on_hold)
+        self.assertEqual(payload["prescription_status"], "awaiting_dispensing")
         self.assertEqual(order.prescription_status, "fully_served")
         self.assertTrue(line.dispensed)
         self.assertEqual(report_action["type"], "ir.actions.act_url")
         self.assertIn("report/pdf/lesotho_sale.report_prescription_labels", report_action["url"])
         self.assertEqual(report_action["target"], "new")
 
+    def test_resume_restores_previous_status(self):
+        line = self._create_order_line(quantity=5.0)
+        order = line.order_id
+        order.write({"dispensing_status": "partially_fulfilled"})
+        order.action_hold_prescription_from_ui("Waiting for patient")
+
+        payload = order.action_resume_prescription_from_ui()
+
+        order = self.env["sale.order"].browse(order.id)
+        self.assertFalse(order.is_on_hold)
+        self.assertEqual(order.previous_status, "partially_fulfilled")
+        self.assertEqual(order.prescription_status, "partially_fulfilled")
+        self.assertEqual(payload["prescription_status"], "partially_fulfilled")
+
+    def test_closed_or_cancelled_prescription_cannot_resume(self):
+        line = self._create_order_line(quantity=5.0)
+        order = line.order_id
+        order.action_hold_prescription_from_ui("Cancelled by clinician")
+        order.action_cancel()
+
+        with self.assertRaises(UserError):
+            order.action_resume_prescription_from_ui()
+
     def test_fully_served_prescription_cannot_be_modified_again(self):
         line = self._create_order_line(quantity=5.0)
         order = line.order_id
         order.write({"medication_explanation_confirmed": True})
+        order.fetch_prescription_dispensing()
         order.action_serve_prescription_from_ui()
 
         order = self.env["sale.order"].browse(order.id)

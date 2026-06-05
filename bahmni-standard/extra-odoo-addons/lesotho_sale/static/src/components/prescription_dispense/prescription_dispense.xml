@@ -16,18 +16,27 @@
                     <div class="o_lesotho_cp_bottom">
                         <div class="o_lesotho_cp_actions">
                             <button t-if="!state.readOnly" type="button" class="o_lesotho_cp_save" t-on-click="() => this.save()">Save</button>
-                            <button t-if="!state.readOnly" type="button" class="o_lesotho_cp_serve" t-att-disabled="!state.explanationConfirmed" t-on-click="() => this.serve()">Serve</button>
+                            <button t-if="!state.readOnly &amp;&amp; !this.isOnHold()" type="button" class="o_lesotho_cp_hold" t-on-click="() => this.putOnHold()">Put On Hold</button>
+                            <button t-if="!state.readOnly &amp;&amp; this.isOnHold()" type="button" class="o_lesotho_cp_resume" t-on-click="() => this.resumeDispensing()">Resume Dispensing</button>
+                            <button t-if="!state.readOnly" type="button" class="o_lesotho_cp_serve" t-att-disabled="!this.canServe()" t-on-click="() => this.serve()">Serve</button>
                             <button type="button" class="o_lesotho_cp_cancel" t-on-click="() => this.cancel()"><t t-esc="state.readOnly ? 'Close' : 'Cancel'"/></button>
                         </div>
                         <div class="o_lesotho_statusbar" aria-label="Prescription status">
                             <span t-att-class="this.getOrderStatusClass('awaiting_dispensing')">Awaiting Dispensing</span>
                             <span t-att-class="this.getOrderStatusClass('partially_fulfilled')">Partially Served</span>
+                            <span t-att-class="this.getOrderStatusClass('partially_served_backorder_created')">Back Order Created</span>
                             <span t-att-class="this.getOrderStatusClass('on_hold')">On Hold</span>
                             <span t-att-class="this.getOrderStatusClass('fully_served')">Fully Served</span>
                         </div>
                     </div>
                     <div t-if="state.readOnly" class="o_lesotho_readonly_notice">
-                        This prescription has been fully served. You can review the details below, but the record is now read-only.
+                        This dispensing event is closed. You can review the details below, but the record is now read-only.
+                    </div>
+                    <div t-elif="this.isOnHold()" class="o_lesotho_readonly_notice">
+                        This prescription is on hold. Resume dispensing before serving.
+                        <t t-if="state.order.on_hold_reason">
+                            Reason: <t t-esc="state.order.on_hold_reason"/>
+                        </t>
                     </div>
                 </div>
 
@@ -55,6 +64,22 @@
                             <div class="o_lesotho_patient_detail"><strong>Prescriber</strong> <span><t t-esc="state.order.prescriber"/></span></div>
                             <div class="o_lesotho_patient_detail"><strong>Care Setting</strong> <span><t t-esc="state.order.care_setting"/></span></div>
                             <div class="o_lesotho_patient_detail"><strong>Dispensary</strong> <span><t t-esc="state.order.dispensary"/></span></div>
+                            <div t-if="state.order.original_prescription" class="o_lesotho_patient_detail">
+                                <strong>Original Prescription</strong>
+                                <span>
+                                    <t t-esc="state.order.original_prescription.name"/>
+                                    (<t t-esc="state.order.original_prescription.status_label"/>)
+                                </span>
+                            </div>
+                            <div t-if="state.order.linked_backorders &amp;&amp; state.order.linked_backorders.length" class="o_lesotho_linked_backorders">
+                                <strong>Linked Back Orders</strong>
+                                <t t-foreach="state.order.linked_backorders" t-as="backorder" t-key="backorder.id">
+                                    <span>
+                                        <t t-esc="backorder.name"/>
+                                        (<t t-esc="backorder.status_label"/>)
+                                    </span>
+                                </t>
+                            </div>
                         </section>
                     </div>
                 </div>
@@ -97,6 +122,16 @@
 
                                 <div t-if="line.dispensed_product &amp;&amp; line.dispensed_product !== line.prescribed_product" class="o_lesotho_notice">
                                     You can dispense a different product and adjust the dose and instructions as appropriate.
+                                </div>
+                                <div t-if="line.original_line_prescription" class="o_lesotho_notice">
+                                    Back order line from original prescription <strong><t t-esc="line.original_line_prescription"/></strong>.
+                                </div>
+                                <div t-if="line.backorder_lines &amp;&amp; line.backorder_lines.length" class="o_lesotho_notice">
+                                    Linked back-order balance:
+                                    <t t-foreach="line.backorder_lines" t-as="backorderLine" t-key="backorderLine.id">
+                                        <strong><t t-esc="backorderLine.order_name"/></strong>
+                                        for <t t-esc="backorderLine.quantity_prescribed"/> remaining.
+                                    </t>
                                 </div>
 
                                 <div class="o_lesotho_form_grid">
@@ -165,6 +200,18 @@
                                             <label class="o_lesotho_field o_lesotho_checkbox_field">
                                                 <span>Served Internally</span>
                                                 <input type="checkbox" t-att-disabled="state.readOnly" t-att-checked="line.served_internally" t-on-change="(ev) => this.onFieldChanged(line, 'served_internally', ev.target.checked)"/>
+                                            </label>
+                                            <label t-if="this.hasOutstandingBalance(line)" class="o_lesotho_field">
+                                                <span>Balance Resolution</span>
+                                                <select t-att-disabled="state.readOnly" t-att-value="line.balance_resolution || ''" t-on-change="(ev) => this.onFieldChanged(line, 'balance_resolution', ev.target.value)">
+                                                    <option value="">Select reason</option>
+                                                    <option value="external_referral" t-att-selected="line.balance_resolution === 'external_referral'">External referral</option>
+                                                    <option value="other" t-att-selected="line.balance_resolution === 'other'">Other</option>
+                                                </select>
+                                            </label>
+                                            <label t-if="this.hasOutstandingBalance(line) &amp;&amp; line.balance_resolution === 'other'" class="o_lesotho_field o_lesotho_field_full">
+                                                <span>Resolution Explanation</span>
+                                                <input t-att-disabled="state.readOnly" t-att-value="line.balance_resolution_note" t-on-change="(ev) => this.onFieldChanged(line, 'balance_resolution_note', ev.target.value)"/>
                                             </label>
                                         </div>
                                     </section>
@@ -297,8 +344,74 @@
                     <div t-else="" class="o_lesotho_readonly_footer">
                         This prescription is complete. Open the list to review other prescriptions.
                     </div>
-                    <button t-if="!state.readOnly" class="o_lesotho_serve" t-att-disabled="!state.explanationConfirmed" t-on-click="() => this.serve()">Serve</button>
+                    <button t-if="!state.readOnly" class="o_lesotho_serve" t-att-disabled="!this.canServe()" t-on-click="() => this.serve()">Serve</button>
                 </div>
+
+                <t t-if="state.balanceResolutionDialog.visible">
+                    <div class="modal-backdrop fade show"/>
+                    <div class="modal fade show d-block o_lesotho_balance_resolution_modal" role="dialog" aria-modal="true" aria-labelledby="o_lesotho_balance_resolution_title">
+                        <div class="modal-dialog modal-dialog-centered">
+                            <div class="modal-content">
+                                <div class="modal-header">
+                                    <h4 id="o_lesotho_balance_resolution_title" class="modal-title">Balance Resolution</h4>
+                                    <button type="button" class="btn-close" aria-label="Close" t-on-click="() => this.cancelBalanceResolutionDialog()"/>
+                                </div>
+                                <div class="modal-body">
+                                    <p class="o_lesotho_dialog_hint">
+                                        No back order will be created. Choose how the undispensed balance is being resolved.
+                                    </p>
+                                    <label class="o_lesotho_dialog_field">
+                                        <span>Resolution Reason</span>
+                                        <select t-att-value="state.balanceResolutionDialog.reason" t-on-change="(ev) => this.setBalanceResolutionReason(ev.target.value)">
+                                            <option value="external_referral" t-att-selected="state.balanceResolutionDialog.reason === 'external_referral'">External referral</option>
+                                            <option value="other" t-att-selected="state.balanceResolutionDialog.reason === 'other'">Other</option>
+                                        </select>
+                                    </label>
+                                    <label t-if="state.balanceResolutionDialog.reason === 'other'" class="o_lesotho_dialog_field">
+                                        <span>Explanation</span>
+                                        <textarea rows="3" t-att-value="state.balanceResolutionDialog.note" t-on-input="(ev) => this.setBalanceResolutionNote(ev.target.value)"/>
+                                    </label>
+                                    <div t-if="state.balanceResolutionDialog.error" class="alert alert-warning o_lesotho_dialog_error">
+                                        <t t-esc="state.balanceResolutionDialog.error"/>
+                                    </div>
+                                </div>
+                                <div class="modal-footer">
+                                    <button type="button" class="btn btn-secondary" t-on-click="() => this.cancelBalanceResolutionDialog()">Cancel</button>
+                                    <button type="button" class="btn btn-primary" t-on-click="() => this.confirmBalanceResolutionDialog()">Continue</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </t>
+
+                <t t-if="state.confirmationDialog.visible">
+                    <div class="modal-backdrop fade show"/>
+                    <div class="modal fade show d-block o_lesotho_confirmation_modal" role="dialog" aria-modal="true" aria-labelledby="o_lesotho_confirmation_title">
+                        <div class="modal-dialog modal-dialog-centered">
+                            <div class="modal-content">
+                                <div class="modal-header">
+                                    <h4 id="o_lesotho_confirmation_title" class="modal-title">
+                                        <t t-esc="state.confirmationDialog.title"/>
+                                    </h4>
+                                    <button type="button" class="btn-close" aria-label="Close" t-on-click="() => this.cancelConfirmationDialog()"/>
+                                </div>
+                                <div class="modal-body">
+                                    <p class="o_lesotho_dialog_hint">
+                                        <t t-esc="state.confirmationDialog.message"/>
+                                    </p>
+                                </div>
+                                <div class="modal-footer">
+                                    <button type="button" class="btn btn-secondary" t-on-click="() => this.cancelConfirmationDialog()">
+                                        <t t-esc="state.confirmationDialog.cancelLabel"/>
+                                    </button>
+                                    <button type="button" class="btn btn-primary" t-on-click="() => this.confirmConfirmationDialog()">
+                                        <t t-esc="state.confirmationDialog.confirmLabel"/>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </t>
             </t>
         </div>
     </t>

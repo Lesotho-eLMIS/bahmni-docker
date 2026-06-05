@@ -125,6 +125,35 @@ class ExtendedSaleOrderLine(models.Model):
         copy=False,
         help="Comments added by the dispenser during prescription dispensing.",
     )
+    balance_resolution = fields.Selection(
+        selection=[
+            ("external_referral", "External Referral"),
+            ("other", "Other"),
+        ],
+        string="Balance Resolution",
+        copy=False,
+        help="Reason captured when an undispensed balance is closed without a back order.",
+    )
+    balance_resolution_note = fields.Text(
+        string="Balance Resolution Explanation",
+        copy=False,
+        help="Free-text explanation for balance resolutions that need additional context.",
+    )
+    prescription_backorder_origin_line_id = fields.Many2one(
+        "sale.order.line",
+        string="Original Prescription Line",
+        copy=False,
+        readonly=True,
+        index=True,
+        help="Original prescription line that created this back-order line.",
+    )
+    prescription_backorder_line_ids = fields.One2many(
+        "sale.order.line",
+        "prescription_backorder_origin_line_id",
+        string="Linked Back-Order Lines",
+        readonly=True,
+        help="Back-order lines created from this original prescription line.",
+    )
 
     is_existing_prescription = fields.Boolean(
         string="Existing Prescription",
@@ -238,10 +267,11 @@ class ExtendedSaleOrderLine(models.Model):
 
     prescription_status = fields.Selection(
         selection=[
-            ("awaiting_dispensing", "Awaiting Dispensing"),
-            ("partially_fulfilled", "Partially Served"),
-            ("fully_served", "Fully Served"),
-            ("served_externally", "served externally"),
+            ("awaiting_dispensing", "Not Dispensed"),
+            ("partially_fulfilled", "Partially Dispensed"),
+            ("fully_served", "Fully Dispensed"),
+            ("served_externally", "Served Externally"),
+            ("balance_waived", "Balance Waived"),
         ],
         string="Prescription Status",
         compute="_compute_prescription_status",
@@ -465,6 +495,8 @@ class ExtendedSaleOrderLine(models.Model):
         "served_internally",
         "product_uom_qty",
         "prescribed_qty_base_units",
+        "balance_resolution",
+        "balance_resolution_note",
     )
     def _compute_prescription_status(self):
         for line in self:
@@ -476,6 +508,25 @@ class ExtendedSaleOrderLine(models.Model):
         served_qty = self.product_uom_qty or 0.0
         return prescribed_qty, served_qty
 
+    def _has_outstanding_prescription_balance(self):
+        self.ensure_one()
+        if self.display_type or not self.served_internally:
+            return False
+        prescribed_qty, served_qty = self._get_prescription_quantities()
+        return float_compare(
+            served_qty,
+            prescribed_qty,
+            precision_rounding=self.product_uom.rounding or 0.0001,
+        ) < 0
+
+    def _has_balance_resolution(self):
+        self.ensure_one()
+        if not self.balance_resolution:
+            return False
+        if self.balance_resolution == "other" and not (self.balance_resolution_note or "").strip():
+            return False
+        return True
+
     def _get_prescription_status(self):
         self.ensure_one()
         if self.display_type:
@@ -485,6 +536,11 @@ class ExtendedSaleOrderLine(models.Model):
 
         prescribed_qty, served_qty = self._get_prescription_quantities()
         qty_rounding = self.product_uom.rounding or 0.0001
+        if (
+            float_compare(served_qty, prescribed_qty, precision_rounding=qty_rounding) < 0
+            and self._has_balance_resolution()
+        ):
+            return "balance_waived"
         if float_compare(served_qty, 0.0, precision_rounding=qty_rounding) <= 0:
             return "awaiting_dispensing"
         if float_compare(served_qty, prescribed_qty, precision_rounding=qty_rounding) < 0:
@@ -495,7 +551,11 @@ class ExtendedSaleOrderLine(models.Model):
         self.ensure_one()
         if self.display_type:
             return False
-        return self._get_prescription_status() in ("fully_served", "served_externally")
+        return self._get_prescription_status() in (
+            "fully_served",
+            "served_externally",
+            "balance_waived",
+        )
 
     def _has_positive_internal_service(self):
         self.ensure_one()
@@ -1194,6 +1254,8 @@ class ExtendedSaleOrderLine(models.Model):
                 line.with_context(skip_prescription_init=True).write(vals)
 
     def unlink(self):
+        if self.env.context.get("allow_prescription_serve_cleanup"):
+            return super().unlink()
         protected = self.filtered("is_existing_prescription")
         if protected:
             raise UserError(

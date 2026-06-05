@@ -30,6 +30,7 @@
     "assets": {
         "web.assets_backend": [
             "lesotho_sale/static/src/components/prescription_dispense/prescription_dispense.js",
+            "lesotho_sale/static/src/components/prescription_dispense/prescription_list_open.js",
             "lesotho_sale/static/src/components/prescription_dispense/prescription_dispense.xml",
             "lesotho_sale/static/src/components/prescription_dispense/prescription_dispense.scss",
         ],

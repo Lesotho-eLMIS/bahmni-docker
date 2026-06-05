@@ -2,7 +2,7 @@ import logging
 
 from odoo import _, api, fields, models
 from odoo.exceptions import UserError
-from odoo.tools.float_utils import float_compare, float_is_zero
+from odoo.tools.float_utils import float_compare
 
 _logger = logging.getLogger(__name__)
 
@@ -26,6 +26,10 @@ class ExtendedSaleOrder(models.Model):
         selection=[
             ("awaiting_dispensing", "Awaiting Dispensing"),
             ("partially_fulfilled", "Partially Served"),
+            (
+                "partially_served_backorder_created",
+                "Partially Served - Back Order Created",
+            ),
             ("on_hold", "On Hold"),
             ("fully_served", "Fully Served"),
         ],
@@ -38,6 +42,10 @@ class ExtendedSaleOrder(models.Model):
         selection=[
             ("awaiting_dispensing", "Awaiting Dispensing"),
             ("partially_fulfilled", "Partially Served"),
+            (
+                "partially_served_backorder_created",
+                "Partially Served - Back Order Created",
+            ),
             ("fully_served", "Fully Served"),
         ],
         string="Dispensing Status",
@@ -46,11 +54,46 @@ class ExtendedSaleOrder(models.Model):
         index=True,
         help="Workflow status set by the dispensing actions.",
     )
+    previous_status = fields.Selection(
+        selection=[
+            ("awaiting_dispensing", "Awaiting Dispensing"),
+            ("partially_fulfilled", "Partially Served"),
+            (
+                "partially_served_backorder_created",
+                "Partially Served - Back Order Created",
+            ),
+            ("fully_served", "Fully Served"),
+        ],
+        string="Previous Status",
+        copy=False,
+        readonly=True,
+        help="Lifecycle status the prescription had before it was placed on hold.",
+    )
     is_on_hold = fields.Boolean(
         string="On Hold",
         default=False,
         copy=False,
         help="True when the prescription has been saved for later continuation.",
+    )
+    on_hold_reason = fields.Text(
+        string="On Hold Reason",
+        copy=False,
+        help="Reason captured when the prescription is placed on hold.",
+    )
+    prescription_backorder_origin_id = fields.Many2one(
+        "sale.order",
+        string="Original Prescription",
+        copy=False,
+        readonly=True,
+        index=True,
+        help="Prescription that created this back order.",
+    )
+    prescription_backorder_ids = fields.One2many(
+        "sale.order",
+        "prescription_backorder_origin_id",
+        string="Linked Back Orders",
+        readonly=True,
+        help="Back orders created from this prescription.",
     )
     patient_sex = fields.Selection(
         related="partner_id.sex",
@@ -165,6 +208,8 @@ class ExtendedSaleOrder(models.Model):
         "order_line.served_internally",
         "order_line.product_uom_qty",
         "order_line.prescribed_qty_base_units",
+        "order_line.balance_resolution",
+        "order_line.balance_resolution_note",
     )
     def _compute_prescription_status(self):
         for order in self:
@@ -262,15 +307,71 @@ class ExtendedSaleOrder(models.Model):
             "context": {"active_id": self.id},
         }
 
-    def action_hold_prescription(self):
+    def action_save_prescription_from_ui(self):
         self.ensure_one()
-        if self.prescription_status == "fully_served":
-            raise UserError(_("This prescription has already been fully served."))
-        self.write({"is_on_hold": True})
+        self._ensure_prescription_is_editable()
+        return True
+
+    def action_hold_prescription(self, reason):
+        self.ensure_one()
+        self._ensure_prescription_is_editable()
+        if not reason or not reason.strip():
+            raise UserError(_("Enter a reason before putting the prescription on hold."))
+
+        previous_status = self.previous_status if self.is_on_hold else self.prescription_status
+        if previous_status == "on_hold":
+            previous_status = self.dispensing_status or "awaiting_dispensing"
+
+        self.write(
+            {
+                "is_on_hold": True,
+                "on_hold_reason": reason.strip(),
+                "previous_status": previous_status or "awaiting_dispensing",
+            }
+        )
+        self.message_post(
+            body=_(
+                "Prescription put on hold by %(user)s. Reason: %(reason)s",
+                user=self.env.user.display_name,
+                reason=reason.strip(),
+            )
+        )
         return self.env.ref("sale.action_quotations_with_onboarding").read()[0]
 
-    def action_hold_prescription_from_ui(self):
-        return self.action_hold_prescription()
+    def action_hold_prescription_from_ui(self, reason):
+        return self.action_hold_prescription(reason)
+
+    def action_resume_prescription(self):
+        self.ensure_one()
+        if self.state in ("done", "cancel") or self._is_prescription_closed():
+            raise UserError(_("Closed or cancelled prescriptions cannot be resumed."))
+        if not self.is_on_hold:
+            return self.fetch_prescription_dispensing()
+
+        restored_status = self.previous_status or self.dispensing_status or "awaiting_dispensing"
+        if restored_status in ("fully_served", "partially_served_backorder_created"):
+            raise UserError(_("Closed prescriptions cannot be resumed."))
+
+        self.write(
+            {
+                "is_on_hold": False,
+                "dispensing_status": restored_status,
+            }
+        )
+        self.message_post(
+            body=_(
+                "Prescription resumed by %(user)s. Restored status: %(status)s",
+                user=self.env.user.display_name,
+                status=dict(self._fields["previous_status"].selection).get(
+                    restored_status,
+                    restored_status,
+                ),
+            )
+        )
+        return self.fetch_prescription_dispensing()
+
+    def action_resume_prescription_from_ui(self):
+        return self.action_resume_prescription()
 
     def _get_internal_prescription_lines(self):
         self.ensure_one()
@@ -289,33 +390,80 @@ class ExtendedSaleOrder(models.Model):
             > 0
         )
 
-    def _get_prescription_quantity_totals(self):
+    def _is_prescription_closed(self):
+        self.ensure_one()
+        return self.prescription_status in (
+            "fully_served",
+            "partially_served_backorder_created",
+        )
+
+    def _get_prescription_line_fulfillment_summary(self):
         self.ensure_one()
         internal_lines = self._get_internal_prescription_lines()
+        prescription_lines = self.order_line.filtered(lambda line: not line.display_type)
         total_prescribed = 0.0
         total_dispensed = 0.0
-        for line in internal_lines:
+        line_statuses = {}
+        has_dispensed_internal_lines = False
+
+        for line in prescription_lines:
+            status = line._get_prescription_status()
+            line_statuses[line.id] = status
+
+            if status == "served_externally":
+                continue
+
             prescribed_qty = line.prescribed_qty_base_units or line.product_uom_qty or 0.0
             dispensed_qty = line.product_uom_qty or 0.0
             total_prescribed += prescribed_qty
             total_dispensed += dispensed_qty
-        return internal_lines, total_prescribed, total_dispensed
+
+            qty_rounding = line.product_uom.rounding or 0.0001
+            if float_compare(dispensed_qty, 0.0, precision_rounding=qty_rounding) > 0:
+                has_dispensed_internal_lines = True
+
+        status_values = set(line_statuses.values())
+        terminal_statuses = {"fully_served", "served_externally", "balance_waived"}
+        if not prescription_lines or status_values == {"awaiting_dispensing"}:
+            prescription_status = "awaiting_dispensing"
+        elif status_values and status_values.issubset(terminal_statuses):
+            prescription_status = "fully_served"
+        else:
+            prescription_status = "partially_fulfilled"
+
+        needs_backorder = (
+            has_dispensed_internal_lines
+            and bool(status_values.intersection({"awaiting_dispensing", "partially_fulfilled"}))
+        )
+        return {
+            "prescription_lines": prescription_lines,
+            "internal_lines": internal_lines,
+            "line_statuses": line_statuses,
+            "unresolved_balance_line_ids": [
+                line_id
+                for line_id, status in line_statuses.items()
+                if status in ("awaiting_dispensing", "partially_fulfilled")
+            ],
+            "prescription_status": prescription_status,
+            "total_prescribed": total_prescribed,
+            "total_dispensed": total_dispensed,
+            "has_internal_lines": bool(internal_lines),
+            "has_dispensed_internal_lines": has_dispensed_internal_lines,
+            "needs_backorder": needs_backorder,
+            "has_labels": bool(self._get_dispensed_internal_lines()),
+        }
 
     def evaluate_prescription_serving(self):
         self.ensure_one()
-        internal_lines, total_prescribed, total_dispensed = self._get_prescription_quantity_totals()
-        has_internal_lines = bool(internal_lines)
-        needs_backorder = (
-            has_internal_lines
-            and float_compare(total_dispensed, 0.0, precision_digits=6) > 0
-            and float_compare(total_dispensed, total_prescribed, precision_digits=6) < 0
-        )
+        summary = self._get_prescription_line_fulfillment_summary()
         return {
-            "has_internal_lines": has_internal_lines,
-            "total_prescribed": total_prescribed,
-            "total_dispensed": total_dispensed,
-            "needs_backorder": needs_backorder,
-            "has_labels": bool(self._get_dispensed_internal_lines()),
+            "has_internal_lines": summary["has_internal_lines"],
+            "total_prescribed": summary["total_prescribed"],
+            "total_dispensed": summary["total_dispensed"],
+            "needs_backorder": summary["needs_backorder"],
+            "has_labels": summary["has_labels"],
+            "prescription_status": summary["prescription_status"],
+            "unresolved_balance_line_ids": summary["unresolved_balance_line_ids"],
         }
 
     def _get_prescription_label_partner(self):
@@ -378,6 +526,7 @@ class ExtendedSaleOrder(models.Model):
                 "is_on_hold": False,
                 "dispensing_status": "awaiting_dispensing",
                 "medication_explanation_confirmed": False,
+                "prescription_backorder_origin_id": self.id,
             }
         )
         original_lines = self.order_line.filtered(lambda line: not line.display_type)
@@ -401,7 +550,7 @@ class ExtendedSaleOrder(models.Model):
 
             copied_line.with_context(skip_prescription_init=True).write(
                 {
-                    "product_uom_qty": remaining_qty,
+                    "product_uom_qty": 0.0,
                     "prescribed_qty_base_units": remaining_qty,
                     "dispensed": False,
                     "served_internally": True,
@@ -411,16 +560,59 @@ class ExtendedSaleOrder(models.Model):
                     "substitution_timestamp": False,
                     "substitution_user_id": False,
                     "substitution_note": False,
+                    "balance_resolution": False,
+                    "balance_resolution_note": False,
+                    "prescription_backorder_origin_line_id": original_line.id,
                 }
             )
 
         backorder.message_post(
-            body=_(
-                "Back order created from %(source)s for the remaining quantity.",
-                source=self.name,
-            )
+            body=_("Back order created from %s for the remaining quantity.") % self.name
         )
         return backorder
+
+    def _get_unresolved_balance_lines(self, summary=None):
+        self.ensure_one()
+        summary = summary or self._get_prescription_line_fulfillment_summary()
+        unresolved_ids = set(summary["unresolved_balance_line_ids"])
+        return self.order_line.filtered(
+            lambda line: not line.display_type and line.id in unresolved_ids
+        )
+
+    def _remove_zero_quantity_lines_after_backorder(self, summary):
+        self.ensure_one()
+        line_statuses = summary["line_statuses"]
+        unserved_lines = self.order_line.filtered(
+            lambda line: not line.display_type
+            and line_statuses.get(line.id) == "awaiting_dispensing"
+        )
+        if unserved_lines:
+            unserved_lines.with_context(allow_prescription_serve_cleanup=True).unlink()
+
+    def _validate_balance_resolution(self, balance_resolution, balance_resolution_note=False):
+        if balance_resolution not in ("external_referral", "other"):
+            raise UserError(
+                _(
+                    "Choose a balance resolution reason before closing without a back order."
+                )
+            )
+        if balance_resolution == "other" and not (balance_resolution_note or "").strip():
+            raise UserError(
+                _("Enter an explanation for the other balance resolution reason.")
+            )
+
+    def _apply_balance_resolution(self, summary, balance_resolution, balance_resolution_note=False):
+        self.ensure_one()
+        self._validate_balance_resolution(balance_resolution, balance_resolution_note)
+        unresolved_lines = self._get_unresolved_balance_lines(summary)
+        if unresolved_lines:
+            unresolved_lines.with_context(skip_prescription_init=True).write(
+                {
+                    "balance_resolution": balance_resolution,
+                    "balance_resolution_note": (balance_resolution_note or "").strip(),
+                }
+            )
+        return self._get_prescription_line_fulfillment_summary()
 
     def action_mark_all_dispensed(self):
         """Mark all lines in the order as dispensed"""
@@ -432,25 +624,27 @@ class ExtendedSaleOrder(models.Model):
         lines_to_dispense.write({"dispensed": True})
         return True
 
-    def action_serve_prescription(self, create_backorder=False):
+    def action_serve_prescription(
+        self,
+        create_backorder=False,
+        balance_resolution=False,
+        balance_resolution_note=False,
+    ):
         self.ensure_one()
-        if self.prescription_status == "fully_served":
-            raise UserError(_("This prescription has already been fully served."))
+        if self._is_prescription_closed():
+            raise UserError(_("This prescription has already been closed."))
+        if self.prescription_status == "on_hold" or self.is_on_hold:
+            raise UserError(_("Resume dispensing before serving an on-hold prescription."))
         if not self.medication_explanation_confirmed:
             raise UserError(
                 _("Confirm that the medication instructions were explained before serving.")
             )
 
-        if self.is_on_hold:
-            self.write({"is_on_hold": False})
-
-        if self.state in ("draft", "sent"):
-            self.action_confirm()
-
-        internal_lines, total_prescribed, total_dispensed = self._get_prescription_quantity_totals()
+        summary = self._get_prescription_line_fulfillment_summary()
+        internal_lines = summary["internal_lines"]
         label_lines = self._get_dispensed_internal_lines()
 
-        if internal_lines and float_is_zero(total_dispensed, precision_digits=6):
+        if internal_lines and not summary["has_dispensed_internal_lines"]:
             raise UserError(
                 _(
                     "Enter a quantity to dispense for at least one internal prescription item before serving."
@@ -458,31 +652,34 @@ class ExtendedSaleOrder(models.Model):
             )
 
         backorder = self.env["sale.order"]
-        if internal_lines and float_compare(
-            total_dispensed, total_prescribed, precision_digits=6
-        ) < 0:
+        target_status = summary["prescription_status"]
+        if summary["needs_backorder"]:
             if create_backorder:
                 backorder = self._create_prescription_backorder()
-                self.write(
-                    {
-                        "dispensing_status": "partially_fulfilled",
-                        "is_on_hold": False,
-                    }
-                )
+                self._remove_zero_quantity_lines_after_backorder(summary)
+                target_status = "partially_served_backorder_created"
             else:
-                self.write(
-                    {
-                        "dispensing_status": "fully_served",
-                        "is_on_hold": False,
-                    }
+                summary = self._apply_balance_resolution(
+                    summary,
+                    balance_resolution,
+                    balance_resolution_note,
                 )
-        else:
-            self.write(
-                {
-                    "dispensing_status": "fully_served",
-                    "is_on_hold": False,
-                }
+                target_status = summary["prescription_status"]
+
+        if summary["unresolved_balance_line_ids"] and not create_backorder:
+            raise UserError(
+                _("Do not close an undispensed balance without a back order or balance resolution.")
             )
+
+        if self.state in ("draft", "sent"):
+            self.action_confirm()
+
+        self.write(
+            {
+                "dispensing_status": target_status,
+                "is_on_hold": False,
+            }
+        )
 
         lines_to_finalize = self.order_line.filtered(lambda l: not l.display_type)
         lines_to_finalize.write({"dispensed": True})
@@ -505,13 +702,36 @@ class ExtendedSaleOrder(models.Model):
 
         return self.env.ref("sale.action_quotations_with_onboarding").read()[0]
 
-    def action_serve_prescription_from_ui(self, create_backorder=False):
-        return self.action_serve_prescription(create_backorder=create_backorder)
+    def action_serve_prescription_from_ui(
+        self,
+        create_backorder=False,
+        balance_resolution=False,
+        balance_resolution_note=False,
+    ):
+        return self.action_serve_prescription(
+            create_backorder=create_backorder,
+            balance_resolution=balance_resolution,
+            balance_resolution_note=balance_resolution_note,
+        )
+
+    def _serialize_linked_prescription(self, order):
+        return {
+            "id": order.id,
+            "name": order.name,
+            "status": order.prescription_status,
+            "status_label": dict(order._fields["prescription_status"].selection).get(
+                order.prescription_status,
+                order.prescription_status or "",
+            ),
+        }
 
     def _serialize_dispensing_line(self, line):
         self.ensure_one()
         prescribed_product = line.prescribed_product_id or line.product_id
         expiry_date = self._get_dispensing_line_expiry(line)
+        backorder_lines = line.prescription_backorder_line_ids.filtered(
+            lambda item: item.order_id
+        )
         return {
             "id": line.id,
             "is_existing_prescription": line.is_existing_prescription,
@@ -535,6 +755,28 @@ class ExtendedSaleOrder(models.Model):
             "batch_options": line._get_dispensing_batch_options(),
             "served_internally": line.served_internally,
             "prescription_status": line.prescription_status,
+            "balance_resolution": line.balance_resolution or "",
+            "balance_resolution_note": line.balance_resolution_note or "",
+            "original_line_id": line.prescription_backorder_origin_line_id.id,
+            "original_line_prescription": (
+                line.prescription_backorder_origin_line_id.order_id.name
+                if line.prescription_backorder_origin_line_id
+                and line.prescription_backorder_origin_line_id.order_id
+                else ""
+            ),
+            "backorder_lines": [
+                {
+                    "id": backorder_line.id,
+                    "order_id": backorder_line.order_id.id,
+                    "order_name": backorder_line.order_id.name,
+                    "quantity_prescribed": backorder_line.prescribed_qty_base_units
+                    or backorder_line.product_uom_qty
+                    or 0,
+                    "quantity_dispensed": backorder_line.product_uom_qty or 0,
+                    "status": backorder_line.prescription_status,
+                }
+                for backorder_line in backorder_lines
+            ],
             "stock_on_hand": line.stock_on_hand or 0,
             "out_of_stock": line.out_of_stock,
             "is_pack_substituted": line.is_pack_substituted,
@@ -571,7 +813,7 @@ class ExtendedSaleOrder(models.Model):
     def fetch_prescription_dispensing(self):
         self.ensure_one()
         dispensing_lines = self.order_line.filtered(lambda l: not l.display_type)
-        if self.prescription_status != "fully_served":
+        if not self._is_prescription_closed():
             for line in dispensing_lines.filtered(
                 lambda l: l.served_internally and l.product_id and not l.dispensing_batch_number
             ):
@@ -599,7 +841,19 @@ class ExtendedSaleOrder(models.Model):
             "dispensary": self.shop_id.display_name if self.shop_id else "",
             "medication_explanation_confirmed": self.medication_explanation_confirmed,
             "prescription_status": self.prescription_status,
-            "is_readonly": self.prescription_status == "fully_served",
+            "previous_status": self.previous_status,
+            "is_on_hold": self.is_on_hold,
+            "on_hold_reason": self.on_hold_reason or "",
+            "is_readonly": self._is_prescription_closed(),
+            "original_prescription": (
+                self._serialize_linked_prescription(self.prescription_backorder_origin_id)
+                if self.prescription_backorder_origin_id
+                else False
+            ),
+            "linked_backorders": [
+                self._serialize_linked_prescription(backorder)
+                for backorder in self.prescription_backorder_ids
+            ],
             "direction_options": self._get_prescription_direction_options(dispensing_lines),
             "product_options": self._get_dispensing_product_options(),
             "lines": [
@@ -794,6 +1048,8 @@ class ExtendedSaleOrder(models.Model):
             "served_internally": "served_internally",
             "is_pack_substituted": "is_pack_substituted",
             "comments": "dispensing_comments",
+            "balance_resolution": "balance_resolution",
+            "balance_resolution_note": "balance_resolution_note",
         }
         for source, target in field_map.items():
             if source in vals:
@@ -858,8 +1114,8 @@ class ExtendedSaleOrder(models.Model):
 
     def _ensure_prescription_is_editable(self):
         self.ensure_one()
-        if self.prescription_status == "fully_served":
-            raise UserError(_("This prescription has already been fully served."))
+        if self._is_prescription_closed():
+            raise UserError(_("This prescription has already been closed."))
 
     # Add a method to help find orders
 

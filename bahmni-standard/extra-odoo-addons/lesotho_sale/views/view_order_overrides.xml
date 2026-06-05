@@ -79,6 +79,8 @@
                             <field name="encounter_type" readonly="1" />
                             <field name="encounter_datetime" readonly="1" />
                             <field name="prescription_status" readonly="1" />
+                            <field name="prescription_backorder_origin_id" readonly="1" />
+                            <field name="prescription_backorder_ids" readonly="1" />
                         </group>
                         <group string="Doctor/Nurse Information">
                             <field name="provider_name" readonly="1" />
@@ -215,6 +217,24 @@
                         />
                         <field
                             name="is_pack_substituted"
+                            readonly="1"
+                            attrs="{'invisible': [('display_type', '!=', False)]}"
+                        />
+                        <field
+                            name="balance_resolution"
+                            attrs="{'invisible': [('display_type', '!=', False)]}"
+                        />
+                        <field
+                            name="balance_resolution_note"
+                            attrs="{'invisible': ['|', ('display_type', '!=', False), ('balance_resolution', '!=', 'other')]}"
+                        />
+                        <field
+                            name="prescription_backorder_origin_line_id"
+                            readonly="1"
+                            attrs="{'invisible': [('display_type', '!=', False)]}"
+                        />
+                        <field
+                            name="prescription_backorder_line_ids"
                             readonly="1"
                             attrs="{'invisible': [('display_type', '!=', False)]}"
                         />
