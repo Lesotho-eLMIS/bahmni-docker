@@ -9,6 +9,8 @@
                 <field name="status"/>
                 <field name="consumption_mode" optional="hide"/>
                 <field name="transaction_type"/>
+                <field name="event_source_label"/>
+                <field name="movement_side_label"/>
                 <field name="facility_code"/>
                 <field name="program_id"/>
                 <field name="elmis_orderable_id"/>
@@ -18,6 +20,8 @@
                 <field name="dispensed_lot_id" optional="hide"/>
                 <field name="dispensed_quantity" optional="hide"/>
                 <field name="adjustment_reason"/>
+                <field name="stock_scrap_side" optional="hide"/>
+                <field name="stock_move_line_side" optional="hide"/>
                 <field name="attempt_count"/>
                 <field name="sent_at"/>
                 <field name="delivered_at"/>
@@ -69,18 +73,27 @@
                         </group>
                     </group>
                     <group string="Source">
-                        <field name="source_sale_order_line_id"/>
-                        <field name="source_stock_scrap_id"/>
-                        <field name="source_stock_move_id"/>
-                        <field name="prescription_ref"/>
-                        <field name="consumption_mode"/>
-                        <field name="dispensed_product_id"/>
-                        <field name="dispensed_lot_id"/>
-                        <field name="dispensed_quantity"/>
-                        <field name="dispensed_uom_id"/>
-                        <field name="source_bulk_product_id"/>
-                        <field name="source_bulk_lot_id"/>
-                        <field name="prepack_conversion_factor"/>
+                        <group>
+                            <field name="event_source_label"/>
+                            <field name="movement_side_label"/>
+                            <field name="prescription_ref"/>
+                            <field name="consumption_mode"/>
+                            <field name="dispensed_product_id"/>
+                            <field name="dispensed_lot_id"/>
+                            <field name="dispensed_quantity"/>
+                            <field name="dispensed_uom_id"/>
+                            <field name="source_bulk_product_id"/>
+                            <field name="source_bulk_lot_id"/>
+                            <field name="prepack_conversion_factor"/>
+                        </group>
+                        <group string="Technical Source Links">
+                            <field name="source_sale_order_line_id"/>
+                            <field name="source_stock_scrap_id"/>
+                            <field name="stock_scrap_side"/>
+                            <field name="source_stock_move_id"/>
+                            <field name="source_stock_move_line_id"/>
+                            <field name="stock_move_line_side"/>
+                        </group>
                     </group>
                     <group string="Submission">
                         <group>
@@ -106,6 +119,8 @@
                 <field name="created_at"/>
                 <field name="message_id"/>
                 <field name="transaction_type"/>
+                <field name="event_source_label"/>
+                <field name="movement_side_label"/>
                 <field name="facility_code"/>
                 <field name="program_id"/>
                 <field name="prescription_ref"/>
@@ -116,7 +131,10 @@
                 <field name="adjustment_reason"/>
                 <field name="source_sale_order_line_id" optional="hide"/>
                 <field name="source_stock_scrap_id" optional="hide"/>
+                <field name="stock_scrap_side" optional="hide"/>
                 <field name="source_stock_move_id" optional="hide"/>
+                <field name="source_stock_move_line_id" optional="hide"/>
+                <field name="stock_move_line_side" optional="hide"/>
                 <field name="consumption_mode" optional="hide"/>
                 <field name="dispensed_product_id" optional="hide"/>
                 <field name="dispensed_lot_id" optional="hide"/>

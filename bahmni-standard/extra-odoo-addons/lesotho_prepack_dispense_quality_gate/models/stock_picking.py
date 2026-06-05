@@ -6,6 +6,8 @@ class StockPicking(models.Model):
 
     def button_validate(self):
         for picking in self:
+            if picking.picking_type_code != "outgoing":
+                continue
             check_qc_gate(
                 picking,
                 require_any=True,
