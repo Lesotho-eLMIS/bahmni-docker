@@ -36,6 +36,7 @@ class TestElmisConfigSettings(TransactionCase):
     def test_settings_can_store_credentials_and_mirror_location_for_local_testing(self):
         settings = self.env["res.config.settings"].create(
             {
+                "elmis_base_url": "http://openhim-core:5001/api/",
                 "elmis_username": "test-user",
                 "elmis_password": "test-password",
                 "elmis_api_token": "test-token",
@@ -49,6 +50,10 @@ class TestElmisConfigSettings(TransactionCase):
         settings.execute()
 
         params = self.env["ir.config_parameter"].sudo()
+        self.assertEqual(
+            params.get_param("lesotho_elmis_integration.base_url"),
+            "http://openhim-core:5001/api/",
+        )
         self.assertEqual(params.get_param("lesotho_elmis_integration.username"), "test-user")
         self.assertEqual(params.get_param("lesotho_elmis_integration.password"), "test-password")
         self.assertEqual(params.get_param("lesotho_elmis_integration.api_token"), "test-token")
@@ -59,6 +64,61 @@ class TestElmisConfigSettings(TransactionCase):
         self.assertEqual(
             params.get_param("lesotho_elmis_integration.mirror_location_ids"),
             "%s,%s" % (self.mirror_location.id, self.second_mirror_location.id),
+        )
+
+    def test_sparse_settings_execute_does_not_clear_existing_elmis_config(self):
+        params = self.env["ir.config_parameter"].sudo()
+        params.set_param("lesotho_elmis_integration.base_url", "http://openhim-core:5001/api/")
+        params.set_param("lesotho_elmis_integration.program_codes", "art,em")
+        params.set_param("lesotho_elmis_integration.username", "facility-user")
+        params.set_param("lesotho_elmis_integration.password", "facility-password")
+        params.set_param(
+            "lesotho_elmis_integration.mirror_location_ids",
+            "%s,%s" % (self.mirror_location.id, self.second_mirror_location.id),
+        )
+        params.set_param(
+            "lesotho_elmis_integration.mirror_location_id",
+            str(self.mirror_location.id),
+        )
+
+        self.env["res.config.settings"].create({}).execute()
+
+        self.assertEqual(
+            params.get_param("lesotho_elmis_integration.base_url"),
+            "http://openhim-core:5001/api/",
+        )
+        self.assertEqual(params.get_param("lesotho_elmis_integration.program_codes"), "art,em")
+        self.assertEqual(params.get_param("lesotho_elmis_integration.username"), "facility-user")
+        self.assertEqual(
+            params.get_param("lesotho_elmis_integration.password"),
+            "facility-password",
+        )
+        self.assertEqual(
+            params.get_param("lesotho_elmis_integration.mirror_location_ids"),
+            "%s,%s" % (self.mirror_location.id, self.second_mirror_location.id),
+        )
+        self.assertEqual(
+            params.get_param("lesotho_elmis_integration.mirror_location_id"),
+            str(self.mirror_location.id),
+        )
+
+    def test_get_values_migrates_legacy_mirror_location_to_multi_location_key(self):
+        params = self.env["ir.config_parameter"].sudo()
+        params.set_param("lesotho_elmis_integration.mirror_location_ids", "")
+        params.set_param(
+            "lesotho_elmis_integration.mirror_location_id",
+            str(self.mirror_location.id),
+        )
+
+        values = self.env["res.config.settings"].get_values()
+
+        self.assertEqual(
+            values["elmis_mirror_location_ids"],
+            [(6, 0, [self.mirror_location.id])],
+        )
+        self.assertEqual(
+            params.get_param("lesotho_elmis_integration.mirror_location_ids"),
+            str(self.mirror_location.id),
         )
 
     def test_settings_can_configure_scheduled_sync_cron(self):
@@ -78,6 +138,19 @@ class TestElmisConfigSettings(TransactionCase):
         self.assertEqual(cron.interval_number, 30)
         self.assertEqual(cron.interval_type, "minutes")
         self.assertTrue(cron.nextcall)
+        params = self.env["ir.config_parameter"].sudo()
+        self.assertEqual(
+            params.get_param("lesotho_elmis_integration.sync_cron_active"),
+            "True",
+        )
+        self.assertEqual(
+            params.get_param("lesotho_elmis_integration.sync_interval_number"),
+            "30",
+        )
+        self.assertEqual(
+            params.get_param("lesotho_elmis_integration.sync_interval_type"),
+            "minutes",
+        )
 
     def test_settings_test_connection_button_returns_notification(self):
         settings = self.env["res.config.settings"].create({})
