@@ -60,6 +60,11 @@ class TestStockScrapElmisAdjustment(TransactionCase):
             cls.other_elmis_product,
             "eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee",
         )
+        cls.other_location_lot = cls._create_lot(
+            "LOT-EFV-OTHER-LOCATION",
+            cls.elmis_product,
+            "ffffffff-ffff-ffff-ffff-ffffffffffff",
+        )
 
     @classmethod
     def _create_product(
@@ -146,6 +151,28 @@ class TestStockScrapElmisAdjustment(TransactionCase):
     def test_elmis_scrap_lot_must_belong_to_product(self):
         with self.assertRaises(ValidationError):
             self._create_scrap(lot_id=self.other_lot.id)
+
+    def test_available_scrap_lots_are_limited_to_source_location(self):
+        self._seed_stock(quantity=7)
+        self.env["stock.quant"]._update_available_quantity(
+            self.elmis_product,
+            self.mapped_unserviceable_location,
+            9,
+            lot_id=self.other_location_lot,
+        )
+
+        scrap = self._create_scrap(scrap_qty=3)
+
+        self.assertIn(self.elmis_lot, scrap.available_source_lot_ids)
+        self.assertNotIn(self.other_location_lot, scrap.available_source_lot_ids)
+        self.assertEqual(scrap.selected_lot_available_qty, 7)
+
+    def test_elmis_scrap_blocks_when_selected_lot_has_insufficient_source_stock(self):
+        self._seed_stock(quantity=2)
+        scrap = self._create_scrap(scrap_qty=4)
+
+        with self.assertRaises(UserError):
+            scrap.action_validate()
 
     def test_elmis_scrap_creates_adjustment_outbox(self):
         self._seed_stock(quantity=10)
