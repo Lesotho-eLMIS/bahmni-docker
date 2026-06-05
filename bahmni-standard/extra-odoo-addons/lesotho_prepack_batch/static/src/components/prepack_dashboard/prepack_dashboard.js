@@ -10,6 +10,7 @@ export class PrepackDashboard extends Component {
     this.orm = useService("orm");
     this.notification = useService("notification");
     this.actionService = useService("action");
+    this.printedPrepackLineIds = new Set();
     this.state = useState({
       step: 1,
       mode: "all", // "all", "create", "authorize"
@@ -150,6 +151,9 @@ export class PrepackDashboard extends Component {
   async selectBatch(batchId) {
     const details = await this.orm.call("bahmni.prepack.batch", "fetch_batch_details", [batchId]);
     if (details) {
+      if (this.state.batchId !== details.id) {
+        this.printedPrepackLineIds.clear();
+      }
       this.state.batchId = details.id;
       this.state.batchName = details.name;
       this.state.batchState = details.state;
@@ -166,6 +170,7 @@ export class PrepackDashboard extends Component {
   }
 
   clearSelectedBatch() {
+    this.printedPrepackLineIds.clear();
     this.state.batchId = null;
     this.state.batchName = "";
     this.state.batchState = null;
@@ -751,10 +756,7 @@ export class PrepackDashboard extends Component {
       "action_print_prepack_labels",
       [[this.state.batchId]]
     );
-    await this.actionService.doAction(action);
-    await this.actionService.doAction("lesotho_base.action_view_prepacks_placeholder", {
-      clearBreadcrumbs: true,
-    });
+    await this.doPrintAction(action, true);
   }
 
   async printLineLabel(lineId) {
@@ -763,7 +765,44 @@ export class PrepackDashboard extends Component {
       "action_print_prepack_label",
       [[lineId]]
     );
-    await this.actionService.doAction(action);
+    this.printedPrepackLineIds.add(lineId);
+    await this.doPrintAction(action, this.hasPrintedAllReleasedLineLabels());
+  }
+
+  hasPrintedAllReleasedLineLabels() {
+    const releasedLineIds = this.getReleaseTargets()
+      .filter(target => target.state === "done")
+      .map(target => target.line_id);
+    return releasedLineIds.length > 0 && releasedLineIds.every(
+      lineId => this.printedPrepackLineIds.has(lineId)
+    );
+  }
+
+  async doPrintAction(action, returnToList = false) {
+    if (!returnToList) {
+      await this.actionService.doAction(action);
+      return;
+    }
+    let returnedToList = false;
+    const returnToPrepackList = async () => {
+      if (returnedToList) {
+        return;
+      }
+      returnedToList = true;
+      await this.actionService.doAction({
+        type: "ir.actions.client",
+        name: "Release Prepacks",
+        tag: "prepack_dashboard_client_action",
+        target: "current",
+        context: { mode: "authorize" },
+      }, {
+        clearBreadcrumbs: true,
+      });
+    };
+    await this.actionService.doAction(action, {
+      onClose: returnToPrepackList,
+    });
+    await returnToPrepackList();
   }
 }
 PrepackDashboard.template = "lesotho_prepack_batch.PrepackDashboard";
