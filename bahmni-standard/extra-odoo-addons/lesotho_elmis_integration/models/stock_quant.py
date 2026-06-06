@@ -29,11 +29,54 @@ ELMIS_INVENTORY_CREDIT_REASONS = {reason for reason, _label in ELMIS_INVENTORY_C
 class StockQuant(models.Model):
     _inherit = "stock.quant"
 
+    ELMIS_EXPIRING_SOON_DAYS = 90
+
     elmis_program_ids = fields.Many2many(
         "elmis.program",
         compute="_compute_elmis_program_ids",
         search="_search_elmis_program_ids",
         string="eLMIS Programs",
+        readonly=True,
+    )
+    elmis_product_code = fields.Char(
+        string="Product Code",
+        related="product_id.default_code",
+        readonly=True,
+    )
+    elmis_location_facility_code = fields.Char(
+        string="eLMIS Facility Code",
+        related="location_id.elmis_facility_code",
+        readonly=True,
+    )
+    elmis_lot_expiration_date = fields.Datetime(
+        string="Expiry Date",
+        related="lot_id.expiration_date",
+        readonly=True,
+    )
+    elmis_stock_status = fields.Selection(
+        [
+            ("available", "Available"),
+            ("reserved", "Reserved"),
+            ("out", "Out of Stock"),
+        ],
+        compute="_compute_elmis_inventory_display_status",
+        string="Stock Status",
+        readonly=True,
+    )
+    elmis_expiry_status = fields.Selection(
+        [
+            ("valid", "Valid"),
+            ("expiring_soon", "Expiring Soon"),
+            ("expired", "Expired"),
+            ("not_tracked", "No Expiry"),
+        ],
+        compute="_compute_elmis_inventory_display_status",
+        string="Expiry Status",
+        readonly=True,
+    )
+    elmis_days_to_expiry = fields.Integer(
+        compute="_compute_elmis_inventory_display_status",
+        string="Days to Expiry",
         readonly=True,
     )
     elmis_inventory_program_id = fields.Many2one(
@@ -58,6 +101,40 @@ class StockQuant(models.Model):
 
     def _search_elmis_program_ids(self, operator, value):
         return [("product_id.elmis_program_ids", operator, value)]
+
+    @api.depends("quantity", "reserved_quantity", "available_quantity", "lot_id.expiration_date")
+    def _compute_elmis_inventory_display_status(self):
+        today = fields.Date.context_today(self)
+        for quant in self:
+            if float_compare(
+                quant.quantity,
+                0,
+                precision_rounding=quant.product_uom_id.rounding,
+            ) <= 0:
+                quant.elmis_stock_status = "out"
+            elif float_compare(
+                quant.available_quantity,
+                0,
+                precision_rounding=quant.product_uom_id.rounding,
+            ) <= 0:
+                quant.elmis_stock_status = "reserved"
+            else:
+                quant.elmis_stock_status = "available"
+
+            if not quant.lot_id.expiration_date:
+                quant.elmis_expiry_status = "not_tracked"
+                quant.elmis_days_to_expiry = 0
+                continue
+
+            expiry_date = fields.Date.to_date(quant.lot_id.expiration_date)
+            days_to_expiry = (expiry_date - today).days
+            quant.elmis_days_to_expiry = days_to_expiry
+            if days_to_expiry < 0:
+                quant.elmis_expiry_status = "expired"
+            elif days_to_expiry <= self.ELMIS_EXPIRING_SOON_DAYS:
+                quant.elmis_expiry_status = "expiring_soon"
+            else:
+                quant.elmis_expiry_status = "valid"
 
     @api.onchange("product_id")
     def _onchange_elmis_inventory_product_id(self):
