@@ -57,6 +57,7 @@
                     margin: 0 0 1.5mm;
                     font-size: 11px;
                     font-weight: 800;
+                    text-align: center;
                     text-transform: uppercase;
                     letter-spacing: 0.4px;
                     border-bottom: 0.3mm solid #111;
@@ -144,7 +145,7 @@
                     <t t-if="not line_ids or line.id in line_ids" t-foreach="line.get_prepack_label_copies()" t-as="label">
                         <div class="page prepack-label-page">
                             <div class="prepack-label">
-                                <h3>Prepack Medicine</h3>
+                                <h3>Prepack Label</h3>
                                 <div class="prepack-label-facility">
                                     <strong>Facility:</strong>
                                     <span t-esc="label['facility']"/>

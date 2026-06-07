@@ -1,8 +1,11 @@
 import json
+import logging
 
 from odoo import _, api, fields, models
 from odoo.exceptions import UserError, ValidationError
 from odoo.tools.float_utils import float_compare
+
+_logger = logging.getLogger(__name__)
 
 
 ELMIS_ADJUSTMENT_REASON_SELECTION = [
@@ -34,7 +37,7 @@ class BahmniPrepackBatch(models.Model):
     state = fields.Selection(
         [
             ("draft", "Draft"),
-            ("pending_auth", "Pending Authorization"),
+            ("pending_auth", "Pending Release"),
             ("rejected", "Rejected"),
             ("done", "Done"),
             ("cancel", "Cancelled"),
@@ -156,7 +159,33 @@ class BahmniPrepackBatch(models.Model):
         return False
 
     @api.model
-    def fetch_bulk_inventory(self, include_prepacks=False):
+    def fetch_prepack_locations(self):
+        """Fetch internal stock locations available for prepacking."""
+        default_location_id = self._default_location_src_id()
+        domain = [
+            ("usage", "=", "internal"),
+            "|",
+            ("company_id", "=", False),
+            ("company_id", "=", self.env.company.id),
+        ]
+        if default_location_id:
+            domain.append(("id", "child_of", default_location_id))
+        locations = self.env["stock.location"].search(domain, order="complete_name, id")
+        if default_location_id and default_location_id not in locations.ids:
+            locations |= self.env["stock.location"].browse(default_location_id)
+        return {
+            "default_location_id": default_location_id,
+            "locations": [
+                {
+                    "id": location.id,
+                    "name": location.display_name,
+                }
+                for location in locations
+            ],
+        }
+
+    @api.model
+    def fetch_bulk_inventory(self, include_prepacks=False, location_src_id=False, location_id=False):
         """Fetch bulk products with stock on hand and lot details for the prepacking UI."""
         domain = [
             ("quantity", ">", 0),
@@ -165,7 +194,7 @@ class BahmniPrepackBatch(models.Model):
         if not include_prepacks:
             domain.append(("product_id.is_prepack", "=", False))
 
-        location_src_id = self._default_location_src_id()
+        location_src_id = int(location_src_id or location_id or 0) or self._default_location_src_id()
         if location_src_id:
             domain.append(("location_id", "child_of", location_src_id))
 
@@ -174,17 +203,23 @@ class BahmniPrepackBatch(models.Model):
 
         inventory_by_key = {}
         for quant in quants:
-            key = (quant.product_id.id, quant.lot_id.id if quant.lot_id else False)
+            key = (
+                quant.product_id.id,
+                quant.lot_id.id if quant.lot_id else False,
+                quant.location_id.id,
+            )
             if key in inventory_by_key:
                 inventory_by_key[key]["soh"] += quant.quantity
                 continue
 
             inventory_by_key[key] = {
-                "key": f"{quant.product_id.id}_{quant.lot_id.id if quant.lot_id else 0}",
+                "key": f"{quant.product_id.id}_{quant.lot_id.id if quant.lot_id else 0}_{quant.location_id.id}",
                 "id": quant.product_id.id,
                 "name": quant.product_id.display_name,
                 "batch": quant.lot_id.name if quant.lot_id else _("No Lot"),
                 "lot_id": quant.lot_id.id if quant.lot_id else False,
+                "location_id": quant.location_id.id,
+                "location_name": quant.location_id.display_name,
                 "exp": quant.lot_id.expiration_date.strftime("%Y-%m")
                 if quant.lot_id and quant.lot_id.expiration_date
                 else "N/A",
@@ -209,6 +244,46 @@ class BahmniPrepackBatch(models.Model):
         return inventory
 
     @api.model
+    def fetch_packaging_materials(self, location_id=False):
+        """Fetch products available for packaging material selection."""
+        product_domain = [
+            ("active", "=", True),
+            ("detailed_type", "in", ["product", "consu"]),
+        ]
+        if "company_id" in self.env["product.product"]._fields:
+            product_domain.extend(
+                [
+                    "|",
+                    ("company_id", "=", False),
+                    ("company_id", "=", self.env.company.id),
+                ]
+            )
+        products = self.env["product.product"].search(product_domain, order="display_name, id")
+        material_by_product = {
+            product.id: {
+                "id": product.id,
+                "name": product.display_name,
+                "uom": product.uom_id.name,
+                "soh": 0,
+            }
+            for product in products
+        }
+        quant_domain = [
+            ("quantity", ">", 0),
+            ("product_id", "in", products.ids),
+        ]
+        location_src_id = int(location_id) if location_id else self._default_location_src_id()
+        if location_src_id:
+            quant_domain.append(("location_id", "child_of", location_src_id))
+        quants = self.env["stock.quant"].search(quant_domain)
+        for quant in quants:
+            product = quant.product_id
+            material_by_product[product.id]["soh"] += quant.quantity
+        materials = list(material_by_product.values())
+        materials.sort(key=lambda material: material["name"])
+        return materials
+
+    @api.model
     def fetch_draft_batch(self):
         """Fetch the current user's draft batch if one exists."""
         batch = self.search(
@@ -222,13 +297,17 @@ class BahmniPrepackBatch(models.Model):
             return {
                 "id": batch.id,
                 "name": batch.name,
+                "location_id": batch.location_src_id.id,
+                "location_src_id": batch.location_src_id.id,
+                "location_src_name": batch.location_src_id.display_name,
                 "items": json.loads(batch.draft_data),
             }
         return None
 
     @api.model
-    def save_prepack_batch(self, payload):
+    def save_prepack_batch(self, payload, location_src_id=False, location_id=False):
         """Save the current prepack list as a draft batch for the user."""
+        selected_location_id = int(location_src_id or location_id or 0)
         batch = self.search(
             [
                 ("state", "in", ["draft", "rejected"]),
@@ -238,20 +317,46 @@ class BahmniPrepackBatch(models.Model):
         )
 
         if not batch:
-            batch = self.create({"state": "draft"})
+            values = {"state": "draft"}
+            if selected_location_id:
+                values["location_src_id"] = selected_location_id
+            batch = self.create(values)
+        elif selected_location_id:
+            batch.location_src_id = selected_location_id
 
         batch.write({"draft_data": json.dumps(payload)})
-        return {"id": batch.id, "name": batch.name}
+        return {
+            "id": batch.id,
+            "name": batch.name,
+            "location_src_id": batch.location_src_id.id,
+            "location_src_name": batch.location_src_id.display_name,
+            "location_dest_id": batch.location_dest_id.id,
+            "location_dest_name": batch.location_dest_id.display_name,
+        }
 
     @api.model
-    def submit_prepack_batch(self, payload):
-        """Submit the batch for authorization, generating MOs for all lines."""
+    def submit_prepack_batch(self, payload, location_src_id=False, location_id=False):
+        """Submit the batch for release, generating MOs for all lines."""
         if not payload:
             raise UserError(_("No data submitted."))
+        selected_location_id = int(location_src_id or location_id or 0)
+        if not selected_location_id:
+            raise UserError(_("Please select a prepacking location before submitting for release."))
 
         # Re-save to ensure we have the latest data before converting to lines
-        res = self.save_prepack_batch(payload)
+        res = self.save_prepack_batch(payload, location_src_id=selected_location_id)
         batch = self.browse(res["id"])
+        batch.location_src_id = selected_location_id
+        if not batch.location_src_id:
+            raise UserError(_("Please select a prepacking location before submitting for release."))
+        _logger.info(
+            "Prepack batch %s submitted with source location %s (%s) and release location %s (%s)",
+            batch.name,
+            batch.location_src_id.display_name,
+            batch.location_src_id.id,
+            batch.location_dest_id.display_name,
+            batch.location_dest_id.id,
+        )
         batch._check_damage_records_before_submission()
 
         # Clear existing lines to rebuild the list for submission
@@ -266,6 +371,11 @@ class BahmniPrepackBatch(models.Model):
                 qty = float(target.get("qty", 0))
                 if size <= 0 or qty <= 0:
                     continue
+                packaging_material_id = target.get("packaging_material_id")
+                if not packaging_material_id:
+                    raise UserError(
+                        _("Please select packaging material for every prepack line.")
+                    )
 
                 prepack_product = self._get_or_create_prepack_product(
                     bulk_product, size
@@ -280,7 +390,11 @@ class BahmniPrepackBatch(models.Model):
                         "product_id": prepack_product.id,
                         "bom_id": bom.id,
                         "bulk_lot_id": lot.id,
+                        "bulk_location_id": item.get("location_id") or False,
                         "package_qty": qty,
+                        "release_expected_qty": int(qty),
+                        "release_actual_qty": int(qty),
+                        "packaging_material_id": packaging_material_id,
                     }
                 )
                 line._generate_manufacturing_order()
@@ -298,7 +412,7 @@ class BahmniPrepackBatch(models.Model):
             ):
                 raise UserError(
                     _(
-                        "Please record and confirm damaged products before submitting this prepack job for authorization."
+                        "Please record and confirm damaged products before submitting this prepack job for release."
                     )
                 )
 
@@ -451,16 +565,29 @@ class BahmniPrepackBatch(models.Model):
             )
         return bom
 
-    def action_authorize_batch(self):
+    def action_release_batch(self):
         for batch in self:
             if batch.state != "pending_auth":
                 raise UserError(
-                    _("Only pending authorization batches can be authorized.")
+                    _("Only batches pending release can be released.")
                 )
+            _logger.info(
+                "Releasing prepack batch %s with source location %s (%s) and release location %s (%s)",
+                batch.name,
+                batch.location_src_id.display_name,
+                batch.location_src_id.id,
+                batch.location_dest_id.display_name,
+                batch.location_dest_id.id,
+            )
+            batch.line_ids._check_release_ready()
             for line in batch.line_ids:
+                line._post_release_discrepancy_message()
                 line._complete_manufacturing_order()
             batch.state = "done"
         return self.action_print_prepack_labels()
+
+    def action_authorize_batch(self):
+        return self.action_release_batch()
 
     def action_reject_batch(self, comment):
         """Reject a pending authorization batch and send it back to the creator with a comment.
@@ -498,9 +625,12 @@ class BahmniPrepackBatch(models.Model):
         return True
 
     @api.model
-    def fetch_pending_batches(self):
-        """Fetch all batches in pending_auth state for the authorization UI."""
-        batches = self.search([("state", "=", "pending_auth")])
+    def fetch_pending_batches(self, location_id=False):
+        """Fetch all batches in pending_auth state for the release UI."""
+        domain = [("state", "=", "pending_auth")]
+        if location_id:
+            domain.append(("location_src_id", "=", int(location_id)))
+        batches = self.search(domain)
         result = []
         for batch in batches:
             result.append(
@@ -510,6 +640,8 @@ class BahmniPrepackBatch(models.Model):
                     "date": batch.planned_date.strftime("%Y-%m-%d %H:%M"),
                     "responsible": batch.responsible_id.name,
                     "line_count": batch.line_count,
+                    "location_src_id": batch.location_src_id.id,
+                    "location_src_name": batch.location_src_id.display_name,
                 }
             )
         return result
@@ -532,6 +664,8 @@ class BahmniPrepackBatch(models.Model):
                     "line_count": batch.line_count,
                     "state": selection_map.get(batch.state, batch.state),
                     "state_raw": batch.state,
+                    "location_src_id": batch.location_src_id.id,
+                    "location_src_name": batch.location_src_id.display_name,
                 }
             )
         return result
@@ -548,7 +682,17 @@ class BahmniPrepackBatch(models.Model):
         for line in batch.line_ids:
             bulk_product = line.bulk_lot_id.product_id
             lot = line.bulk_lot_id
-            key = f"{bulk_product.id}_{lot.id if lot else 0}"
+            bulk_location = line._get_component_source_location()
+            key = f"{bulk_product.id}_{lot.id if lot else 0}_{bulk_location.id if bulk_location else 0}"
+            packaging_soh = 0
+            if line.packaging_material_id and batch.location_src_id:
+                packaging_quants = self.env["stock.quant"].search(
+                    [
+                        ("product_id", "=", line.packaging_material_id.id),
+                        ("location_id", "child_of", batch.location_src_id.id),
+                    ]
+                )
+                packaging_soh = sum(packaging_quants.mapped("quantity"))
 
             if key not in grouped:
                 # Get current SOH for context
@@ -556,7 +700,7 @@ class BahmniPrepackBatch(models.Model):
                     [
                         ("product_id", "=", bulk_product.id),
                         ("lot_id", "=", lot.id),
-                        ("location_id", "child_of", batch.location_src_id.id),
+                        ("location_id", "=", bulk_location.id),
                     ],
                     limit=1,
                 )
@@ -567,6 +711,8 @@ class BahmniPrepackBatch(models.Model):
                     "name": bulk_product.display_name,
                     "batch": lot.name if lot else _("No Lot"),
                     "lot_id": lot.id,
+                    "location_id": bulk_location.id,
+                    "location_name": bulk_location.display_name,
                     "exp": lot.expiration_date.strftime("%Y-%m")
                     if lot and lot.expiration_date
                     else "N/A",
@@ -580,6 +726,17 @@ class BahmniPrepackBatch(models.Model):
                     "line_id": line.id,
                     "size": line.product_id.pack_unit_qty,
                     "qty": line.package_qty,
+                    "packaging_material_id": line.packaging_material_id.id,
+                    "packaging_material_name": line.packaging_material_id.display_name,
+                    "packaging_material_qty": line.packaging_material_qty,
+                    "packaging_material_soh": packaging_soh,
+                    "packaging_material_uom": line.packaging_material_id.uom_id.name,
+                    "expected_qty": line.release_expected_qty or line.package_qty,
+                    "actual_qty": line._get_release_actual_qty(),
+                    "actual_bulk_usage": line.release_actual_bulk_usage,
+                    "has_release_discrepancy": line.has_release_discrepancy,
+                    "release_discrepancy_reason": line.release_discrepancy_reason or "",
+                    "quality_check_completed": line.release_quality_check_completed,
                     "state": line.state,
                 }
             )
@@ -590,6 +747,8 @@ class BahmniPrepackBatch(models.Model):
             "items": list(grouped.values()),
             "state": batch.state,
             "isAuthorized": batch.state == "done",
+            "location_src_id": batch.location_src_id.id,
+            "location_src_name": batch.location_src_id.display_name,
         }
 
     @api.model
@@ -626,10 +785,14 @@ class BahmniPrepackBatch(models.Model):
                     "bahmni.prepack.batch"
                 ) or _("New")
         records = super().create(vals_list)
-        for record in records.filtered(
-            lambda r: not r.location_src_id or not r.location_dest_id
-        ):
-            record._onchange_picking_type_id()
+        for record in records:
+            values = {}
+            if not record.location_src_id:
+                values["location_src_id"] = record.picking_type_id.default_location_src_id.id
+            if not record.location_dest_id:
+                values["location_dest_id"] = record.picking_type_id.default_location_dest_id.id
+            if values:
+                record.write(values)
         return records
 
     def unlink(self):
@@ -667,7 +830,7 @@ class BahmniPrepackBatch(models.Model):
     def action_print_prepack_labels(self):
         for batch in self:
             if batch.state != "done":
-                raise UserError(_("Prepack labels can only be printed after authorization."))
+                raise UserError(_("Prepack labels can only be printed after release."))
             batch.line_ids._ensure_label_barcodes()
         return self.env.ref(
             "lesotho_prepack_batch.action_report_prepack_labels"
@@ -758,6 +921,66 @@ class BahmniPrepackBatchLine(models.Model):
         required=True,
         default=1,
     )
+    release_expected_qty = fields.Integer(
+        string="Expected Prepacks",
+        copy=False,
+        readonly=True,
+    )
+    release_actual_qty = fields.Integer(
+        string="Actual Prepacks",
+        copy=False,
+    )
+    release_actual_bulk_usage = fields.Float(
+        string="Actual Bulk Usage",
+        compute="_compute_release_actual_bulk_usage",
+        store=True,
+        digits="Product Unit of Measure",
+        copy=False,
+    )
+    release_quality_check_completed = fields.Boolean(
+        string="Quality Check Completed",
+        copy=False,
+    )
+    released_by_id = fields.Many2one(
+        "res.users",
+        string="Released By",
+        readonly=True,
+        copy=False,
+    )
+    release_date = fields.Datetime(
+        string="Release Date",
+        readonly=True,
+        copy=False,
+    )
+    packaging_material_id = fields.Many2one(
+        "product.product",
+        string="Packaging Material",
+        domain="[('detailed_type', 'in', ('product', 'consu'))]",
+    )
+    packaging_material_qty = fields.Integer(
+        string="Packaging Material Qty",
+        compute="_compute_packaging_material_qty",
+    )
+    packaging_material_move_id = fields.Many2one(
+        "stock.move",
+        string="Packaging Material Move",
+        readonly=True,
+        copy=False,
+    )
+    bulk_location_id = fields.Many2one(
+        "stock.location",
+        string="Bulk Source Location",
+        copy=False,
+        help="Precise internal location of the selected bulk lot quant.",
+    )
+    has_release_discrepancy = fields.Boolean(
+        string="Physical Prepack Count Does Not Tally",
+        copy=False,
+    )
+    release_discrepancy_reason = fields.Text(
+        string="Discrepancy Explanation",
+        copy=False,
+    )
     component_qty_per_pack = fields.Float(
         string="Units per Pack",
         compute="_compute_component_metrics",
@@ -792,7 +1015,7 @@ class BahmniPrepackBatchLine(models.Model):
     state = fields.Selection(
         [
             ("draft", "Draft"),
-            ("pending_auth", "Pending Authorization"),
+            ("pending_auth", "Pending Release"),
             ("rejected", "Rejected"),
             ("done", "Done"),
             ("cancel", "Cancelled"),
@@ -800,6 +1023,20 @@ class BahmniPrepackBatchLine(models.Model):
         compute="_compute_state",
     )
     note = fields.Char()
+
+    @api.depends("package_qty", "release_actual_qty", "packaging_material_id")
+    def _compute_packaging_material_qty(self):
+        for line in self:
+            line.packaging_material_qty = line._get_release_actual_qty() if line.packaging_material_id else 0
+
+    @api.depends("product_id.pack_unit_qty", "release_actual_qty", "package_qty")
+    def _compute_release_actual_bulk_usage(self):
+        for line in self:
+            line.release_actual_bulk_usage = line.product_id.pack_unit_qty * line._get_release_actual_qty()
+
+    def _get_release_actual_qty(self):
+        self.ensure_one()
+        return self.release_actual_qty or self.package_qty or 0
 
     def _ensure_label_barcodes(self):
         for line in self:
@@ -821,7 +1058,7 @@ class BahmniPrepackBatchLine(models.Model):
             if hasattr(expiry_value, "date"):
                 expiry_value = expiry_value.date()
             expiry_date = fields.Date.to_string(expiry_value)
-        for copy_number in range(1, self.package_qty + 1):
+        for copy_number in range(1, self._get_release_actual_qty() + 1):
             copies.append(
                 {
                     "serial": f"{self.batch_id.name}-{self.sequence or self.id:02d}-{copy_number:03d}",
@@ -865,7 +1102,7 @@ class BahmniPrepackBatchLine(models.Model):
                         / line.bom_id.product_qty
                     )
             line.component_qty_per_pack = qty_per_pack
-            line.component_required_qty = qty_per_pack * line.package_qty
+            line.component_required_qty = qty_per_pack * line._get_release_actual_qty()
 
     @api.depends(
         "bulk_lot_id",
@@ -879,11 +1116,12 @@ class BahmniPrepackBatchLine(models.Model):
         for line in self:
             qty_available = 0.0
             if line.bulk_lot_id and line.batch_id.location_src_id:
+                location = line._get_component_source_location()
                 qty_available = Quant._get_available_quantity(
                     line.bulk_lot_id.product_id,
-                    line.batch_id.location_src_id,
+                    location,
                     lot_id=line.bulk_lot_id,
-                    strict=True,
+                    strict=bool(line.bulk_location_id),
                 )
             line.bulk_qty_available = qty_available
             line.has_sufficient_bulk_stock = (
@@ -958,7 +1196,7 @@ class BahmniPrepackBatchLine(models.Model):
     @api.constrains("package_qty")
     def _check_package_qty(self):
         for line in self:
-            if line.package_qty <= 0:
+            if (line.package_qty or 0) <= 0:
                 raise ValidationError(
                     _("Number of prepacks must be greater than zero.")
                 )
@@ -977,7 +1215,7 @@ class BahmniPrepackBatchLine(models.Model):
             result.append(
                 (
                     line.id,
-                    _("%s x %s") % (line.product_id.display_name, line.package_qty),
+                    _("%s x %s") % (line.product_id.display_name, line.package_qty or 0),
                 )
             )
         return result
@@ -1029,7 +1267,7 @@ class BahmniPrepackBatchLine(models.Model):
             if not line.parent_elmis_product_id:
                 raise ValidationError(
                     _(
-                        "Finished prepack %(product)s must be linked to a parent eLMIS product before it can be authorized or dispensed."
+                        "Finished prepack %(product)s must be linked to a parent eLMIS product before it can be released or dispensed."
                     )
                     % {"product": line.product_id.display_name}
                 )
@@ -1040,6 +1278,20 @@ class BahmniPrepackBatchLine(models.Model):
                     )
                     % {"lot": line.bulk_lot_id.display_name}
                 )
+            if line.bulk_location_id and line.batch_id.location_src_id:
+                valid_locations = self.env["stock.location"].search(
+                    [("id", "child_of", line.batch_id.location_src_id.id)]
+                )
+                if line.bulk_location_id not in valid_locations:
+                    raise ValidationError(
+                        _(
+                            "Bulk source location %(actual)s must be inside selected prepacking source location %(selected)s."
+                        )
+                        % {
+                            "actual": line.bulk_location_id.display_name,
+                            "selected": line.batch_id.location_src_id.display_name,
+                        }
+                    )
             if float_compare(
                 line.component_qty_per_pack,
                 line.product_id.pack_unit_qty,
@@ -1095,12 +1347,116 @@ class BahmniPrepackBatchLine(models.Model):
         return resolver()
 
     def action_authorize_line(self):
-        """Authorize a single prepack line."""
+        """Validate a single prepack line for release."""
+        self._check_release_ready()
+        for line in self:
+            line._post_release_discrepancy_message()
         self._complete_manufacturing_order()
         # If all lines are done, mark the batch as done
         if all(line.state == "done" for line in self.batch_id.line_ids):
             self.batch_id.state = "done"
         return True
+
+    def action_update_release_values(self, size, actual_qty, quality_check_completed=False, discrepancy_explanation=False):
+        """Update editable release values before manufacturing completion."""
+        for line in self:
+            if line.state != "pending_auth":
+                raise UserError(_("Only pending release lines can be edited."))
+            size = float(size or 0)
+            actual_qty = int(actual_qty or 0)
+            if size <= 0 or actual_qty <= 0:
+                raise UserError(_("Pack size and actual prepacks must be greater than zero."))
+
+            expected_qty = line.release_expected_qty or line.package_qty or 0
+            has_discrepancy = expected_qty != actual_qty
+            vals = {
+                "release_expected_qty": expected_qty,
+                "release_actual_qty": actual_qty,
+                "has_release_discrepancy": has_discrepancy,
+                "release_discrepancy_reason": (discrepancy_explanation or "").strip()
+                if has_discrepancy
+                else False,
+                "release_quality_check_completed": bool(quality_check_completed),
+            }
+            size_changed = float_compare(
+                line.product_id.pack_unit_qty,
+                size,
+                precision_digits=6,
+            ) != 0
+            qty_changed = line._get_release_actual_qty() != actual_qty
+            audit_changed = (
+                line.release_expected_qty != expected_qty
+                or line.has_release_discrepancy != has_discrepancy
+                or (line.release_discrepancy_reason or "") != (vals["release_discrepancy_reason"] or "")
+                or line.release_quality_check_completed != bool(quality_check_completed)
+            )
+            if not size_changed and not qty_changed and not audit_changed:
+                continue
+
+            if size_changed:
+                bulk_product = line.bulk_lot_id.product_id
+                prepack_product = line.batch_id._get_or_create_prepack_product(
+                    bulk_product, size
+                )
+                bom = line.batch_id._get_or_create_prepack_bom(
+                    prepack_product, bulk_product, size
+                )
+                vals.update(
+                    {
+                        "product_id": prepack_product.id,
+                        "bom_id": bom.id,
+                    }
+                )
+
+            line.write(vals)
+            if size_changed and line.mrp_production_id:
+                mo = line.mrp_production_id
+                if mo.state not in ("done", "cancel"):
+                    mo.sudo().action_cancel()
+                line.mrp_production_id = False
+                line.packaging_material_move_id = False
+                line.finished_lot_id = False
+                line._generate_manufacturing_order()
+            else:
+                line._sync_mo_from_line()
+
+        return True
+
+    def _check_release_ready(self):
+        for line in self:
+            line._sync_release_discrepancy_state()
+            if line.has_release_discrepancy and not (line.release_discrepancy_reason or "").strip():
+                raise UserError(_("Please enter a discrepancy explanation."))
+            if not line.release_quality_check_completed:
+                raise UserError(_("Please confirm Quality Check Completed before releasing."))
+
+    def _sync_release_discrepancy_state(self):
+        for line in self:
+            expected_qty = line.release_expected_qty or line.package_qty or 0
+            actual_qty = line._get_release_actual_qty()
+            has_discrepancy = expected_qty != actual_qty
+            vals = {}
+            if line.has_release_discrepancy != has_discrepancy:
+                vals["has_release_discrepancy"] = has_discrepancy
+            if not has_discrepancy and line.release_discrepancy_reason:
+                vals["release_discrepancy_reason"] = False
+            if vals:
+                line.write(vals)
+
+    def _post_release_discrepancy_message(self):
+        self.ensure_one()
+        if not self.has_release_discrepancy:
+            return
+        self.batch_id.message_post(
+            body=_(
+                "Release discrepancy recorded by %(user)s for %(product)s:<br/><br/>%(reason)s"
+            )
+            % {
+                "user": self.env.user.name,
+                "product": self.product_id.display_name,
+                "reason": self.release_discrepancy_reason,
+            }
+        )
 
     def action_reject_line(self):
         """Reject a single prepack line by cancelling its manufacturing order."""
@@ -1114,7 +1470,7 @@ class BahmniPrepackBatchLine(models.Model):
     def action_print_prepack_label(self):
         self.ensure_one()
         if self.state != "done":
-            raise UserError(_("Only authorized prepack lines can have labels printed."))
+            raise UserError(_("Only released prepack lines can have labels printed."))
         self._ensure_label_barcodes()
         return self.env.ref(
             "lesotho_prepack_batch.action_report_prepack_labels"
@@ -1198,17 +1554,20 @@ class BahmniPrepackBatchLine(models.Model):
     def _prepare_mo_vals(self):
         self.ensure_one()
         finished_lot = self._ensure_finished_lot()
+        source_location = self._get_component_source_location()
+        release_location = self.batch_id.location_dest_id
+        actual_qty = self._get_release_actual_qty()
         return {
             "origin": self.batch_id.name,
             "product_id": self.product_id.id,
-            "product_qty": self.package_qty,
+            "product_qty": actual_qty,
             "product_uom_id": self.product_id.uom_id.id,
             "bom_id": self.bom_id.id,
             "company_id": self.company_id.id,
             "date_start": self.batch_id.planned_date,
             "picking_type_id": self.batch_id.picking_type_id.id,
-            "location_src_id": self.batch_id.location_src_id.id,
-            "location_dest_id": self.batch_id.location_dest_id.id,
+            "location_src_id": source_location.id,
+            "location_dest_id": release_location.id,
             "lot_producing_id": finished_lot.id,
             "prepack_batch_id": self.batch_id.id,
             "prepack_batch_line_id": self.id,
@@ -1221,9 +1580,16 @@ class BahmniPrepackBatchLine(models.Model):
             mo = line.mrp_production_id
             if not mo or mo.state in ("done", "cancel"):
                 continue
+            actual_qty = line._get_release_actual_qty()
+            source_location = line._get_component_source_location()
+            release_location = line.batch_id.location_dest_id
             vals = {}
-            if mo.product_qty != line.package_qty:
-                vals["product_qty"] = line.package_qty
+            if mo.product_qty != actual_qty:
+                vals["product_qty"] = actual_qty
+            if source_location and mo.location_src_id != source_location:
+                vals["location_src_id"] = source_location.id
+            if release_location and mo.location_dest_id != release_location:
+                vals["location_dest_id"] = release_location.id
             if vals:
                 mo.write(vals)
             if line.bom_id and line.bom_id.product_qty:
@@ -1232,26 +1598,146 @@ class BahmniPrepackBatchLine(models.Model):
                     raw_qty_map.setdefault(bom_line.product_id.id, 0.0)
                     raw_qty_map[bom_line.product_id.id] += (
                         bom_line.product_qty / line.bom_id.product_qty
-                    ) * line.package_qty
+                    ) * actual_qty
                 for move in mo.move_raw_ids.filtered(
                     lambda m: m.state not in ("done", "cancel")
                 ):
+                    move_vals = {}
+                    if (
+                        source_location
+                        and move.product_id == line.bulk_lot_id.product_id
+                        and move.location_id != source_location
+                    ):
+                        move_vals["location_id"] = source_location.id
                     expected_qty = raw_qty_map.get(move.product_id.id)
                     if (
                         expected_qty is not None
                         and move.product_uom_qty != expected_qty
                     ):
-                        move.write({"product_uom_qty": expected_qty})
+                        move_vals["product_uom_qty"] = expected_qty
+                    if move_vals:
+                        move.write(move_vals)
             for move in mo.move_finished_ids.filtered(
                 lambda m: m.state not in ("done", "cancel")
             ):
+                move_vals = {}
                 if (
                     move.product_id == line.product_id
-                    and move.product_uom_qty != line.package_qty
+                    and move.product_uom_qty != actual_qty
                 ):
-                    move.write({"product_uom_qty": line.package_qty})
+                    move_vals["product_uom_qty"] = actual_qty
+                if release_location and move.location_dest_id != release_location:
+                    move_vals["location_dest_id"] = release_location.id
+                if move_vals:
+                    move.write(move_vals)
+            line._sync_packaging_material_move()
             if "qty_producing" in mo._fields and mo.qty_producing != mo.product_qty:
                 mo.write({"qty_producing": mo.product_qty})
+
+    def _sync_mo_quantities_for_completion(self):
+        for line in self:
+            mo = line.mrp_production_id
+            if not mo or mo.state in ("done", "cancel"):
+                continue
+            actual_qty = line._get_release_actual_qty()
+            actual_bulk_usage = line.product_id.pack_unit_qty * actual_qty
+            source_location = line._get_component_source_location()
+            release_location = line.batch_id.location_dest_id
+            if float_compare(mo.product_qty, actual_qty, precision_digits=6) != 0:
+                mo.write({"product_qty": actual_qty})
+            if "qty_producing" in mo._fields and float_compare(
+                mo.qty_producing,
+                actual_qty,
+                precision_digits=6,
+            ) != 0:
+                mo.write({"qty_producing": actual_qty})
+            raw_moves = mo.move_raw_ids.filtered(
+                lambda move: (
+                    move.state not in ("done", "cancel")
+                    and move.product_id == line.bulk_lot_id.product_id
+                )
+            )
+            for move in raw_moves:
+                move_vals = {}
+                if float_compare(
+                    move.product_uom_qty,
+                    actual_bulk_usage,
+                    precision_rounding=move.product_uom.rounding,
+                ) != 0:
+                    move_vals["product_uom_qty"] = actual_bulk_usage
+                if source_location and move.location_id != source_location:
+                    move_vals["location_id"] = source_location.id
+                if move_vals:
+                    move.write(move_vals)
+                line._write_move_lines(move, line.bulk_lot_id, location=source_location)
+            finished_lot = line._ensure_finished_lot()
+            finished_moves = mo.move_finished_ids.filtered(
+                lambda move: (
+                    move.state not in ("done", "cancel")
+                    and move.product_id == line.product_id
+                )
+            )
+            for move in finished_moves:
+                move_vals = {}
+                if float_compare(
+                    move.product_uom_qty,
+                    actual_qty,
+                    precision_rounding=move.product_uom.rounding,
+                ) != 0:
+                    move_vals["product_uom_qty"] = actual_qty
+                if release_location and move.location_dest_id != release_location:
+                    move_vals["location_dest_id"] = release_location.id
+                if move_vals:
+                    move.write(move_vals)
+                line._write_move_lines(move, finished_lot)
+            line._sync_packaging_material_move()
+            line._apply_packaging_material_consumption()
+            line._log_mo_completion_quantities(mo)
+
+    def _sync_packaging_material_move(self):
+        for line in self:
+            mo = line.mrp_production_id
+            move = line.packaging_material_move_id
+            if not mo or mo.state in ("done", "cancel"):
+                continue
+            if move and move.state in ("done", "cancel"):
+                move = self.env["stock.move"]
+                line.packaging_material_move_id = False
+            if not line.packaging_material_id:
+                if move:
+                    move.unlink()
+                    line.packaging_material_move_id = False
+                continue
+            values = {
+                "name": line.packaging_material_id.display_name,
+                "product_id": line.packaging_material_id.id,
+                "product_uom_qty": line.packaging_material_qty,
+                "product_uom": line.packaging_material_id.uom_id.id,
+                "location_id": line.batch_id.location_src_id.id,
+                "location_dest_id": line.batch_id.location_dest_id.id,
+                "company_id": line.company_id.id,
+                "raw_material_production_id": mo.id,
+                "origin": mo.name,
+            }
+            if move:
+                if move.product_id != line.packaging_material_id:
+                    if move.state != "draft":
+                        raise UserError(
+                            _(
+                                "Packaging material cannot be changed after the manufacturing order is confirmed."
+                            )
+                        )
+                    move.write(values)
+                elif move.product_uom_qty != line.packaging_material_qty:
+                    move.write({"product_uom_qty": line.packaging_material_qty})
+            else:
+                line.packaging_material_move_id = self.env["stock.move"].create(values).id
+                move = line.packaging_material_move_id
+            if move and mo.state != "draft":
+                if move.state == "draft":
+                    move._action_confirm()
+                if move.state in ("confirmed", "waiting", "partially_available"):
+                    move._action_assign()
 
     def _generate_manufacturing_order(self):
         for line in self:
@@ -1261,6 +1747,7 @@ class BahmniPrepackBatchLine(models.Model):
                 continue
             mo = self.env["mrp.production"].create(line._prepare_mo_vals())
             line.mrp_production_id = mo.id
+            line._sync_packaging_material_move()
         return True
 
     def _confirm_manufacturing_order(self):
@@ -1274,9 +1761,11 @@ class BahmniPrepackBatchLine(models.Model):
             line._sync_mo_from_line()
             if mo.state == "draft":
                 mo.action_confirm()
+            line._sync_packaging_material_move()
             if hasattr(mo, "action_assign"):
                 mo.action_assign()
             line._apply_component_lot()
+            line._apply_packaging_material_consumption()
             line._apply_finished_lot()
         return True
 
@@ -1288,24 +1777,158 @@ class BahmniPrepackBatchLine(models.Model):
             mo = line.mrp_production_id
             if mo.state in ("done", "cancel"):
                 continue
-            if "qty_producing" in mo._fields and not mo.qty_producing:
-                mo.write({"qty_producing": mo.product_qty})
-            result = mo.button_mark_done()
+            _logger.info(
+                "Completing prepack MO %s for batch %s: batch source=%s (%s), batch release=%s (%s), MO source=%s (%s), MO destination=%s (%s)",
+                mo.display_name,
+                line.batch_id.name,
+                line.batch_id.location_src_id.display_name,
+                line.batch_id.location_src_id.id,
+                line.batch_id.location_dest_id.display_name,
+                line.batch_id.location_dest_id.id,
+                mo.location_src_id.display_name,
+                mo.location_src_id.id,
+                mo.location_dest_id.display_name,
+                mo.location_dest_id.id,
+            )
+            line._sync_mo_quantities_for_completion()
+            result = mo.with_context(
+                skip_consumption=True,
+                skip_backorder=True,
+                cancel_backorder=True,
+            ).button_mark_done()
             if isinstance(result, dict):
+                line._log_mo_completion_action(mo, result)
+                if not line._process_mo_completion_action(result):
+                    res_model = result.get("res_model") or _("unknown wizard")
+                    action_name = result.get("name") or _("Unknown action")
+                    raise UserError(
+                        _(
+                            "Manufacturing order %(order)s returned unexpected wizard %(wizard)s (%(action)s). "
+                            "Please open the manufacturing order and resolve the pending wizard."
+                        )
+                        % {
+                            "order": mo.display_name,
+                            "wizard": res_model,
+                            "action": action_name,
+                        }
+                    )
+            mo.invalidate_recordset(["state"])
+            if mo.state != "done":
                 raise UserError(
                     _(
-                        "Manufacturing order %s needs manual intervention before it can be completed."
+                        "Manufacturing order %(order)s did not complete after processing %(wizard)s. "
+                        "Please open the manufacturing order and resolve the pending wizard."
                     )
-                    % mo.display_name
+                    % {
+                        "order": mo.display_name,
+                        "wizard": result.get("res_model") if isinstance(result, dict) else _("completion"),
+                    }
                 )
             line.finished_lot_id = mo.lot_producing_id
+            line.write(
+                {
+                    "release_expected_qty": line.release_expected_qty or line.package_qty,
+                    "release_actual_qty": line._get_release_actual_qty(),
+                    "released_by_id": self.env.user.id,
+                    "release_date": fields.Datetime.now(),
+                }
+            )
+            for move in mo.move_raw_ids:
+                _logger.info(
+                    "Prepack MO %s raw move %s after completion: product=%s, qty=%s, state=%s, move-line qty_done=%s",
+                    mo.display_name,
+                    move.display_name,
+                    move.product_id.display_name,
+                    move.product_uom_qty,
+                    move.state,
+                    sum(move.move_line_ids.mapped("qty_done")),
+                )
         return True
+
+    def _log_mo_completion_quantities(self, mo):
+        self.ensure_one()
+        raw_moves = mo.move_raw_ids.filtered(
+            lambda move: move.product_id == self.bulk_lot_id.product_id
+        )
+        finished_moves = mo.move_finished_ids.filtered(
+            lambda move: move.product_id == self.product_id
+        )
+        _logger.info(
+            "Prepack MO %s synchronized before completion: product_qty=%s, qty_producing=%s, raw_move_qty=%s, raw_move_line_qty_done=%s, finished_move_qty=%s, finished_move_line_qty_done=%s",
+            mo.display_name,
+            mo.product_qty,
+            mo.qty_producing if "qty_producing" in mo._fields else False,
+            sum(raw_moves.mapped("product_uom_qty")),
+            sum(raw_moves.mapped("move_line_ids.qty_done")),
+            sum(finished_moves.mapped("product_uom_qty")),
+            sum(finished_moves.mapped("move_line_ids.qty_done")),
+        )
+
+    def _log_mo_completion_action(self, mo, action):
+        self.ensure_one()
+        _logger.warning(
+            "Prepack MO %s returned action before completion: name=%s, res_model=%s, context=%s",
+            mo.display_name,
+            action.get("name"),
+            action.get("res_model"),
+            action.get("context"),
+        )
+
+    def _process_mo_completion_action(self, action):
+        self.ensure_one()
+        res_model = action.get("res_model")
+        allowed_models = {
+            "mrp.consumption.warning": ("action_confirm",),
+            "mrp.immediate.production": ("process", "action_process"),
+            "mrp.production.backorder": (
+                "action_close_mo",
+                "action_cancel",
+                "process_cancel_backorder",
+                "action_cancel_backorder",
+            ),
+            "mrp.production.backorder.confirmation": (
+                "action_close_mo",
+                "action_cancel",
+                "process_cancel_backorder",
+                "action_cancel_backorder",
+            ),
+            "mrp.production.backorder_confirmation": (
+                "action_close_mo",
+                "action_cancel",
+                "process_cancel_backorder",
+                "action_cancel_backorder",
+            ),
+        }
+        if res_model not in allowed_models:
+            return False
+
+        try:
+            wizard_model = self.env[res_model]
+        except KeyError:
+            return False
+
+        action_context = action.get("context") or {}
+        if not isinstance(action_context, dict):
+            action_context = {}
+        context = dict(self.env.context, **action_context)
+        wizard = wizard_model.with_context(context)
+        if action.get("res_id"):
+            wizard = wizard.browse(action["res_id"])
+        else:
+            wizard = wizard.create({})
+
+        for method_name in allowed_models[res_model]:
+            if hasattr(wizard, method_name):
+                result = getattr(wizard, method_name)()
+                return not isinstance(result, dict)
+        return False
 
     def _apply_component_lot(self):
         for line in self:
             mo = line.mrp_production_id
             if not mo:
                 continue
+            source_location = line._get_component_source_location()
             target_moves = mo.move_raw_ids.filtered(
                 lambda move: (
                     move.state not in ("done", "cancel")
@@ -1318,7 +1941,22 @@ class BahmniPrepackBatchLine(models.Model):
                     % (line.bulk_lot_id.product_id.display_name, mo.display_name)
                 )
             for move in target_moves:
-                line._write_move_lines(move, line.bulk_lot_id)
+                if source_location and move.location_id != source_location:
+                    move.write({"location_id": source_location.id})
+                _logger.info(
+                    "Preparing prepack raw move for batch %s: batch source=%s (%s), release=%s (%s), MO source=%s (%s), MO destination=%s (%s), raw qty=%s",
+                    line.batch_id.name,
+                    line.batch_id.location_src_id.display_name,
+                    line.batch_id.location_src_id.id,
+                    line.batch_id.location_dest_id.display_name,
+                    line.batch_id.location_dest_id.id,
+                    mo.location_src_id.display_name,
+                    mo.location_src_id.id,
+                    mo.location_dest_id.display_name,
+                    mo.location_dest_id.id,
+                    move.product_uom_qty,
+                )
+                line._write_move_lines(move, line.bulk_lot_id, location=source_location)
 
     def _apply_finished_lot(self):
         for line in self:
@@ -1342,12 +1980,41 @@ class BahmniPrepackBatchLine(models.Model):
             for move in target_moves:
                 line._write_move_lines(move, finished_lot)
 
-    def _write_move_lines(self, move, lot):
+    def _apply_packaging_material_consumption(self):
+        for line in self:
+            move = line.packaging_material_move_id
+            if (
+                not move
+                or not line.packaging_material_id
+                or move.state in ("done", "cancel")
+            ):
+                continue
+            qty = line.packaging_material_qty
+            vals = {
+                "location_id": move.location_id.id,
+                "location_dest_id": move.location_dest_id.id,
+                "qty_done": qty,
+            }
+            if "product_uom_id" in self.env["stock.move.line"]._fields:
+                vals["product_uom_id"] = move.product_uom.id
+            first_line = move.move_line_ids[:1]
+            if not first_line:
+                first_line = self.env["stock.move.line"].create(
+                    dict(vals, move_id=move.id, product_id=move.product_id.id)
+                )
+            else:
+                first_line.write(vals)
+            for extra_line in move.move_line_ids - first_line:
+                extra_line.write({"qty_done": 0})
+
+    def _write_move_lines(self, move, lot, location=False):
         self.ensure_one()
         qty = move.product_uom_qty
+        source_location = location or move.location_id
         vals = {
+            "product_id": move.product_id.id,
             "lot_id": lot.id,
-            "location_id": move.location_id.id,
+            "location_id": source_location.id,
             "location_dest_id": move.location_dest_id.id,
             "qty_done": qty,
         }
@@ -1362,6 +2029,54 @@ class BahmniPrepackBatchLine(models.Model):
             first_line.write(vals)
         for extra_line in move.move_line_ids - first_line:
             extra_line.write({"lot_id": lot.id, "qty_done": 0})
+        _logger.info(
+            "Prepared prepack move line for move %s: lot=%s, source=%s (%s), destination=%s (%s), qty_done=%s",
+            move.display_name,
+            lot.display_name,
+            source_location.display_name,
+            source_location.id,
+            move.location_dest_id.display_name,
+            move.location_dest_id.id,
+            qty,
+        )
+
+    def _find_bulk_quant_location(self):
+        self.ensure_one()
+        if not self.bulk_lot_id or not self.batch_id.location_src_id:
+            return self.env["stock.location"]
+        quants = self.env["stock.quant"].search(
+            [
+                ("product_id", "=", self.bulk_lot_id.product_id.id),
+                ("lot_id", "=", self.bulk_lot_id.id),
+                ("location_id", "child_of", self.batch_id.location_src_id.id),
+                ("quantity", ">", 0),
+                "|",
+                ("company_id", "=", False),
+                ("company_id", "=", self.company_id.id),
+            ],
+            order="quantity desc, id",
+        )
+        required_qty = self.component_required_qty
+        for quant in quants:
+            available_qty = self.env["stock.quant"]._get_available_quantity(
+                self.bulk_lot_id.product_id,
+                quant.location_id,
+                lot_id=self.bulk_lot_id,
+                strict=True,
+            )
+            if available_qty >= required_qty:
+                return quant.location_id
+        return quants[:1].location_id if quants else self.env["stock.location"]
+
+    def _get_component_source_location(self):
+        self.ensure_one()
+        if self.bulk_location_id:
+            return self.bulk_location_id
+        quant_location = self._find_bulk_quant_location()
+        if quant_location:
+            self.bulk_location_id = quant_location.id
+            return quant_location
+        return self.batch_id.location_src_id
 
 
 class PrepackDamageWizard(models.TransientModel):
@@ -1486,11 +2201,21 @@ class PrepackDamageWizard(models.TransientModel):
         if self.unserviceable_location_id.usage == "internal":
             damage_record = self._create_unserviceable_move()
             damage_ref = damage_record.display_name
-            batch.write({"damage_move_ids": [(4, damage_record.id)]})
+            batch.write(
+                {
+                    "has_damaged_products": True,
+                    "damage_move_ids": [(4, damage_record.id)],
+                }
+            )
         else:
             damage_record = self._create_scrap_record()
             damage_ref = damage_record.name
-            batch.write({"damage_scrap_ids": [(4, damage_record.id)]})
+            batch.write(
+                {
+                    "has_damaged_products": True,
+                    "damage_scrap_ids": [(4, damage_record.id)],
+                }
+            )
 
         batch.message_post(
             body=_(
@@ -1516,18 +2241,20 @@ class PrepackDamageWizard(models.TransientModel):
 
     def _create_scrap_record(self):
         self.ensure_one()
+        lot = self._get_damage_lot()
+        source_location = self._get_damage_source_location(lot)
         scrap = self.env["stock.scrap"].create(
             {
                 "product_id": self.product_id.id,
                 "scrap_qty": self.damaged_qty,
                 "product_uom_id": self.product_id.uom_id.id,
-                "location_id": self.prepack_job_id.location_src_id.id,
+                "location_id": source_location.id,
                 "scrap_location_id": self.unserviceable_location_id.id,
                 "company_id": self.prepack_job_id.company_id.id,
                 "origin": self.prepack_job_id.name,
                 "elmis_program_id": self.elmis_program_id.id,
                 "elmis_adjustment_reason": self.elmis_adjustment_reason,
-                **self._get_scrap_lot_values(),
+                **self._get_scrap_lot_values(lot),
             }
         )
         scrap.action_validate()
@@ -1625,11 +2352,14 @@ class PrepackDamageWizard(models.TransientModel):
                 lambda scrap: scrap.product_id == self.product_id
             ).mapped("scrap_qty")
         )
+        damaged_qty += sum(
+            batch.damage_move_ids.filtered(
+                lambda move: move.product_id == self.product_id
+            ).mapped("product_uom_qty")
+        )
         return max(available_qty - damaged_qty, 0.0)
 
-    def _get_scrap_lot_values(self):
+    def _get_scrap_lot_values(self, lot=None):
         self.ensure_one()
-        matching_line = self.prepack_job_id.line_ids.filtered(
-            lambda line: line.bulk_lot_id.product_id == self.product_id
-        )[:1]
-        return {"lot_id": matching_line.bulk_lot_id.id} if matching_line else {}
+        lot = lot or self._get_damage_lot()
+        return {"lot_id": lot.id} if lot else {}

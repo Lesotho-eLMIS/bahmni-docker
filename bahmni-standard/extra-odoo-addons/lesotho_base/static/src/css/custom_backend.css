@@ -75,6 +75,19 @@ USERNAME LINK STYLE: comment this block to show the default avatar/user menu aga
    **************************** */
 
 /* ************************ LESOTHO CUSTOMIZATION
+   REQUIRED FIELD MARKERS
+   ************************ */
+.o_form_view label.o_required_modifier::after,
+.o_form_view .o_form_label.o_required_modifier::after,
+.o_list_view th.o_required_modifier::after {
+  content: " *";
+  color: #dc3545;
+  font-weight: 800;
+}
+/* end of required field markers block
+   **************************** */
+
+/* ************************ LESOTHO CUSTOMIZATION
    HIDE CONVERSATIONS AND ACTIVITIES
    ************************
    Comment this block to show conversations and activities in the navigation bar again */
@@ -224,6 +237,11 @@ USERNAME LINK STYLE: comment this block to show the default avatar/user menu aga
   min-height: 100%;
   width: 100%;
   background-color: #ffffff;
+}
+
+.lesotho_prepack_location_value {
+  font-size: 1.4rem !important;
+  font-weight: 700 !important;
 }
 /* end of prepacking placeholder pages block
    **************************** */
