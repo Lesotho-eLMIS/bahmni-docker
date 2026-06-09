@@ -66,6 +66,9 @@
                             <div class="o_lesotho_patient_detail"><strong>Prescriber</strong> <span><t t-esc="state.order.prescriber"/></span></div>
                             <div class="o_lesotho_patient_detail"><strong>Care Setting</strong> <span><t t-esc="state.order.care_setting"/></span></div>
                             <div class="o_lesotho_patient_detail"><strong>Dispensary</strong> <span><t t-esc="state.order.dispensary"/></span></div>
+                        </section>
+                        <section class="o_lesotho_patient_group">
+                            <h3><span class="o_lesotho_card_icon">S</span>Status</h3>
                             <div class="o_lesotho_patient_detail">
                                 <strong>Label Status</strong>
                                 <span><t t-esc="state.order.label_status_label || ''"/></span>
@@ -123,10 +126,10 @@
                                     <div>
                                         <span class="o_lesotho_line_number"><t t-esc="line_index + 1"/>.</span>
                                         <h3><t t-esc="line.prescribed_product"/></h3>
+                                        <span class="o_lesotho_status_pill">Prescribed</span>
                                     </div>
                                     <div class="o_lesotho_card_actions">
-                                        <button t-if="!state.readOnly &amp;&amp; line.served_internally" type="button" class="o_lesotho_add_prepack" t-on-click="() => this.addPrepack(line)">Add Prepack</button>
-                                        <span class="o_lesotho_status_pill">Prescribed</span>
+                                        <button t-if="!state.readOnly &amp;&amp; line.served_internally" type="button" class="o_lesotho_add_prepack" t-on-click="() => this.addPrepack(line)"><span class="o_lesotho_add_prepack_icon">+</span>Add Prepack</button>
                                         <span t-if="line.dispensed_product &amp;&amp; line.dispensed_product !== line.prescribed_product" class="o_lesotho_change_pill">Change Made</span>
                                     </div>
                                 </header>
@@ -147,11 +150,11 @@
 
                                 <section t-if="line.components &amp;&amp; line.components.length" class="o_lesotho_component_stack">
                                     <t t-foreach="line.components" t-as="component" t-key="component.id">
-                                        <div class="o_lesotho_component_panel">
+                                        <div class="o_lesotho_prescription_detail_panel o_lesotho_component_panel">
                                             <div class="o_lesotho_component_actions">
-                                                <button t-if="!state.readOnly" type="button" class="o_lesotho_remove_prepack" t-on-click="() => this.removePrepack(line, component)">Remove</button>
+                                                <button t-if="!state.readOnly" type="button" class="o_lesotho_remove_prepack" t-on-click="() => this.removePrepack(line, component)" aria-label="Remove prepack"></button>
                                             </div>
-                                            <section class="o_lesotho_field_group">
+                                            <section class="o_lesotho_field_group o_lesotho_product_status_group">
                                                 <h4>Product Status</h4>
                                                 <div class="o_lesotho_group_grid o_lesotho_group_grid_top">
                                                     <label class="o_lesotho_field o_lesotho_field_wide">
@@ -183,57 +186,59 @@
 
                                             <section class="o_lesotho_field_group">
                                                 <h4>Dispensing Details</h4>
-                                                <div class="o_lesotho_group_grid">
-                                                    <label class="o_lesotho_field">
-                                                        <span>Pack/Unit</span>
-                                                        <input type="number" step="1" t-att-disabled="state.readOnly" t-att-value="component.pack_count" t-on-change="(ev) => this.onComponentFieldChanged(line, component, 'pack_count', ev.target.value)"/>
-                                                    </label>
-                                                    <label class="o_lesotho_field">
-                                                        <span>Quantity Dispensed</span>
-                                                        <input readonly="readonly" t-att-value="component.quantity_dispensed"/>
-                                                    </label>
-                                                    <label class="o_lesotho_field">
-                                                        <span>Batch Number</span>
-                                                        <select
-                                                            t-att-value="component.batch_number || ''"
-                                                            t-att-disabled="state.readOnly || !(component.batch_options || []).length"
-                                                            t-on-change="(ev) => this.onComponentBatchChanged(line, component, ev.target.value)"
-                                                        >
-                                                            <option value="">
-                                                                <t t-esc="(component.batch_options || []).length ? 'Select batch number' : 'No batch numbers available'"/>
-                                                            </option>
-                                                            <t t-foreach="component.batch_options || []" t-as="option" t-key="option.batch_number">
-                                                                <option t-att-value="option.batch_number" t-att-selected="option.batch_number === component.batch_number">
-                                                                    <t t-esc="option.batch_number"/>
-                                                                    <t t-if="option.available_qty !== undefined">
-                                                                        - <t t-esc="option.available_qty"/> available
-                                                                    </t>
-                                                                    <t t-if="option.expiry_date">
-                                                                        - Exp: <t t-esc="option.expiry_date"/>
-                                                                    </t>
+                                                <div class="o_lesotho_dispensing_grid">
+                                                    <div class="o_lesotho_dispensing_row">
+                                                        <label class="o_lesotho_field o_lesotho_pack_unit_field">
+                                                            <span>Pack(s)</span>
+                                                            <input type="number" step="1" t-att-disabled="state.readOnly" t-att-value="component.pack_count" t-on-change="(ev) => this.onComponentFieldChanged(line, component, 'pack_count', ev.target.value)"/>
+                                                        </label>
+                                                        <label class="o_lesotho_field o_lesotho_quantity_dispensed_field">
+                                                            <span>Quantity Dispensed</span>
+                                                            <input readonly="readonly" t-att-value="component.quantity_dispensed"/>
+                                                        </label>
+                                                        <label class="o_lesotho_field o_lesotho_batch_number_field">
+                                                            <span>Batch Number</span>
+                                                            <select
+                                                                t-att-value="component.batch_number || ''"
+                                                                t-att-disabled="state.readOnly || !(component.batch_options || []).length"
+                                                                t-on-change="(ev) => this.onComponentBatchChanged(line, component, ev.target.value)"
+                                                            >
+                                                                <option value="">
+                                                                    <t t-esc="(component.batch_options || []).length ? 'Select batch number' : 'No batch numbers available'"/>
                                                                 </option>
-                                                            </t>
-                                                        </select>
-                                                    </label>
-                                                    <label class="o_lesotho_field">
-                                                        <span>Barcode</span>
-                                                        <input class="o_lesotho_barcode" t-att-disabled="state.readOnly" t-att-value="component.barcode" t-on-input="(ev) => this.updateComponentLocal(component, 'barcode', ev.target.value)" t-on-keydown="(ev) => this.scanComponentBarcode(line, component, ev)"/>
-                                                    </label>
-                                                    <label class="o_lesotho_field o_lesotho_checkbox_field o_lesotho_component_served_field">
-                                                        <span>Served Internally</span>
-                                                        <input type="checkbox" disabled="disabled" t-att-checked="line.served_internally"/>
-                                                    </label>
+                                                                <t t-foreach="component.batch_options || []" t-as="option" t-key="option.batch_number">
+                                                                    <option t-att-value="option.batch_number" t-att-selected="option.batch_number === component.batch_number">
+                                                                        <t t-esc="option.batch_number"/>
+                                                                        <t t-if="option.available_qty !== undefined">
+                                                                            | <t t-esc="option.available_qty"/> available
+                                                                        </t>
+                                                                        <t t-if="option.expiry_date">
+                                                                            | Exp: <t t-esc="option.expiry_date"/>
+                                                                        </t>
+                                                                    </option>
+                                                                </t>
+                                                            </select>
+                                                        </label>
+                                                        <label class="o_lesotho_field o_lesotho_barcode_field">
+                                                            <span>Barcode</span>
+                                                            <input class="o_lesotho_barcode" t-att-disabled="state.readOnly" t-att-value="component.barcode" t-on-input="(ev) => this.updateComponentLocal(component, 'barcode', ev.target.value)" t-on-keydown="(ev) => this.scanComponentBarcode(line, component, ev)"/>
+                                                        </label>
+                                                        <label class="o_lesotho_field o_lesotho_checkbox_field o_lesotho_component_served_field">
+                                                            <span>Served Internally</span>
+                                                            <input type="checkbox" disabled="disabled" t-att-checked="line.served_internally"/>
+                                                        </label>
+                                                    </div>
                                                 </div>
                                             </section>
 
-                                            <section class="o_lesotho_field_group">
+                                            <section class="o_lesotho_field_group o_lesotho_directions_group">
                                                 <h4>Directions</h4>
                                                 <div class="o_lesotho_group_grid o_lesotho_group_grid_directions">
-                                                    <label class="o_lesotho_field">
+                                                    <label class="o_lesotho_field o_lesotho_dose_field">
                                                         <span>Dose</span>
                                                         <input type="number" step="1" t-att-disabled="state.readOnly || !line.is_pack_substituted" t-att-value="line.dose" t-on-change="(ev) => this.onFieldChanged(line, 'dose', ev.target.value)"/>
                                                     </label>
-                                                    <label class="o_lesotho_field">
+                                                    <label class="o_lesotho_field o_lesotho_dose_unit_field">
                                                         <span>Dose Unit</span>
                                                         <select t-att-disabled="state.readOnly || !line.is_pack_substituted" t-att-value="line.dose_unit" t-on-change="(ev) => this.onFieldChanged(line, 'dose_unit', ev.target.value)">
                                                             <t t-foreach="state.directionOptions.dose_unit || []" t-as="option" t-key="option">
@@ -241,7 +246,7 @@
                                                             </t>
                                                         </select>
                                                     </label>
-                                                    <label class="o_lesotho_field">
+                                                    <label class="o_lesotho_field o_lesotho_frequency_field">
                                                         <span>Frequency</span>
                                                         <select t-att-disabled="state.readOnly || !line.is_pack_substituted" t-att-value="line.frequency" t-on-change="(ev) => this.onFieldChanged(line, 'frequency', ev.target.value)">
                                                             <t t-foreach="state.directionOptions.frequency || []" t-as="option" t-key="option">
@@ -249,7 +254,7 @@
                                                             </t>
                                                         </select>
                                                     </label>
-                                                    <label class="o_lesotho_field">
+                                                    <label class="o_lesotho_field o_lesotho_route_field">
                                                         <span>Route</span>
                                                         <select t-att-disabled="state.readOnly || !line.is_pack_substituted" t-att-value="line.route" t-on-change="(ev) => this.onFieldChanged(line, 'route', ev.target.value)">
                                                             <t t-foreach="state.directionOptions.route || []" t-as="option" t-key="option">
@@ -257,11 +262,11 @@
                                                             </t>
                                                         </select>
                                                     </label>
-                                                    <label class="o_lesotho_field">
+                                                    <label class="o_lesotho_field o_lesotho_duration_field">
                                                         <span>Duration</span>
                                                         <input type="number" step="1" t-att-disabled="state.readOnly || !line.is_pack_substituted" t-att-value="line.duration" t-on-change="(ev) => this.onFieldChanged(line, 'duration', ev.target.value)"/>
                                                     </label>
-                                                    <label class="o_lesotho_field">
+                                                    <label class="o_lesotho_field o_lesotho_duration_unit_field">
                                                         <span>Duration Unit</span>
                                                         <select t-att-disabled="state.readOnly || !line.is_pack_substituted" t-att-value="line.duration_units" t-on-change="(ev) => this.onFieldChanged(line, 'duration_units', ev.target.value)">
                                                             <t t-foreach="state.directionOptions.duration_units || []" t-as="option" t-key="option">
@@ -269,7 +274,7 @@
                                                             </t>
                                                         </select>
                                                     </label>
-                                                    <label class="o_lesotho_field o_lesotho_field_wide">
+                                                    <label class="o_lesotho_field o_lesotho_instructions_field">
                                                         <span>Instructions</span>
                                                         <select t-att-disabled="state.readOnly || !line.is_pack_substituted" t-att-value="line.instructions" t-on-change="(ev) => this.onFieldChanged(line, 'instructions', ev.target.value)">
                                                             <t t-foreach="state.directionOptions.instructions || []" t-as="option" t-key="option">
@@ -277,7 +282,7 @@
                                                             </t>
                                                         </select>
                                                     </label>
-                                                    <label class="o_lesotho_field o_lesotho_field_wide">
+                                                    <label class="o_lesotho_field o_lesotho_additional_instructions_field">
                                                         <span>Additional Instructions</span>
                                                         <input t-att-disabled="state.readOnly" t-att-value="line.additional_instructions" t-on-change="(ev) => this.onFieldChanged(line, 'additional_instructions', ev.target.value)"/>
                                                     </label>
@@ -287,8 +292,8 @@
                                     </t>
                                 </section>
 
-                                <div class="o_lesotho_form_grid">
-                                    <section class="o_lesotho_field_group">
+                                <div class="o_lesotho_prescription_detail_panel o_lesotho_form_grid">
+                                    <section class="o_lesotho_field_group o_lesotho_product_status_group">
                                         <h4>Product Status</h4>
                                         <div class="o_lesotho_group_grid o_lesotho_group_grid_top">
                                             <label class="o_lesotho_field o_lesotho_field_wide">
@@ -320,58 +325,58 @@
 
                                     <section class="o_lesotho_field_group">
                                         <h4>Dispensing Details</h4>
-                                        <div class="o_lesotho_group_grid">
-                                            <label class="o_lesotho_field">
-                                                <span>Quantity Dispensed</span>
-                                                <input type="number" t-att-disabled="state.readOnly || this.hasComponents(line)" t-att-value="line.quantity_dispensed" t-on-change="(ev) => this.onFieldChanged(line, 'quantity_dispensed', ev.target.value)"/>
-                                            </label>
-                                            <label class="o_lesotho_field">
-                                                <span>Batch Number</span>
-                                                <select
-                                                    t-att-value="line.batch_number || ''"
-                                                    t-att-disabled="state.readOnly || this.hasComponents(line) || !(line.batch_options || []).length"
-                                                    t-on-change="(ev) => this.onBatchChanged(line, ev.target.value)"
-                                                >
-                                                    <option value="">
-                                                        <t t-esc="(line.batch_options || []).length ? 'Select batch number' : 'No batch numbers available'"/>
-                                                    </option>
-                                                    <t t-foreach="line.batch_options || []" t-as="option" t-key="option.batch_number">
-                                                        <option t-att-value="option.batch_number" t-att-selected="option.batch_number === line.batch_number">
-                                                            <t t-esc="option.batch_number"/>
-                                                            <t t-if="option.available_qty !== undefined">
-                                                                - <t t-esc="option.available_qty"/> available
-                                                            </t>
-                                                            <t t-if="option.expiry_date">
-                                                                - Exp: <t t-esc="option.expiry_date"/>
-                                                            </t>
+                                        <div class="o_lesotho_dispensing_grid">
+                                            <div class="o_lesotho_dispensing_row">
+                                                <div class="o_lesotho_quantity_stack">
+                                                    <label class="o_lesotho_field o_lesotho_pack_unit_field">
+                                                        <span>Pack(s)</span>
+                                                        <input type="number" step="1" t-att-disabled="state.readOnly || this.hasComponents(line)" t-att-value="line.pack_count" t-on-change="(ev) => this.onFieldChanged(line, 'pack_count', ev.target.value)"/>
+                                                    </label>
+                                                    <label class="o_lesotho_field o_lesotho_quantity_dispensed_field">
+                                                        <span>Quantity Dispensed</span>
+                                                        <input readonly="readonly" t-att-value="line.quantity_dispensed"/>
+                                                    </label>
+                                                    <label t-if="this.hasOutstandingBalance(line)" class="o_lesotho_field o_lesotho_balance_resolution_field">
+                                                        <span>Balance Resolution</span>
+                                                        <select t-att-disabled="state.readOnly" t-att-value="line.balance_resolution || ''" t-on-change="(ev) => this.onFieldChanged(line, 'balance_resolution', ev.target.value)">
+                                                            <option value="">Select reason</option>
+                                                            <option value="external_referral" t-att-selected="line.balance_resolution === 'external_referral'">External referral</option>
+                                                            <option value="other" t-att-selected="line.balance_resolution === 'other'">Other</option>
+                                                        </select>
+                                                    </label>
+                                                </div>
+                                                <label class="o_lesotho_field o_lesotho_batch_number_field">
+                                                    <span>Batch Number</span>
+                                                    <select
+                                                        t-att-value="line.batch_number || ''"
+                                                        t-att-disabled="state.readOnly || this.hasComponents(line) || !(line.batch_options || []).length"
+                                                        t-on-change="(ev) => this.onBatchChanged(line, ev.target.value)"
+                                                    >
+                                                        <option value="">
+                                                            <t t-esc="(line.batch_options || []).length ? 'Select batch number' : 'No batch numbers available'"/>
                                                         </option>
-                                                    </t>
-                                                </select>
-                                            </label>
-                                            <label class="o_lesotho_field">
-                                                <span>Selected Batch Available</span>
-                                                <input readonly="readonly" t-att-value="line.selected_batch_available_qty || 0"/>
-                                            </label>
-                                            <label class="o_lesotho_field">
-                                                <span>Expiry Date</span>
-                                                <input readonly="readonly" t-att-value="line.expiry_date"/>
-                                            </label>
-                                            <label class="o_lesotho_field">
-                                                <span>Barcode</span>
-                                                <input class="o_lesotho_barcode" t-att-disabled="state.readOnly || this.hasComponents(line)" t-att-value="line.barcode" t-on-input="(ev) => this.updateLocal(line, 'barcode', ev.target.value)" t-on-keydown="(ev) => this.scanBarcode(line, line_index, ev)"/>
-                                            </label>
-                                            <label class="o_lesotho_field o_lesotho_checkbox_field">
-                                                <span>Served Internally</span>
-                                                <input type="checkbox" t-att-disabled="state.readOnly" t-att-checked="line.served_internally" t-on-change="(ev) => this.onFieldChanged(line, 'served_internally', ev.target.checked)"/>
-                                            </label>
-                                            <label t-if="this.hasOutstandingBalance(line)" class="o_lesotho_field">
-                                                <span>Balance Resolution</span>
-                                                <select t-att-disabled="state.readOnly" t-att-value="line.balance_resolution || ''" t-on-change="(ev) => this.onFieldChanged(line, 'balance_resolution', ev.target.value)">
-                                                    <option value="">Select reason</option>
-                                                    <option value="external_referral" t-att-selected="line.balance_resolution === 'external_referral'">External referral</option>
-                                                    <option value="other" t-att-selected="line.balance_resolution === 'other'">Other</option>
-                                                </select>
-                                            </label>
+                                                        <t t-foreach="line.batch_options || []" t-as="option" t-key="option.batch_number">
+                                                            <option t-att-value="option.batch_number" t-att-selected="option.batch_number === line.batch_number">
+                                                                <t t-esc="option.batch_number"/>
+                                                                <t t-if="option.available_qty !== undefined">
+                                                                    | <t t-esc="option.available_qty"/> available
+                                                                </t>
+                                                                <t t-if="option.expiry_date">
+                                                                    | Exp: <t t-esc="option.expiry_date"/>
+                                                                </t>
+                                                            </option>
+                                                        </t>
+                                                    </select>
+                                                </label>
+                                                <label class="o_lesotho_field o_lesotho_barcode_field">
+                                                    <span>Barcode</span>
+                                                    <input class="o_lesotho_barcode" t-att-disabled="state.readOnly || this.hasComponents(line)" t-att-value="line.barcode" t-on-input="(ev) => this.updateLocal(line, 'barcode', ev.target.value)" t-on-keydown="(ev) => this.scanBarcode(line, line_index, ev)"/>
+                                                </label>
+                                                <label class="o_lesotho_field o_lesotho_checkbox_field o_lesotho_served_internally_field">
+                                                    <span>Served Internally</span>
+                                                    <input type="checkbox" t-att-disabled="state.readOnly" t-att-checked="line.served_internally" t-on-change="(ev) => this.onFieldChanged(line, 'served_internally', ev.target.checked)"/>
+                                                </label>
+                                            </div>
                                             <label t-if="this.hasOutstandingBalance(line) &amp;&amp; line.balance_resolution === 'other'" class="o_lesotho_field o_lesotho_field_full">
                                                 <span>Resolution Explanation</span>
                                                 <input t-att-disabled="state.readOnly" t-att-value="line.balance_resolution_note" t-on-change="(ev) => this.onFieldChanged(line, 'balance_resolution_note', ev.target.value)"/>
@@ -379,14 +384,14 @@
                                         </div>
                                     </section>
 
-                                    <section class="o_lesotho_field_group">
+                                    <section class="o_lesotho_field_group o_lesotho_directions_group">
                                         <h4>Directions</h4>
                                         <div class="o_lesotho_group_grid o_lesotho_group_grid_directions">
-                                            <label class="o_lesotho_field">
+                                            <label class="o_lesotho_field o_lesotho_dose_field">
                                                 <span>Dose</span>
                                                 <input type="number" step="1" t-att-disabled="state.readOnly || !line.is_pack_substituted" t-att-value="line.dose" t-on-change="(ev) => this.onFieldChanged(line, 'dose', ev.target.value)"/>
                                             </label>
-                                            <label class="o_lesotho_field">
+                                            <label class="o_lesotho_field o_lesotho_dose_unit_field">
                                                 <span>Dose Unit</span>
                                                 <select t-att-disabled="state.readOnly || !line.is_pack_substituted" t-att-value="line.dose_unit" t-on-change="(ev) => this.onFieldChanged(line, 'dose_unit', ev.target.value)">
                                                     <t t-foreach="state.directionOptions.dose_unit || []" t-as="option" t-key="option">
@@ -394,7 +399,7 @@
                                                     </t>
                                                 </select>
                                             </label>
-                                            <label class="o_lesotho_field">
+                                            <label class="o_lesotho_field o_lesotho_frequency_field">
                                                 <span>Frequency</span>
                                                 <select t-att-disabled="state.readOnly || !line.is_pack_substituted" t-att-value="line.frequency" t-on-change="(ev) => this.onFieldChanged(line, 'frequency', ev.target.value)">
                                                     <t t-foreach="state.directionOptions.frequency || []" t-as="option" t-key="option">
@@ -402,7 +407,7 @@
                                                     </t>
                                                 </select>
                                             </label>
-                                            <label class="o_lesotho_field">
+                                            <label class="o_lesotho_field o_lesotho_route_field">
                                                 <span>Route</span>
                                                 <select t-att-disabled="state.readOnly || !line.is_pack_substituted" t-att-value="line.route" t-on-change="(ev) => this.onFieldChanged(line, 'route', ev.target.value)">
                                                     <t t-foreach="state.directionOptions.route || []" t-as="option" t-key="option">
@@ -410,11 +415,11 @@
                                                     </t>
                                                 </select>
                                             </label>
-                                            <label class="o_lesotho_field">
+                                            <label class="o_lesotho_field o_lesotho_duration_field">
                                                 <span>Duration</span>
                                                 <input type="number" step="1" t-att-disabled="state.readOnly || !line.is_pack_substituted" t-att-value="line.duration" t-on-change="(ev) => this.onFieldChanged(line, 'duration', ev.target.value)"/>
                                             </label>
-                                            <label class="o_lesotho_field">
+                                            <label class="o_lesotho_field o_lesotho_duration_unit_field">
                                                 <span>Duration Unit</span>
                                                 <select t-att-disabled="state.readOnly || !line.is_pack_substituted" t-att-value="line.duration_units" t-on-change="(ev) => this.onFieldChanged(line, 'duration_units', ev.target.value)">
                                                     <t t-foreach="state.directionOptions.duration_units || []" t-as="option" t-key="option">
@@ -422,7 +427,7 @@
                                                     </t>
                                                 </select>
                                             </label>
-                                            <label class="o_lesotho_field o_lesotho_field_wide">
+                                            <label class="o_lesotho_field o_lesotho_instructions_field">
                                                 <span>Instructions</span>
                                                 <select t-att-disabled="state.readOnly || !line.is_pack_substituted" t-att-value="line.instructions" t-on-change="(ev) => this.onFieldChanged(line, 'instructions', ev.target.value)">
                                                     <t t-foreach="state.directionOptions.instructions || []" t-as="option" t-key="option">
@@ -430,7 +435,7 @@
                                                     </t>
                                                 </select>
                                             </label>
-                                            <label class="o_lesotho_field o_lesotho_field_wide">
+                                            <label class="o_lesotho_field o_lesotho_additional_instructions_field">
                                                 <span>Additional Instructions</span>
                                                 <input t-att-disabled="state.readOnly" t-att-value="line.additional_instructions" t-on-change="(ev) => this.onFieldChanged(line, 'additional_instructions', ev.target.value)"/>
                                             </label>
@@ -449,8 +454,8 @@
                         t-on-click="() => this.toggleReview()"
                         t-att-aria-expanded="state.reviewExpanded"
                     >
-                        <span>Review Dispensed Items</span>
                         <span class="o_lesotho_review_chevron"><t t-esc="state.reviewExpanded ? 'Hide' : 'Show'"/></span>
+                        <span>Review Dispensed Items</span>
                     </button>
                     <div t-if="state.reviewExpanded" class="o_lesotho_table_wrap">
                         <table class="o_lesotho_rx_table o_lesotho_review_table">

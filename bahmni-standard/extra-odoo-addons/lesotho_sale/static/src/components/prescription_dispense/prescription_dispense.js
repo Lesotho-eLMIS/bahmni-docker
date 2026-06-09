@@ -403,17 +403,26 @@ export class PrescriptionDispense extends Component {
         if (this.state.readOnly) {
             return;
         }
-        if (this.hasComponents(line) && ["product_id", "quantity_dispensed", "batch_number"].includes(field)) {
+        if (this.hasComponents(line) && ["product_id", "pack_count", "quantity_dispensed", "batch_number"].includes(field)) {
             return;
         }
         if (field === "served_internally" && !value) {
+            this.updateLocal(line, "pack_count", 0);
             this.updateLocal(line, "quantity_dispensed", 0);
         }
         if (field === "balance_resolution" && value !== "other") {
             this.updateLocal(line, "balance_resolution_note", "");
             this.saveLine(line, "balance_resolution_note", "");
         }
-        if (field === 'quantity_dispensed') {
+        if (field === "pack_count") {
+            const numericValue = parseFloat(value || 0);
+            const quantityDispensed = numericValue * Number(line.pack_unit_qty || 1);
+            if (quantityDispensed > 0 && !line.served_internally) {
+                this.updateLocal(line, "served_internally", true);
+            }
+            this.updateLocal(line, "quantity_dispensed", quantityDispensed);
+            this.saveLine(line, field, numericValue);
+        } else if (field === 'quantity_dispensed') {
             const numericValue = parseFloat(value || 0);
             if (numericValue > 0 && !line.served_internally) {
                 this.updateLocal(line, "served_internally", true);

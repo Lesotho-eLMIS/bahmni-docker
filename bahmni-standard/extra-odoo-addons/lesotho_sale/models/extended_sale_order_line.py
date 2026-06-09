@@ -884,7 +884,7 @@ class ExtendedSaleOrderLine(models.Model):
                 value = getattr(lot, field_name)
                 if field.type == "date":
                     return fields.Date.to_string(value)
-                return fields.Datetime.to_string(value)
+                return fields.Date.to_string(value.date())
         return ""
 
     def _get_dispensing_batch_options(self, product=None):

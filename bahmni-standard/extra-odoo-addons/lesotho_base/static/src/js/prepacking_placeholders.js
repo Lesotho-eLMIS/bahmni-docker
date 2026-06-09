@@ -10,3 +10,4 @@ PrepackingPlaceholder.template = "lesotho_base.PrepackingPlaceholder";
 registry.category("actions").add("lesotho_base.create_prepacks_placeholder", PrepackingPlaceholder);
 registry.category("actions").add("lesotho_base.authorise_prepacks_placeholder", PrepackingPlaceholder);
 registry.category("actions").add("lesotho_base.view_prepacks_placeholder", PrepackingPlaceholder);
+registry.category("actions").add("lesotho_base.create_new_prescription_placeholder", PrepackingPlaceholder);
