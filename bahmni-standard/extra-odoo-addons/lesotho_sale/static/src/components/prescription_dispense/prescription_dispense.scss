@@ -86,11 +86,26 @@
 }
 
 .o_lesotho_breadcrumbs span,
-.o_lesotho_breadcrumbs strong {
+.o_lesotho_breadcrumbs strong,
+.o_lesotho_breadcrumbs button {
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+}
+
+.o_lesotho_breadcrumbs button {
+    appearance: none;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: #714b67;
+    font: inherit;
+    cursor: pointer;
+}
+
+.o_lesotho_breadcrumbs button:hover {
+    text-decoration: none;
 }
 
 .o_lesotho_breadcrumbs strong {
@@ -433,7 +448,7 @@
 
 .o_lesotho_patient_grid {
     display: grid;
-    grid-template-columns: 1.15fr .5fr 1fr 1fr;
+    grid-template-columns: 1.15fr .5fr .72fr 1fr 1fr;
     gap: 0;
     border: 1px solid #dfe7ed;
     border-radius: 8px;
@@ -534,6 +549,15 @@
     font-weight: 400;
     line-height: 1.3;
     overflow-wrap: anywhere;
+}
+
+.o_lesotho_patient_allergies .o_lesotho_patient_detail {
+    grid-template-columns: 1fr;
+    gap: 4px;
+}
+
+.o_lesotho_patient_allergies .o_lesotho_patient_detail span {
+    white-space: normal;
 }
 
 .o_lesotho_patient_name {
@@ -857,47 +881,43 @@
     flex-direction: column;
     gap: 14px;
     max-width: 100%;
-    overflow-x: auto;
+    overflow-x: visible;
 }
 
 .o_lesotho_dispensing_row {
-    display: flex;
-    flex-wrap: nowrap;
+    display: grid;
+    grid-template-columns:
+        minmax(194px, .78fr)
+        minmax(340px, 1.55fr)
+        minmax(180px, 1fr)
+        minmax(118px, .7fr);
     gap: 14px;
     align-items: start;
-    width: max-content;
+    width: 100%;
 }
 
 .o_lesotho_dispensing_row > .o_lesotho_field,
 .o_lesotho_dispensing_row > .o_lesotho_quantity_stack {
-    flex: 0 0 auto;
     grid-column: auto;
     grid-row: auto;
+    min-width: 0;
 }
 
 .o_lesotho_dispensing_row > .o_lesotho_quantity_stack {
-    flex-basis: 194px;
-}
-
-.o_lesotho_dispensing_row > .o_lesotho_pack_unit_field {
-    flex-basis: 58px;
-}
-
-.o_lesotho_dispensing_row > .o_lesotho_quantity_dispensed_field {
-    flex-basis: 122px;
+    width: 100%;
 }
 
 .o_lesotho_dispensing_row > .o_lesotho_batch_number_field {
-    flex-basis: 340px;
+    width: 100%;
 }
 
 .o_lesotho_dispensing_row > .o_lesotho_barcode_field {
-    flex-basis: 180px;
+    width: 100%;
 }
 
 .o_lesotho_dispensing_row > .o_lesotho_served_internally_field,
 .o_lesotho_dispensing_row > .o_lesotho_component_served_field {
-    flex-basis: 118px;
+    width: 100%;
 }
 
 .o_lesotho_group_grid_top {
@@ -944,16 +964,23 @@
 }
 
 .o_lesotho_group_grid_directions {
-    display: flex;
-    flex-wrap: nowrap;
+    display: grid;
+    grid-template-columns:
+        minmax(62px, .5fr)
+        minmax(96px, .82fr)
+        minmax(130px, 1.12fr)
+        minmax(120px, 1fr)
+        minmax(70px, .58fr)
+        minmax(106px, .92fr)
+        minmax(150px, 1.22fr)
+        minmax(190px, 1.55fr);
     align-items: stretch;
     gap: 14px;
     max-width: 100%;
-    overflow-x: auto;
+    overflow-x: visible;
 }
 
 .o_lesotho_group_grid_directions .o_lesotho_field {
-    flex: 0 0 auto;
     grid-column: auto;
     min-width: 0;
 }
@@ -961,38 +988,6 @@
 .o_lesotho_group_grid_directions .o_lesotho_field input,
 .o_lesotho_group_grid_directions .o_lesotho_field select {
     width: 100%;
-}
-
-.o_lesotho_group_grid_directions .o_lesotho_dose_field {
-    width: 62px;
-}
-
-.o_lesotho_group_grid_directions .o_lesotho_dose_unit_field {
-    width: 106px;
-}
-
-.o_lesotho_group_grid_directions .o_lesotho_frequency_field {
-    width: 144px;
-}
-
-.o_lesotho_group_grid_directions .o_lesotho_route_field {
-    width: 125px;
-}
-
-.o_lesotho_group_grid_directions .o_lesotho_duration_field {
-    width: 62px;
-}
-
-.o_lesotho_group_grid_directions .o_lesotho_duration_unit_field {
-    width: 106px;
-}
-
-.o_lesotho_group_grid_directions .o_lesotho_instructions_field {
-    width: 137px;
-}
-
-.o_lesotho_group_grid_directions .o_lesotho_additional_instructions_field {
-    width: 194px;
 }
 
 .o_lesotho_field {
@@ -1017,27 +1012,27 @@
 
 .o_lesotho_quantity_stack {
     display: grid;
-    grid-template-columns: 58px 122px;
+    grid-template-columns: minmax(58px, .48fr) minmax(122px, 1fr);
     grid-column: span 2;
     gap: 14px;
-    justify-self: start;
+    justify-self: stretch;
     max-width: 100%;
-    width: 194px;
+    width: 100%;
 }
 
 .o_lesotho_quantity_dispensed_field,
 .o_lesotho_pack_unit_field,
 .o_lesotho_served_internally_field,
 .o_lesotho_component_served_field {
-    justify-self: start;
+    justify-self: stretch;
 }
 
 .o_lesotho_quantity_dispensed_field {
-    width: 122px;
+    width: 100%;
 }
 
 .o_lesotho_pack_unit_field {
-    width: 58px;
+    width: 100%;
 }
 
 .o_lesotho_quantity_stack .o_lesotho_quantity_dispensed_field,
@@ -1052,7 +1047,7 @@
 
 .o_lesotho_served_internally_field,
 .o_lesotho_component_served_field {
-    width: 118px;
+    width: 100%;
 }
 
 .o_lesotho_quantity_dispensed_field span,
@@ -1342,6 +1337,14 @@
     .o_lesotho_field_wide {
         grid-column: span 2;
     }
+
+    .o_lesotho_dispensing_row {
+        grid-template-columns: minmax(194px, .85fr) minmax(300px, 1.5fr);
+    }
+
+    .o_lesotho_group_grid_directions {
+        grid-template-columns: repeat(4, minmax(120px, 1fr));
+    }
 }
 
 @media (max-width: 980px) {
@@ -1386,6 +1389,15 @@
         grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 
+    .o_lesotho_dispensing_row,
+    .o_lesotho_group_grid_directions {
+        grid-template-columns: 1fr;
+    }
+
+    .o_lesotho_quantity_stack {
+        grid-template-columns: minmax(58px, .48fr) minmax(122px, 1fr);
+    }
+
     .o_lesotho_footer {
         align-items: stretch;
         flex-direction: column;
@@ -1421,9 +1433,9 @@
     }
 
     .o_lesotho_quantity_stack {
-        grid-column: span 2;
-        grid-template-columns: 58px 122px;
-        width: 194px;
+        grid-column: auto;
+        grid-template-columns: 1fr;
+        width: 100%;
     }
 
     .o_lesotho_group_grid_top {
@@ -1449,10 +1461,6 @@
         width: 18px;
     }
 
-    .o_lesotho_group_grid_directions {
-        flex-wrap: nowrap;
-    }
-
     .o_lesotho_group_grid_directions .o_lesotho_field,
     .o_lesotho_group_grid_directions .o_lesotho_field:nth-child(1),
     .o_lesotho_group_grid_directions .o_lesotho_field:nth-child(2),
@@ -1463,14 +1471,6 @@
     .o_lesotho_group_grid_directions .o_lesotho_field_wide {
         grid-column: auto;
         min-width: 0;
-    }
-
-    .o_lesotho_group_grid_directions .o_lesotho_dose_field {
-        width: 42px;
-    }
-
-    .o_lesotho_group_grid_directions .o_lesotho_duration_field {
-        width: 62px;
     }
 
     .o_lesotho_patient_detail {

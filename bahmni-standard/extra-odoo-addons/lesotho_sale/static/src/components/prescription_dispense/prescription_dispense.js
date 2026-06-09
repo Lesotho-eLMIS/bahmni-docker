@@ -373,6 +373,11 @@ export class PrescriptionDispense extends Component {
             const product = this.state.productOptions.find((item) => item.id === productId);
             this.updateLocal(line, "product_id", productId);
             this.updateLocal(line, "dispensed_product", product ? product.name : "");
+            this.updateLocal(line, "is_prepack", Boolean(product && product.is_prepack));
+            this.updateLocal(line, "isPrepack", Boolean(product && product.isPrepack));
+            if (product) {
+                this.updateLocal(line, "pack_unit_qty", Number(product.pack_unit_qty || 1));
+            }
             this.updateLocal(line, "batch_number", "");
             this.updateLocal(line, "expiry_date", "");
             this.updateLocal(line, "batch_options", []);
@@ -445,6 +450,11 @@ export class PrescriptionDispense extends Component {
         if (field === "product_id") {
             const product = this.state.productOptions.find((item) => item.id === value);
             this.updateLocal(line, "dispensed_product", product ? product.name : "");
+            this.updateLocal(line, "is_prepack", Boolean(product && product.is_prepack));
+            this.updateLocal(line, "isPrepack", Boolean(product && product.isPrepack));
+            if (product) {
+                this.updateLocal(line, "pack_unit_qty", Number(product.pack_unit_qty || 1));
+            }
         }
         const saveKey = `${line.id}:${field}`;
         this.clearSaveError(saveKey);
@@ -478,6 +488,11 @@ export class PrescriptionDispense extends Component {
         this.updateLocal(line, "product_id", productId);
         const product = this.state.productOptions.find((item) => item.id === productId);
         this.updateLocal(line, "dispensed_product", product ? product.name : line.prescribed_product);
+        this.updateLocal(line, "is_prepack", Boolean(product && product.is_prepack));
+        this.updateLocal(line, "isPrepack", Boolean(product && product.isPrepack));
+        if (product) {
+            this.updateLocal(line, "pack_unit_qty", Number(product.pack_unit_qty || 1));
+        }
         this.updateLocal(line, "batch_number", "");
         this.updateLocal(line, "expiry_date", "");
         this.updateLocal(line, "batch_options", []);
@@ -557,6 +572,11 @@ export class PrescriptionDispense extends Component {
         const product = this.state.productOptions.find((item) => item.id === productId);
         this.updateComponentLocal(component, "product_id", productId);
         this.updateComponentLocal(component, "dispensed_product", product ? product.name : "");
+        this.updateComponentLocal(component, "is_prepack", Boolean(product && product.is_prepack));
+        this.updateComponentLocal(component, "isPrepack", Boolean(product && product.isPrepack));
+        if (product) {
+            this.updateComponentLocal(component, "pack_unit_qty", Number(product.pack_unit_qty || 1));
+        }
         this.updateComponentLocal(component, "batch_number", "");
         this.updateComponentLocal(component, "expiry_date", "");
         this.updateComponentLocal(component, "batch_options", []);

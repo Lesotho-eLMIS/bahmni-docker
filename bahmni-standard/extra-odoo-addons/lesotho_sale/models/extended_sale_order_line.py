@@ -521,6 +521,8 @@ class ExtendedSaleOrderLine(models.Model):
         served_qty = self._get_total_component_dispensed_qty()
         if not self.dispensing_component_ids:
             served_qty = self.product_uom_qty or 0.0
+            if self.product_id and self.product_id.is_dispensing_pack and self.product_id.pack_unit_qty:
+                served_qty *= self.product_id.pack_unit_qty
         return prescribed_qty, served_qty
 
     def _get_total_component_dispensed_qty(self):
@@ -658,7 +660,7 @@ class ExtendedSaleOrderLine(models.Model):
                     }
                 }
 
-            qty = product.pack_unit_qty if product.is_dispensing_pack and product.pack_unit_qty else 1.0
+            qty = 1.0
             line.product_id = product
             line.product_uom = product.uom_id
             line.product_uom_qty = qty
@@ -689,11 +691,7 @@ class ExtendedSaleOrderLine(models.Model):
         if not product:
             raise UserError(_("No product was found for barcode %s.") % barcode)
 
-        qty = (
-            product.pack_unit_qty
-            if product.is_dispensing_pack and product.pack_unit_qty
-            else 1.0
-        )
+        qty = 1.0
         lot = self._get_default_dispensing_lot(product, qty)
         write_vals = {
             "barcode_scan": barcode,
@@ -722,11 +720,7 @@ class ExtendedSaleOrderLine(models.Model):
     def _apply_prepack_line_barcode(self, prepack_line, barcode, use_write=False):
         self.ensure_one()
         product = prepack_line.product_id
-        qty = (
-            product.pack_unit_qty
-            if product.is_dispensing_pack and product.pack_unit_qty
-            else 1.0
-        )
+        qty = 1.0
         lot = prepack_line.finished_lot_id or self._get_default_dispensing_lot(product, qty)
         values = {
             "barcode_scan": barcode,

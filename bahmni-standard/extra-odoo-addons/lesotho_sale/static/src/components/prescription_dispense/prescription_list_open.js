@@ -4,6 +4,19 @@ import { patch } from "@web/core/utils/patch";
 import { ListController } from "@web/views/list/list_controller";
 
 patch(ListController.prototype, "lesotho_sale_prescription_list_open", {
+    async createRecord() {
+        const context = this.props.context || {};
+        if (
+            this.props.resModel === "sale.order" &&
+            context.open_prescription_dispense_page
+        ) {
+            return this.actionService.doAction("lesotho_base.action_create_new_prescription_placeholder", {
+                clearBreadcrumbs: true,
+            });
+        }
+        return this._super(...arguments);
+    },
+
     async openRecord(record) {
         const context = this.props.context || {};
         if (

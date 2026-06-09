@@ -872,6 +872,13 @@ class ExtendedSaleOrder(models.Model):
             return product.pack_unit_qty
         return 1.0
 
+    def _get_dispensing_stock_qty_from_pack_count(self, line, pack_count, product=False):
+        product = product or line.product_id or line.prescribed_product_id
+        if product and product.is_dispensing_pack:
+            return pack_count
+        pack_unit_qty = self._get_dispensing_line_pack_unit_qty(line, product=product)
+        return pack_count * pack_unit_qty
+
     def _get_dispensing_line_pack_count(self, line, quantity_dispensed=False):
         pack_unit_qty = self._get_dispensing_line_pack_unit_qty(line)
         if quantity_dispensed is False:
@@ -888,6 +895,7 @@ class ExtendedSaleOrder(models.Model):
             lambda item: item.order_id
         )
         quantity_dispensed = line._get_prescription_quantities()[1] if line.served_internally else 0
+        dispensed_product = line.product_id or prescribed_product
         return {
             "id": line.id,
             "is_existing_prescription": line.is_existing_prescription,
@@ -895,6 +903,8 @@ class ExtendedSaleOrder(models.Model):
             "prescribed_product_id": prescribed_product.id if prescribed_product else False,
             "dispensed_product": line.product_id.display_name if line.product_id else (prescribed_product.display_name if prescribed_product else ""),
             "product_id": line.product_id.id if line.product_id else (prescribed_product.id if prescribed_product else False),
+            "is_prepack": bool(dispensed_product and dispensed_product.is_dispensing_pack),
+            "isPrepack": bool(dispensed_product and dispensed_product.is_dispensing_pack),
             "quantity_prescribed": line.prescribed_qty_base_units or line.product_uom_qty or 0,
             "pack_count": self._get_dispensing_line_pack_count(line, quantity_dispensed),
             "pack_unit_qty": self._get_dispensing_line_pack_unit_qty(line),
@@ -953,6 +963,8 @@ class ExtendedSaleOrder(models.Model):
             "id": component.id,
             "product_id": component.product_id.id,
             "dispensed_product": component.product_id.display_name or "",
+            "is_prepack": bool(component.product_id and component.product_id.is_dispensing_pack),
+            "isPrepack": bool(component.product_id and component.product_id.is_dispensing_pack),
             "pack_count": component.pack_count or 0,
             "pack_unit_qty": component.pack_unit_qty or 0,
             "quantity_dispensed": component.dispensed_qty_base_units or 0,
@@ -1036,6 +1048,7 @@ class ExtendedSaleOrder(models.Model):
             "height": self.height or "",
             "bmi": self.bmi or "",
             "bp": self.bp_display or "",
+            "allergies": self.partner_id.allergy_summary or _("No known allergies"),
             "date": fields.Datetime.to_string(self.date_order) if self.date_order else "",
             "prescriber": self.provider_name or "",
             "care_setting": self.care_setting or "",
@@ -1076,8 +1089,246 @@ class ExtendedSaleOrder(models.Model):
             {
                 "id": product.id,
                 "name": product.display_name,
+                "is_prepack": bool(product.is_dispensing_pack),
+                "isPrepack": bool(product.is_dispensing_pack),
+                "pack_unit_qty": product.pack_unit_qty if product.is_dispensing_pack else 1.0,
             }
             for product in products
+        ]
+
+    @api.model
+    def get_prescription_create_form_options(self):
+        partners = self.env["res.partner"].with_context(active_test=False).search(
+            [("is_patient", "=", True)],
+            order="name, id",
+            limit=500,
+        )
+        if not partners:
+            partners = self.env["res.partner"].with_context(active_test=False).search(
+                [],
+                order="name, id",
+                limit=500,
+            )
+
+        sex_labels = dict(self.env["res.partner"]._fields["sex"].selection)
+
+        def patient_display_name(partner):
+            return " | ".join(
+                [
+                    partner.name or "",
+                    str(partner.age or ""),
+                    sex_labels.get(partner.sex, partner.sex or ""),
+                    partner.village_id.display_name if partner.village_id else "",
+                ]
+            )
+
+        return {
+            "patients": [
+                {
+                    "id": partner.id,
+                    "name": patient_display_name(partner),
+                    "weight": self._format_prescription_option_value(partner.weight) if partner.weight else "",
+                    "height": self._format_prescription_option_value(partner.height) if partner.height else "",
+                    "bmi": (
+                        self._format_prescription_option_value(
+                            round(partner.weight / ((partner.height / 100.0) ** 2), 2)
+                        )
+                        if partner.weight and partner.height
+                        else ""
+                    ),
+                    "bp": (
+                        f"{partner.diastolic}/{partner.systolic}"
+                        if partner.diastolic and partner.systolic
+                        else self._format_prescription_option_value(partner.systolic)
+                        if partner.systolic
+                        else ""
+                    ),
+                    "allergies": partner.allergy_summary or "No known allergies",
+                }
+                for partner in partners
+            ],
+            "products": self._get_dispensing_product_options(),
+            "direction_options": self._get_prescription_direction_options(
+                self.env["sale.order.line"]
+            ),
+            "care_settings": self._get_prescription_care_setting_options(),
+            "dispensaries": self._get_prescription_dispensary_options(),
+        }
+
+    @api.model
+    def create_prescription_from_ui(self, payload):
+        payload = payload or {}
+        partner = self.env["res.partner"].browse(int(payload.get("patient_id") or 0)).exists()
+        if not partner:
+            raise UserError(_("Please select a patient."))
+
+        lines_payload = payload.get("lines") or []
+        if not lines_payload:
+            raise UserError(_("Please add at least one prescribed item."))
+
+        order_vals = {
+            "partner_id": partner.id,
+            "origin": _("Manual Prescription"),
+            "provider_name": self.env.user.name,
+        }
+        if payload.get("care_setting") and "care_setting" in self._fields:
+            order_vals["care_setting"] = payload["care_setting"]
+        if payload.get("dispensary_id") and "shop_id" in self._fields:
+            shop = self.env["sale.shop"].browse(int(payload["dispensary_id"])).exists()
+            if shop:
+                order_vals["shop_id"] = shop.id
+                if "location_name" in self._fields:
+                    order_vals["location_name"] = shop.display_name
+
+        order = self.create(order_vals)
+        line_model = self.env["sale.order.line"].with_context(skip_prescription_init=True)
+        for line_payload in lines_payload:
+            product = self.env["product.product"].browse(
+                int(line_payload.get("product_id") or 0)
+            ).exists()
+            if not product:
+                raise UserError(_("Every prescribed item must have a product."))
+
+            prescribed_qty = self._get_ui_prescribed_quantity(line_payload)
+            if float_compare(prescribed_qty, 0.0, precision_digits=6) <= 0:
+                raise UserError(_("Every prescribed item must have a prescribed quantity greater than zero."))
+
+            line_model.create(
+                {
+                    "order_id": order.id,
+                    "product_id": product.id,
+                    "name": product.display_name,
+                    "product_uom_qty": prescribed_qty,
+                    "product_uom": product.uom_id.id,
+                    "price_unit": 0.0,
+                    "prescribed_product_id": product.id,
+                    "prescribed_qty_base_units": prescribed_qty,
+                    "prescribed_uom_id": product.uom_id.id,
+                    "base_product_id": product.id,
+                    "served_internally": True,
+                    "dispensed": False,
+                    "dose": float(line_payload.get("dose") or 0.0),
+                    "dose_units": line_payload.get("dose_unit") or "",
+                    "frequency": line_payload.get("frequency") or "",
+                    "route": line_payload.get("route") or "",
+                    "duration": int(float(line_payload.get("duration") or 0.0)),
+                    "duration_units": line_payload.get("duration_unit") or "",
+                    "administration_instructions": line_payload.get("instructions") or "",
+                    "additional_instructions": line_payload.get("additional_instructions") or "",
+                }
+            )
+
+        return {
+            "id": order.id,
+            "name": order.name,
+            "action": order.action_open_prescription_dispense_page(),
+        }
+
+    def _get_ui_prescribed_quantity(self, line_payload):
+        try:
+            dose = float(line_payload.get("dose") or 0.0)
+            duration = float(line_payload.get("duration") or 0.0)
+        except (TypeError, ValueError):
+            return 0.0
+        frequency = self._get_ui_frequency_multiplier(line_payload.get("frequency"))
+        duration_multiplier = self._get_ui_duration_unit_multiplier(
+            line_payload.get("duration_unit")
+        )
+        return dose * frequency * duration * duration_multiplier
+
+    def _get_ui_frequency_multiplier(self, value):
+        frequency = (value or "").strip().lower()
+        if not frequency:
+            return 0.0
+        try:
+            return float(frequency)
+        except ValueError:
+            pass
+        if (
+            "immediate" in frequency
+            or "stat" in frequency
+            or "once" in frequency
+            or "daily" in frequency
+            or frequency in ("od", "qd")
+            or "q24h" in frequency
+        ):
+            return 1.0
+        if (
+            "twice" in frequency
+            or "bid" in frequency
+            or "bd" in frequency
+            or "q12h" in frequency
+        ):
+            return 2.0
+        if (
+            "three" in frequency
+            or "tid" in frequency
+            or "tds" in frequency
+            or "q8h" in frequency
+        ):
+            return 3.0
+        if (
+            "four" in frequency
+            or "qid" in frequency
+            or "qds" in frequency
+            or "q6h" in frequency
+        ):
+            return 4.0
+        return 0.0
+
+    def _get_ui_duration_unit_multiplier(self, value):
+        unit = (value or "").strip().lower()
+        if "hour" in unit:
+            return 1.0 / 24.0
+        if "week" in unit:
+            return 7.0
+        if "month" in unit:
+            return 30.0
+        if "year" in unit:
+            return 365.0
+        return 1.0
+
+    def _get_prescription_care_setting_options(self):
+        options = []
+        field = self._fields.get("care_setting")
+        if field and field.type == "selection":
+            if isinstance(field.selection, str):
+                selection = getattr(self, field.selection)()
+            elif callable(field.selection):
+                selection = field.selection(self)
+            else:
+                selection = field.selection
+            options.extend(
+                {"value": value, "label": label}
+                for value, label in selection
+                if value and label
+            )
+
+        if field:
+            existing_values = self.search_read(
+                [("care_setting", "!=", False)],
+                ["care_setting"],
+                limit=100,
+                order="care_setting",
+            )
+            for value in existing_values:
+                care_setting = value.get("care_setting")
+                if isinstance(care_setting, (list, tuple)):
+                    care_setting = care_setting[1] if len(care_setting) > 1 else care_setting[0]
+                if care_setting:
+                    options.append({"value": care_setting, "label": care_setting})
+
+        unique_options = {option["value"]: option for option in options}
+        return sorted(unique_options.values(), key=lambda option: option["label"])
+
+    def _get_prescription_dispensary_options(self):
+        shops = self.env["sale.shop"].with_context(active_test=False).search([], order="name, id")
+        return [
+            {
+                "id": shop.id,
+                "name": shop.display_name,
+            }
+            for shop in shops
         ]
 
     def _get_prescription_direction_options(self, current_lines):
@@ -1269,10 +1520,20 @@ class ExtendedSaleOrder(models.Model):
             if not product:
                 raise UserError(_("Selected product was not found."))
             write_vals.update(line._prepare_dispensing_product_change_vals(product))
+            if "pack_count" not in vals:
+                pack_count = self._get_dispensing_line_pack_count(line)
+                write_vals["product_uom_qty"] = self._get_dispensing_stock_qty_from_pack_count(
+                    line,
+                    pack_count,
+                    product=product,
+                )
         if "pack_count" in vals:
             pack_count = vals.get("pack_count") or 0.0
-            pack_unit_qty = self._get_dispensing_line_pack_unit_qty(line, product=product)
-            write_vals["product_uom_qty"] = pack_count * pack_unit_qty
+            write_vals["product_uom_qty"] = self._get_dispensing_stock_qty_from_pack_count(
+                line,
+                pack_count,
+                product=product,
+            )
         if write_vals:
             line.with_context(skip_prescription_init=True).write(write_vals)
         if product:

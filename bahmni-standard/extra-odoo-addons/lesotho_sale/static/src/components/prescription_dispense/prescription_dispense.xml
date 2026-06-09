@@ -8,7 +8,7 @@
                 <div class="o_lesotho_control_panel">
                     <div class="o_lesotho_cp_top">
                         <div class="o_lesotho_breadcrumbs">
-                            <span>Prescriptions</span>
+                            <button type="button" t-on-click="() => this.goToPrescriptionList()">Prescriptions</button>
                             <span>/</span>
                             <strong><t t-esc="state.order.name"/></strong>
                         </div>
@@ -59,6 +59,13 @@
                             <div class="o_lesotho_patient_detail"><strong>Height (cm)</strong> <span><t t-esc="state.order.height"/></span></div>
                             <div class="o_lesotho_patient_detail"><strong>BMI (kg/m2)</strong> <span><t t-esc="state.order.bmi"/></span></div>
                             <div class="o_lesotho_patient_detail"><strong>BP (mmHg)</strong> <span><t t-esc="state.order.bp"/></span></div>
+                        </section>
+                        <section class="o_lesotho_patient_group o_lesotho_patient_allergies">
+                            <h3><span class="o_lesotho_card_icon">A</span>Allergies</h3>
+                            <div class="o_lesotho_patient_detail">
+                                <strong>Allergies</strong>
+                                <span><t t-esc="state.order.allergies"/></span>
+                            </div>
                         </section>
                         <section class="o_lesotho_patient_group">
                             <h3><span class="o_lesotho_card_icon">Rx</span>Prescription</h3>
