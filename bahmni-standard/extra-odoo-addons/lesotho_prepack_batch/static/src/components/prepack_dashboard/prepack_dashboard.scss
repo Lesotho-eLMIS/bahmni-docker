@@ -52,6 +52,191 @@
     .bg-warning-light { background-color: rgba(255, 193, 7, 0.1) !important; }
     .text-monospace { font-family: 'Courier New', Courier, monospace; }
 
+    .prepack-location-context {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        width: 100%;
+        max-width: 860px;
+        margin: -16px auto 24px;
+        padding: 14px 16px;
+        background: #fff;
+        border: 1px solid #6366F1;
+        border-radius: 8px;
+        box-shadow: none;
+
+        .prepack-location-icon {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 44px;
+            height: 44px;
+            flex: 0 0 44px;
+            background: #f8f9fa;
+            border: 1px solid #6366F1;
+            border-radius: 8px;
+            color: #4b50df;
+            font-size: 1.1rem;
+        }
+
+        .prepack-location-copy {
+            min-width: 190px;
+            flex: 0 0 auto;
+        }
+
+        .prepack-location-label {
+            display: block;
+            margin-bottom: 8px;
+            color: #2c3e50;
+            font-size: 1.5rem;
+            font-weight: 700;
+            line-height: 1.2;
+        }
+
+        .prepack-location-control {
+            flex: 1;
+            min-width: 280px;
+
+            .form-select {
+                min-height: 44px;
+                background-color: #fff;
+                border: 1px solid #6366F1;
+                box-shadow: none;
+                font-size: 1.05rem;
+                font-weight: 800;
+            }
+        }
+
+        .prepack-location-readonly {
+            display: flex;
+            align-items: center;
+            min-height: 44px;
+            padding: 10px 14px;
+            background: #fff;
+            border: 1px solid #6366F1;
+            border-radius: 8px;
+            color: #1f2937;
+            font-size: 1.05rem;
+            font-weight: 800;
+        }
+
+        @media (max-width: 768px) {
+            align-items: flex-start;
+            flex-wrap: wrap;
+
+            .prepack-location-copy {
+                flex: 1 1 calc(100% - 60px);
+                min-width: 0;
+            }
+
+            .prepack-location-control {
+                flex: 1 1 100%;
+                min-width: 0;
+            }
+        }
+    }
+
+    .prepack-authorization-filter {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        width: 100%;
+        max-width: 860px;
+        margin-left: auto;
+        margin-right: auto;
+        padding: 14px 16px;
+        background: #fff;
+        border: 1px solid #6366F1;
+        border-radius: 8px;
+
+        .prepack-location-icon {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 44px;
+            height: 44px;
+            flex: 0 0 44px;
+            background: #f8f9fa;
+            border: 1px solid #6366F1;
+            border-radius: 8px;
+            color: #4b50df;
+            font-size: 1.1rem;
+        }
+
+        .prepack-location-copy {
+            min-width: 190px;
+            flex: 0 0 auto;
+        }
+
+        .prepack-location-label {
+            display: block;
+            margin-bottom: 8px;
+            color: #2c3e50;
+            font-size: 1.5rem;
+            font-weight: 700;
+            line-height: 1.2;
+        }
+
+        .prepack-location-control {
+            flex: 1;
+            min-width: 280px;
+
+            .form-select {
+                min-height: 44px;
+                background-color: #fff;
+                border: 1px solid #6366F1;
+                box-shadow: none;
+                font-size: 1.05rem;
+                font-weight: 800;
+            }
+        }
+
+        @media (max-width: 768px) {
+            align-items: flex-start;
+            flex-wrap: wrap;
+
+            .prepack-location-copy {
+                flex: 1 1 calc(100% - 60px);
+                min-width: 0;
+            }
+
+            .prepack-location-control {
+                flex: 1 1 100%;
+                min-width: 0;
+            }
+        }
+    }
+
+    .required-label::after {
+        content: " *";
+        color: #dc3545;
+        font-weight: 800;
+    }
+
+    .prepack-backbar {
+        display: flex;
+        justify-content: flex-start;
+        margin: 28px 0 0;
+        padding-top: 18px;
+        border-top: 1px solid #e2e6e9;
+
+        .prepack-back-button {
+            min-width: 180px;
+            padding: 12px 18px;
+            font-size: 0.95rem;
+        }
+    }
+
+    .packaging-material-stock {
+        line-height: 1.5;
+        font-weight: 800 !important;
+
+        .packaging-material-qty {
+            color: #008000;
+            font-weight: 800;
+        }
+    }
+
     /* Product Meta Polished */
     .product-meta {
         background: #f0f7fb;
@@ -102,8 +287,8 @@
 
         thead th {
             font-weight: 700;
-            text-transform: uppercase;
-            font-size: 0.85rem;
+            text-transform: none;
+            font-size: 1.05rem;
             letter-spacing: 0.5px;
             background-color: #f8f9fa;
             color: #495057;
@@ -115,6 +300,203 @@
             padding: 12px 15px;
             border-bottom: 1px solid #eee;
             text-align: left;
+            font-weight: 600;
+        }
+    }
+
+    .release-table-wrap {
+        overflow-x: auto;
+        width: 100%;
+    }
+
+    .release-prepacks-table {
+        min-width: 1260px;
+        table-layout: fixed;
+
+        thead th {
+            background: #f3f4f6 !important;
+            color: #374151;
+            border-bottom: 1px solid #dfe3e8;
+            font-size: 1rem;
+            letter-spacing: 0;
+            padding: 12px 14px;
+            text-transform: none;
+            vertical-align: middle;
+            white-space: nowrap;
+        }
+
+        thead tr:last-child th {
+            background: #eef2f7 !important;
+            padding-top: 8px;
+            padding-bottom: 8px;
+        }
+
+        th,
+        td {
+            vertical-align: middle !important;
+        }
+
+        td {
+            padding: 12px 14px;
+            border-bottom: 1px solid #e8edf2;
+            text-align: center;
+        }
+
+        .product-col,
+        .product-cell {
+            width: 34%;
+            min-width: 340px;
+            text-align: left;
+        }
+
+        .release-product-name {
+            color: #5c52b3;
+            font-size: 1.16rem;
+            font-weight: 800;
+            line-height: 1.25;
+        }
+
+        .release-product-meta {
+            color: #6b7280;
+            font-size: 1rem;
+            font-weight: 600;
+            line-height: 1.35;
+            margin-top: 4px;
+        }
+
+        .compact-text {
+            color: #111827;
+            font-size: 1.08rem;
+            font-weight: 700;
+            white-space: nowrap;
+        }
+
+        .release-count-badge {
+            background: #eef2ff;
+            color: #3730a3;
+            border: 1px solid #dbe2ff;
+            border-radius: 999px;
+            font-size: 1rem;
+            font-weight: 800;
+            padding: 6px 11px;
+            white-space: nowrap;
+        }
+
+        .release-actual-input {
+            display: inline-flex;
+            width: 118px;
+            flex-wrap: nowrap;
+
+            .form-control {
+                width: 58px;
+                min-width: 58px;
+                padding: 6px 7px;
+                font-size: 1.05rem;
+                font-weight: 800;
+                text-align: center;
+                border-width: 1px;
+                border-radius: 6px 0 0 6px;
+            }
+
+            .input-group-text {
+                padding: 6px 8px;
+                font-size: 0.98rem;
+                border-width: 1px;
+                border-radius: 0 6px 6px 0;
+            }
+        }
+
+        .quality-check-inline {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 7px;
+            margin: 0;
+            color: #374151;
+            font-size: 1rem;
+            font-weight: 700;
+            white-space: nowrap;
+            cursor: help;
+
+            .form-check-input {
+                margin: 0;
+            }
+        }
+
+        .release-status-badge {
+            border-radius: 999px;
+            font-size: 0.95rem;
+            font-weight: 800;
+            padding: 6px 10px;
+            white-space: nowrap;
+        }
+
+        .status-pending {
+            background: #fbbf24;
+            color: #1f2937;
+        }
+
+        .status-released {
+            background: #16a34a;
+            color: #fff;
+        }
+
+        .status-discrepancy {
+            background: #f97316;
+            color: #fff;
+        }
+
+        .status-cancelled {
+            background: #dc2626;
+            color: #fff;
+        }
+
+        .release-action-button {
+            min-width: 88px;
+            padding: 7px 14px;
+            margin: 0;
+            border-radius: 6px;
+            font-size: 0.98rem;
+            font-weight: 800;
+            white-space: nowrap;
+        }
+
+        .release-discrepancy-row td {
+            padding: 0 12px 12px;
+            background: #fff7ed;
+            border-bottom: 1px solid #fed7aa;
+            text-align: left;
+        }
+
+        .release-discrepancy-panel {
+            padding: 12px;
+            background: #fff7ed;
+            border: 1px solid #fed7aa;
+            border-radius: 6px;
+        }
+
+        .release-discrepancy-message {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: #9a3412;
+            font-size: 1.05rem;
+            font-weight: 800;
+            margin-bottom: 8px;
+        }
+
+        .release-discrepancy-panel .form-label {
+            color: #7c2d12;
+            font-size: 1rem;
+            font-weight: 800;
+            margin-bottom: 5px;
+        }
+
+        .release-discrepancy-panel .form-control {
+            min-height: 64px;
+            padding: 8px 10px;
+            border-width: 1px;
+            font-size: 1.05rem;
             font-weight: 600;
         }
     }
@@ -168,7 +550,7 @@
         padding: 10px 0;
         gap: 10px;
         position: sticky;
-        top: -40px; /* Adjusting for container padding */
+        top: 0;
         z-index: 100;
         border-bottom: 1px solid #f4f7f6;
 

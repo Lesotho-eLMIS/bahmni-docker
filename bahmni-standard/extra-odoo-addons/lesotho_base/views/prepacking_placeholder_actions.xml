@@ -14,7 +14,7 @@
     </record>
 
     <record id="action_authorise_prepacks_placeholder" model="ir.actions.client">
-      <field name="name">Authorise Prepacks</field>
+      <field name="name">Release Prepacks</field>
       <field name="tag">lesotho_base.authorise_prepacks_placeholder</field>
       <field name="target">current</field>
     </record>

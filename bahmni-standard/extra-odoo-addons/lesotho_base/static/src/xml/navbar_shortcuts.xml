@@ -31,7 +31,7 @@
             class="'lesotho_navbar_dropdown_item'"
             onSelected="() => this.openLesothoShortcut('lesotho_base.action_authorise_prepacks_placeholder')"
           >
-            Authorise Prepacks
+            Release Prepacks
           </DropdownItem>
           <DropdownItem
             class="'lesotho_navbar_dropdown_item'"
