@@ -3,4 +3,193 @@
   <t t-name="lesotho_base.PrepackingPlaceholder" owl="1">
     <div class="lesotho_prepacking_placeholder"/>
   </t>
+
+  <t t-name="lesotho_base.CreateNewPrescription" owl="1">
+    <div class="lesotho_create_prescription_page">
+      <div class="lesotho_create_prescription_header">
+        <div class="lesotho_create_prescription_header_left">
+          <div class="lesotho_create_prescription_breadcrumbs">
+            <button type="button" t-on-click="() => this.goToPrescriptionList()">Prescriptions</button>
+            <span>/</span>
+            <strong>Create New Prescription</strong>
+          </div>
+          <div class="lesotho_create_prescription_actions">
+            <button type="button" class="lesotho_create_prescription_save" t-att-disabled="state.creating" t-on-click="() => this.requestCreateConfirmation()">Create</button>
+            <button type="button" class="lesotho_create_prescription_secondary">Cancel</button>
+          </div>
+        </div>
+      </div>
+
+      <section class="lesotho_create_prescription_top">
+        <div class="lesotho_create_prescription_group lesotho_create_prescription_patient">
+          <label>
+            <span>Patient (Name | Age | Sex | Village)</span>
+            <select t-att-value="state.patientId" t-on-change="(ev) => this.updatePatient(ev.target.value)">
+              <option value="">Select patient</option>
+              <t t-foreach="state.patientOptions" t-as="patient" t-key="patient.id">
+                <option t-att-value="patient.id"><t t-esc="patient.name"/></option>
+              </t>
+            </select>
+          </label>
+        </div>
+
+        <div class="lesotho_create_prescription_group">
+          <label>
+            <span>Weight (kg)</span>
+            <span class="lesotho_create_prescription_value"><t t-esc="state.patientId ? state.weight : ''"/></span>
+          </label>
+          <label>
+            <span>Height (cm)</span>
+            <span class="lesotho_create_prescription_value"><t t-esc="state.patientId ? state.height : ''"/></span>
+          </label>
+        </div>
+
+        <div class="lesotho_create_prescription_group">
+          <label>
+            <span>BMI (kg/m2)</span>
+            <span class="lesotho_create_prescription_value"><t t-esc="state.patientId ? state.bmi : ''"/></span>
+          </label>
+          <label>
+            <span>BP (mmHg)</span>
+            <span class="lesotho_create_prescription_value"><t t-esc="state.patientId ? state.bp : ''"/></span>
+          </label>
+        </div>
+
+        <div class="lesotho_create_prescription_group lesotho_create_prescription_allergies">
+          <label>
+            <span>Allergies</span>
+            <span class="lesotho_create_prescription_value"><t t-esc="state.patientId ? state.allergies : ''"/></span>
+          </label>
+        </div>
+
+        <div class="lesotho_create_prescription_group">
+          <label>
+            <span>Care Setting</span>
+            <select t-att-value="state.careSetting" t-on-change="(ev) => state.careSetting = ev.target.value">
+              <option value=""></option>
+              <t t-foreach="state.careSettingOptions" t-as="option" t-key="option.value">
+                <option t-att-value="option.value"><t t-esc="option.label"/></option>
+              </t>
+            </select>
+          </label>
+          <label>
+            <span>Dispensary</span>
+            <select t-att-value="state.dispensaryId" t-on-change="(ev) => state.dispensaryId = ev.target.value">
+              <option value=""></option>
+              <t t-foreach="state.dispensaryOptions" t-as="dispensary" t-key="dispensary.id">
+                <option t-att-value="dispensary.id"><t t-esc="dispensary.name"/></option>
+              </t>
+            </select>
+          </label>
+        </div>
+      </section>
+
+      <div class="lesotho_create_prescription_workspace">
+        <main class="lesotho_create_prescription_lines">
+          <div class="lesotho_create_prescription_line_actions">
+            <button type="button" class="lesotho_create_prescription_add_item" t-on-click="() => this.addLine()"><span>+</span>Add Prescribed Item</button>
+          </div>
+          <t t-foreach="state.lines" t-as="line" t-key="line.id">
+            <section class="lesotho_create_prescription_line">
+              <header>
+                <span class="lesotho_create_prescription_line_number"><t t-esc="line_index + 1"/>.</span>
+                <strong>Prescribed Item</strong>
+                <button t-if="line_index > 0" type="button" class="lesotho_create_prescription_remove" t-on-click="() => this.removeLine(line)" aria-label="Remove prescribed item"></button>
+              </header>
+
+              <div class="lesotho_create_prescription_product">
+                <label class="lesotho_create_prescription_wide">
+                  <span>Prescribed Product</span>
+                  <select t-att-value="line.productId" t-on-change="(ev) => this.updateProduct(line, ev.target.value)">
+                    <option value="">Select product</option>
+                    <t t-foreach="state.productOptions" t-as="product" t-key="product.id">
+                      <option t-att-value="product.id"><t t-esc="product.name"/></option>
+                    </t>
+                  </select>
+                </label>
+                <label class="lesotho_create_prescription_quantity">
+                  <span>Prescribed Quantity</span>
+                  <input readonly="readonly" t-att-value="line.prescribedQuantity"/>
+                </label>
+              </div>
+
+              <div class="lesotho_create_prescription_directions">
+                <label>
+                  <span>Dose</span>
+                  <input type="number" t-att-value="line.dose" t-on-input="(ev) => this.updateLine(line, 'dose', ev.target.value)"/>
+                </label>
+                <label>
+                  <span>Dose Unit</span>
+                  <select t-att-value="line.doseUnit" t-on-change="(ev) => this.updateLine(line, 'doseUnit', ev.target.value)">
+                    <option value=""></option>
+                    <t t-foreach="state.directionOptions.dose_unit || []" t-as="option" t-key="option">
+                      <option t-att-value="option"><t t-esc="option"/></option>
+                    </t>
+                  </select>
+                </label>
+                <label>
+                  <span>Frequency</span>
+                  <select t-att-value="line.frequency" t-on-change="(ev) => this.updateLine(line, 'frequency', ev.target.value)">
+                    <option value=""></option>
+                    <t t-foreach="state.directionOptions.frequency || []" t-as="option" t-key="option">
+                      <option t-att-value="option"><t t-esc="option"/></option>
+                    </t>
+                  </select>
+                </label>
+                <label>
+                  <span>Route</span>
+                  <select t-att-value="line.route" t-on-change="(ev) => this.updateLine(line, 'route', ev.target.value)">
+                    <option value=""></option>
+                    <t t-foreach="state.directionOptions.route || []" t-as="option" t-key="option">
+                      <option t-att-value="option"><t t-esc="option"/></option>
+                    </t>
+                  </select>
+                </label>
+                <label>
+                  <span>Duration</span>
+                  <input type="number" t-att-value="line.duration" t-on-input="(ev) => this.updateLine(line, 'duration', ev.target.value)"/>
+                </label>
+                <label>
+                  <span>Duration Unit</span>
+                  <select t-att-value="line.durationUnit" t-on-change="(ev) => this.updateLine(line, 'durationUnit', ev.target.value)">
+                    <option value=""></option>
+                    <t t-foreach="state.directionOptions.duration_units || []" t-as="option" t-key="option">
+                      <option t-att-value="option"><t t-esc="option"/></option>
+                    </t>
+                  </select>
+                </label>
+                <label>
+                  <span>Instructions</span>
+                  <select t-att-value="line.instructions" t-on-change="(ev) => this.updateLine(line, 'instructions', ev.target.value)">
+                    <option value=""></option>
+                    <t t-foreach="state.directionOptions.instructions || []" t-as="option" t-key="option">
+                      <option t-att-value="option"><t t-esc="option"/></option>
+                    </t>
+                  </select>
+                </label>
+                <label>
+                  <span>Additional Instructions</span>
+                  <input t-att-value="line.additionalInstructions" t-on-input="(ev) => this.updateLine(line, 'additionalInstructions', ev.target.value)"/>
+                </label>
+              </div>
+            </section>
+          </t>
+        </main>
+      </div>
+      <div class="lesotho_create_prescription_footer">
+        <button type="button" class="lesotho_create_prescription_bottom_create" t-att-disabled="state.creating" t-on-click="() => this.requestCreateConfirmation()">Create Prescription</button>
+      </div>
+
+      <div t-if="state.showCreateConfirmation" class="lesotho_create_prescription_modal_backdrop">
+        <section class="lesotho_create_prescription_modal" role="dialog" aria-modal="true">
+          <h3>Confirm Prescription</h3>
+          <p>Are you sure you want to create this prescription, please confirm.</p>
+          <div class="lesotho_create_prescription_modal_actions">
+            <button type="button" class="lesotho_create_prescription_secondary" t-on-click="() => this.cancelCreateConfirmation()">Cancel</button>
+            <button type="button" class="lesotho_create_prescription_save" t-att-disabled="state.creating" t-on-click="() => this.createPrescription()">Confirm</button>
+          </div>
+        </section>
+      </div>
+    </div>
+  </t>
 </templates>

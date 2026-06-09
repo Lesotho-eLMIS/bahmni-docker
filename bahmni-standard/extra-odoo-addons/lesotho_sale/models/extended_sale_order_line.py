@@ -154,6 +154,13 @@ class ExtendedSaleOrderLine(models.Model):
         readonly=True,
         help="Back-order lines created from this original prescription line.",
     )
+    dispensing_component_ids = fields.One2many(
+        "sale.order.line.dispensing.component",
+        "sale_order_line_id",
+        string="Dispensing Components",
+        copy=False,
+        help="Prepack/product components used to serve this prescription line.",
+    )
 
     is_existing_prescription = fields.Boolean(
         string="Existing Prescription",
@@ -499,6 +506,7 @@ class ExtendedSaleOrderLine(models.Model):
         "display_type",
         "served_internally",
         "product_uom_qty",
+        "dispensing_component_ids.dispensed_qty_base_units",
         "prescribed_qty_base_units",
         "balance_resolution",
         "balance_resolution_note",
@@ -510,8 +518,44 @@ class ExtendedSaleOrderLine(models.Model):
     def _get_prescription_quantities(self):
         self.ensure_one()
         prescribed_qty = self.prescribed_qty_base_units or self.product_uom_qty or 0.0
-        served_qty = self.product_uom_qty or 0.0
+        served_qty = self._get_total_component_dispensed_qty()
+        if not self.dispensing_component_ids:
+            served_qty = self.product_uom_qty or 0.0
+            if self.product_id and self.product_id.is_dispensing_pack and self.product_id.pack_unit_qty:
+                served_qty *= self.product_id.pack_unit_qty
         return prescribed_qty, served_qty
+
+    def _get_total_component_dispensed_qty(self):
+        self.ensure_one()
+        if not self.served_internally:
+            return 0.0
+        return sum(self.dispensing_component_ids.mapped("dispensed_qty_base_units"))
+
+    def _sync_component_total_to_line(self):
+        for line in self:
+            if not line.dispensing_component_ids:
+                continue
+            total_qty = line._get_total_component_dispensed_qty()
+            vals = {
+                "product_uom_qty": total_qty,
+                "served_internally": True,
+                "is_pack_substituted": any(
+                    component.is_substitution
+                    for component in line.dispensing_component_ids
+                ),
+            }
+            first_component = line.dispensing_component_ids.sorted("id")[:1]
+            vals["dispensing_batch_number"] = first_component.batch_number or False
+            vals["barcode_scan"] = first_component.barcode or False
+            parent_lot = line._get_default_dispensing_lot(line.product_id, total_qty or 1.0)
+            if parent_lot:
+                vals.update(
+                    line._prepare_dispensing_batch_selection_vals(
+                        parent_lot.name,
+                        product=line.product_id,
+                    )
+                )
+            line.with_context(skip_prescription_init=True).write(vals)
 
     def _has_outstanding_prescription_balance(self):
         self.ensure_one()
@@ -616,7 +660,7 @@ class ExtendedSaleOrderLine(models.Model):
                     }
                 }
 
-            qty = product.pack_unit_qty if product.is_dispensing_pack and product.pack_unit_qty else 1.0
+            qty = 1.0
             line.product_id = product
             line.product_uom = product.uom_id
             line.product_uom_qty = qty
@@ -647,11 +691,7 @@ class ExtendedSaleOrderLine(models.Model):
         if not product:
             raise UserError(_("No product was found for barcode %s.") % barcode)
 
-        qty = (
-            product.pack_unit_qty
-            if product.is_dispensing_pack and product.pack_unit_qty
-            else 1.0
-        )
+        qty = 1.0
         lot = self._get_default_dispensing_lot(product, qty)
         write_vals = {
             "barcode_scan": barcode,
@@ -680,11 +720,7 @@ class ExtendedSaleOrderLine(models.Model):
     def _apply_prepack_line_barcode(self, prepack_line, barcode, use_write=False):
         self.ensure_one()
         product = prepack_line.product_id
-        qty = (
-            product.pack_unit_qty
-            if product.is_dispensing_pack and product.pack_unit_qty
-            else 1.0
-        )
+        qty = 1.0
         lot = prepack_line.finished_lot_id or self._get_default_dispensing_lot(product, qty)
         values = {
             "barcode_scan": barcode,
@@ -842,7 +878,7 @@ class ExtendedSaleOrderLine(models.Model):
                 value = getattr(lot, field_name)
                 if field.type == "date":
                     return fields.Date.to_string(value)
-                return fields.Datetime.to_string(value)
+                return fields.Date.to_string(value.date())
         return ""
 
     def _get_dispensing_batch_options(self, product=None):
@@ -1240,6 +1276,9 @@ class ExtendedSaleOrderLine(models.Model):
 
     def _check_dispensing_batch_available(self):
         for line in self:
+            if line.dispensing_component_ids:
+                line.dispensing_component_ids._check_dispensing_batch_available()
+                continue
             if (
                 line.display_type
                 or not line.served_internally
@@ -1522,6 +1561,302 @@ class ExtendedSaleOrderLine(models.Model):
             )
         )
         return True
+
+
+class SaleOrderLineDispensingComponent(models.Model):
+    _name = "sale.order.line.dispensing.component"
+    _description = "Prescription Dispensing Component"
+    _order = "sale_order_line_id, id"
+
+    sale_order_line_id = fields.Many2one(
+        "sale.order.line",
+        string="Prescription Line",
+        required=True,
+        ondelete="cascade",
+        index=True,
+    )
+    order_id = fields.Many2one(
+        "sale.order",
+        string="Prescription",
+        related="sale_order_line_id.order_id",
+        store=True,
+        readonly=True,
+    )
+    product_id = fields.Many2one(
+        "product.product",
+        string="Dispensed Product",
+        required=True,
+    )
+    product_uom_id = fields.Many2one(
+        "uom.uom",
+        string="UoM",
+        required=True,
+    )
+    pack_count = fields.Float(
+        string="Pack/Unit Count",
+        digits=(16, 4),
+        default=1.0,
+        help="Number of prepacks, or loose units when the product is not a prepack.",
+    )
+    pack_unit_qty = fields.Float(
+        string="Pack Size",
+        digits=(16, 4),
+        default=1.0,
+        help="Base prescribed units covered by one selected pack/unit.",
+    )
+    dispensed_qty_base_units = fields.Float(
+        string="Dispensed Qty",
+        digits=(16, 4),
+        compute="_compute_dispensed_qty_base_units",
+        store=True,
+    )
+    barcode = fields.Char(string="Barcode", copy=False)
+    batch_number = fields.Char(string="Batch Number", copy=False)
+    comments = fields.Text(string="Comments", copy=False)
+    selected_batch_available_qty = fields.Float(
+        string="Selected Batch Available",
+        digits=(16, 4),
+        compute="_compute_selected_batch_available_qty",
+    )
+    stock_on_hand = fields.Float(
+        string="Stock on Hand",
+        digits=(16, 4),
+        compute="_compute_stock_on_hand",
+    )
+    out_of_stock = fields.Boolean(
+        string="Out of Stock",
+        compute="_compute_out_of_stock",
+    )
+    is_substitution = fields.Boolean(
+        string="Substitution",
+        compute="_compute_is_substitution",
+        store=True,
+    )
+
+    @api.depends("pack_count", "pack_unit_qty")
+    def _compute_dispensed_qty_base_units(self):
+        for component in self:
+            component.dispensed_qty_base_units = (
+                (component.pack_count or 0.0) * (component.pack_unit_qty or 0.0)
+            )
+
+    @api.depends("product_id", "sale_order_line_id.prescribed_product_id")
+    def _compute_is_substitution(self):
+        for component in self:
+            prescribed_product = (
+                component.sale_order_line_id.prescribed_product_id
+                or component.sale_order_line_id.product_id
+            )
+            component.is_substitution = bool(
+                component.product_id
+                and prescribed_product
+                and component.product_id != prescribed_product
+            )
+
+    @api.depends("product_id", "batch_number")
+    def _compute_selected_batch_available_qty(self):
+        for component in self:
+            component.selected_batch_available_qty = (
+                component._get_dispensing_lot_available_qty()
+            )
+
+    @api.depends(
+        "product_id",
+        "sale_order_line_id.order_id.shop_id",
+        "sale_order_line_id.order_id.shop_id.location_id",
+        "sale_order_line_id.order_id.warehouse_id",
+        "sale_order_line_id.order_id.warehouse_id.lot_stock_id",
+    )
+    def _compute_stock_on_hand(self):
+        Quant = self.env["stock.quant"]
+        for component in self:
+            stock_on_hand = 0.0
+            if component.product_id:
+                domain = [
+                    ("product_id", "=", component.product_id.id),
+                    ("location_id.usage", "=", "internal"),
+                ]
+                source_location = (
+                    component.sale_order_line_id._get_dispensing_source_location()
+                )
+                if source_location:
+                    domain.append(("location_id", "child_of", source_location.id))
+                quants = Quant.search(domain)
+                stock_on_hand = sum(quants.mapped("available_quantity"))
+            component.stock_on_hand = stock_on_hand
+
+    @api.depends("product_id", "pack_count", "stock_on_hand")
+    def _compute_out_of_stock(self):
+        for component in self:
+            if component.product_id:
+                component.out_of_stock = float_compare(
+                    component.stock_on_hand or 0.0,
+                    component.pack_count or 0.0,
+                    precision_rounding=component.product_uom_id.rounding or 0.0001,
+                ) < 0
+            else:
+                component.out_of_stock = False
+
+    @api.model_create_multi
+    def create(self, vals_list):
+        normalized_vals = [self._normalize_vals(vals) for vals in vals_list]
+        components = super().create(normalized_vals)
+        components.mapped("sale_order_line_id")._sync_component_total_to_line()
+        return components
+
+    def write(self, vals):
+        normalized_vals = self._normalize_vals(vals, current_component=self[:1])
+        result = super().write(normalized_vals)
+        self.mapped("sale_order_line_id")._sync_component_total_to_line()
+        return result
+
+    def unlink(self):
+        lines = self.mapped("sale_order_line_id")
+        result = super().unlink()
+        lines._sync_component_total_to_line()
+        for line in lines.filtered(lambda item: not item.dispensing_component_ids):
+            line.with_context(skip_prescription_init=True).write(
+                {
+                    "product_uom_qty": 0.0,
+                    "dispensing_batch_number": False,
+                    "barcode_scan": False,
+                }
+            )
+        return result
+
+    def _normalize_vals(self, vals, current_component=None):
+        vals = dict(vals)
+        product = False
+        if vals.get("product_id"):
+            product = self.env["product.product"].browse(vals["product_id"]).exists()
+            if not product:
+                raise UserError(_("Selected product was not found."))
+            vals.setdefault("product_uom_id", product.uom_id.id)
+            vals.setdefault(
+                "pack_unit_qty",
+                product.pack_unit_qty
+                if product.is_dispensing_pack and product.pack_unit_qty
+                else 1.0,
+            )
+        return vals
+
+    def _get_parent_line(self):
+        self.ensure_one()
+        return self.sale_order_line_id
+
+    def _find_dispensing_lot(self):
+        self.ensure_one()
+        if not self.product_id or not self.batch_number:
+            return self.env["stock.lot"]
+        return self.sale_order_line_id._find_dispensing_lot(
+            self.product_id,
+            self.batch_number,
+        )
+
+    def _get_dispensing_lot_available_qty(self):
+        self.ensure_one()
+        lot = self._find_dispensing_lot()
+        return self.sale_order_line_id._get_dispensing_lot_available_qty(
+            self.product_id,
+            lot,
+        )
+
+    def _get_dispensing_batch_options(self):
+        self.ensure_one()
+        return self.sale_order_line_id._get_dispensing_batch_options(self.product_id)
+
+    def _get_default_dispensing_lot(self):
+        self.ensure_one()
+        return self.sale_order_line_id._get_default_dispensing_lot(
+            self.product_id,
+            self.pack_count or 1.0,
+        )
+
+    def _sync_batch_selection(self, batch_number=False):
+        self.ensure_one()
+        batch_number = (batch_number or "").strip()
+        lot = self.sale_order_line_id._find_dispensing_lot(
+            self.product_id,
+            batch_number,
+        )
+        self.write({"batch_number": lot.name if lot else batch_number or False})
+
+    def action_apply_barcode_scan(self, barcode):
+        self.ensure_one()
+        barcode = (barcode or "").strip()
+        if not barcode:
+            return False
+
+        prepack_line = self.sale_order_line_id._get_prepack_line_from_barcode(barcode)
+        if prepack_line:
+            product = prepack_line.product_id
+            lot = prepack_line.finished_lot_id
+        else:
+            product = self.env["product.product"].search([("barcode", "=", barcode)], limit=1)
+            if not product:
+                product = self.env["product.product"].search([("default_code", "=", barcode)], limit=1)
+            if not product:
+                raise UserError(_("No product was found for barcode %s.") % barcode)
+            lot = False
+
+        pack_unit_qty = (
+            product.pack_unit_qty
+            if product.is_dispensing_pack and product.pack_unit_qty
+            else 1.0
+        )
+        if not lot:
+            lot = self.sale_order_line_id._get_default_dispensing_lot(product, 1.0)
+        self.write(
+            {
+                "barcode": barcode,
+                "product_id": product.id,
+                "product_uom_id": product.uom_id.id,
+                "pack_count": 1.0,
+                "pack_unit_qty": pack_unit_qty,
+                "batch_number": lot.name if lot else False,
+            }
+        )
+        return self.sale_order_line_id.order_id._serialize_dispensing_component(self)
+
+    def _check_dispensing_batch_available(self):
+        for component in self:
+            if (
+                not component.product_id
+                or component.product_id.tracking == "none"
+                or float_compare(
+                    component.pack_count or 0.0,
+                    0.0,
+                    precision_rounding=component.product_uom_id.rounding or 0.0001,
+                )
+                <= 0
+            ):
+                continue
+            lot = component._find_dispensing_lot()
+            if not lot:
+                raise UserError(
+                    _("Select an available batch before serving %(product)s.")
+                    % {"product": component.product_id.display_name}
+                )
+            available_qty = component._get_dispensing_lot_available_qty()
+            if float_compare(
+                available_qty,
+                component.pack_count or 0.0,
+                precision_rounding=component.product_uom_id.rounding or 0.0001,
+            ) < 0:
+                raise UserError(
+                    _(
+                        "Insufficient stock for %(product)s batch %(lot)s at %(location)s. "
+                        "Requested: %(requested).2f %(uom)s. Available: %(available).2f %(uom)s."
+                    )
+                    % {
+                        "product": component.product_id.display_name,
+                        "lot": lot.name,
+                        "location": component.sale_order_line_id._get_dispensing_source_location().display_name,
+                        "requested": component.pack_count or 0.0,
+                        "available": available_qty,
+                        "uom": component.product_uom_id.name,
+                    }
+                )
 
 
 class DispensingPackSelectionWizard(models.TransientModel):

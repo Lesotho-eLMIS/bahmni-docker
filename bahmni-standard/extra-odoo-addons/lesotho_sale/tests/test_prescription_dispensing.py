@@ -1,3 +1,5 @@
+from unittest.mock import patch
+
 from odoo import fields
 from odoo.exceptions import UserError
 from odoo.tests import SavepointCase, tagged
@@ -32,6 +34,16 @@ class TestPrescriptionDispensing(SavepointCase):
 
         cls.product = cls._create_tracked_product("Dispensed Product A")
         cls.alt_product = cls._create_tracked_product("Dispensed Product B")
+        cls.pack10 = cls._create_dispensing_pack(
+            "Dispensed Product A pack of 10",
+            cls.product,
+            10.0,
+        )
+        cls.pack5 = cls._create_dispensing_pack(
+            "Dispensed Product A pack of 5",
+            cls.product,
+            5.0,
+        )
 
         cls.product_lot_1 = cls._create_lot(
             cls.product,
@@ -57,6 +69,16 @@ class TestPrescriptionDispensing(SavepointCase):
             cls.product,
             "A-OTHER-LOCATION",
             "2026-05-01",
+        )
+        cls.pack10_lot = cls._create_lot(
+            cls.pack10,
+            "A-PACK-10-01",
+            "2026-08-01",
+        )
+        cls.pack5_lot = cls._create_lot(
+            cls.pack5,
+            "A-PACK-05-01",
+            "2026-08-15",
         )
 
         cls.env["stock.quant"]._update_available_quantity(
@@ -89,6 +111,18 @@ class TestPrescriptionDispensing(SavepointCase):
             99.0,
             lot_id=cls.other_location_lot,
         )
+        cls.env["stock.quant"]._update_available_quantity(
+            cls.pack10,
+            cls.dispensing_location,
+            5.0,
+            lot_id=cls.pack10_lot,
+        )
+        cls.env["stock.quant"]._update_available_quantity(
+            cls.pack5,
+            cls.dispensing_location,
+            5.0,
+            lot_id=cls.pack5_lot,
+        )
 
     @classmethod
     def _get_lot_expiry_field(cls):
@@ -107,6 +141,26 @@ class TestPrescriptionDispensing(SavepointCase):
                 "uom_id": cls.unit_uom.id,
                 "uom_po_id": cls.unit_uom.id,
                 "list_price": 1.0,
+            }
+        )
+        return template.product_variant_id
+
+    @classmethod
+    def _create_dispensing_pack(cls, name, base_product, pack_unit_qty):
+        template = cls.env["product.template"].create(
+            {
+                "name": name,
+                "detailed_type": "product",
+                "tracking": "lot",
+                "uom_id": cls.unit_uom.id,
+                "uom_po_id": cls.unit_uom.id,
+                "list_price": 1.0,
+                "is_prepack": True,
+                "dispensing_base_product_id": base_product.id,
+                "is_dispensing_pack": True,
+                "dispensing_pack_enabled": True,
+                "pack_unit_qty": pack_unit_qty,
+                "substitution_priority": 10,
             }
         )
         return template.product_variant_id
@@ -351,6 +405,7 @@ class TestPrescriptionDispensing(SavepointCase):
         self.assertEqual(report_action["type"], "ir.actions.act_url")
         self.assertEqual(line.prescription_status, "fully_served")
         self.assertEqual(order.prescription_status, "fully_served")
+        self.assertEqual(order.label_status, "generated")
 
     def test_serving_uses_per_line_status_not_aggregate_totals(self):
         line = self._create_order_line(quantity=5.0)
@@ -404,6 +459,124 @@ class TestPrescriptionDispensing(SavepointCase):
         self.assertEqual(backorder_line.prescribed_qty_base_units, 5.0)
         self.assertEqual(backorder_line.product_uom_qty, 0.0)
         self.assertEqual(order.prescription_status, "partially_served_backorder_created")
+
+    def test_multiple_prepack_components_fulfill_single_prescription_line(self):
+        line = self._create_order_line(quantity=15.0)
+        order = line.order_id
+        order.write({"medication_explanation_confirmed": True})
+
+        updated = order.add_prescription_dispensing_component(line.id)
+        component_10 = updated["components"][0]
+        updated = order.update_prescription_dispensing_component(
+            line.id,
+            component_10["id"],
+            {"product_id": self.pack10.id, "pack_count": 1.0},
+        )
+        component_10 = updated["components"][0]
+        updated = order.add_prescription_dispensing_component(line.id)
+        component_5 = updated["components"][1]
+        updated = order.update_prescription_dispensing_component(
+            line.id,
+            component_5["id"],
+            {"product_id": self.pack5.id, "pack_count": 1.0},
+        )
+
+        line = self.env["sale.order.line"].browse(line.id)
+        summary = order.evaluate_prescription_serving()
+        label_items = order._get_dispensing_label_items()
+
+        self.assertEqual(updated["quantity_dispensed"], 15.0)
+        self.assertEqual(line._get_prescription_quantities(), (15.0, 15.0))
+        self.assertEqual(line.prescription_status, "fully_served")
+        self.assertEqual(summary["prescription_status"], "fully_served")
+        self.assertFalse(summary["needs_backorder"])
+        self.assertEqual(len(label_items), 2)
+        self.assertEqual(
+            sorted(item["quantity"] for item in label_items),
+            [5.0, 10.0],
+        )
+
+        order.fetch_prescription_dispensing()
+        report_action = order.action_serve_prescription_from_ui()
+
+        self.assertEqual(report_action["type"], "ir.actions.act_url")
+        self.assertEqual(order.prescription_status, "fully_served")
+        self.assertEqual(order.label_status, "generated")
+
+    def test_prepack_component_balance_creates_backorder_for_remaining_quantity(self):
+        line = self._create_order_line(quantity=15.0)
+        order = line.order_id
+        order.write({"medication_explanation_confirmed": True})
+
+        updated = order.add_prescription_dispensing_component(line.id)
+        component = updated["components"][0]
+        order.update_prescription_dispensing_component(
+            line.id,
+            component["id"],
+            {"product_id": self.pack10.id, "pack_count": 1.0},
+        )
+
+        summary = order.evaluate_prescription_serving()
+        self.assertTrue(summary["needs_backorder"])
+        self.assertEqual(summary["total_dispensed"], 10.0)
+
+        order.fetch_prescription_dispensing()
+        report_action = order.action_serve_prescription_from_ui(True)
+        backorder = self.env["sale.order"].search([("origin", "=", order.name)], limit=1)
+        backorder_line = backorder.order_line.filtered(lambda item: not item.display_type)[:1]
+
+        self.assertEqual(report_action["type"], "ir.actions.act_url")
+        self.assertEqual(order.prescription_status, "partially_served_backorder_created")
+        self.assertEqual(backorder.prescription_status, "awaiting_dispensing")
+        self.assertEqual(backorder_line.prescribed_qty_base_units, 5.0)
+        self.assertEqual(backorder_line.product_uom_qty, 0.0)
+
+    def test_label_generation_failure_does_not_rollback_clinical_dispensing(self):
+        line = self._create_order_line(quantity=5.0)
+        order = line.order_id
+        order.write({"medication_explanation_confirmed": True})
+        order.fetch_prescription_dispensing()
+
+        with patch.object(
+            type(order),
+            "_prepare_label_report_action",
+            side_effect=UserError("PDF renderer unavailable"),
+        ):
+            label_result = order.action_serve_prescription_from_ui()
+
+        order = self.env["sale.order"].browse(order.id)
+        line = self.env["sale.order.line"].browse(line.id)
+
+        self.assertEqual(label_result["type"], "lesotho_sale.label_generation_failed")
+        self.assertEqual(order.prescription_status, "fully_served")
+        self.assertEqual(order.label_status, "print_failed")
+        self.assertIn("PDF renderer unavailable", order.label_last_error)
+        self.assertTrue(line.dispensed)
+
+        retry_action = order.action_retry_label_generation_from_ui()
+
+        self.assertEqual(retry_action["type"], "ir.actions.act_url")
+        self.assertIn("report/pdf/lesotho_sale.report_prescription_labels", retry_action["url"])
+        self.assertEqual(order.label_status, "generated")
+
+    def test_label_reprint_requires_reason_and_logs_audit(self):
+        line = self._create_order_line(quantity=5.0)
+        order = line.order_id
+        order.write({"medication_explanation_confirmed": True})
+        order.fetch_prescription_dispensing()
+        order.action_serve_prescription_from_ui()
+
+        with self.assertRaises(UserError):
+            order.action_reprint_prescription_labels_from_ui("")
+
+        reprint_action = order.action_reprint_prescription_labels_from_ui("Printer jam replacement copy")
+
+        self.assertEqual(reprint_action["type"], "ir.actions.act_url")
+        self.assertEqual(order.label_status, "reprinted")
+        latest_message = order.message_ids[:1].body
+        self.assertIn("Prescription labels reprinted by", latest_message)
+        self.assertIn(self.env.user.display_name, latest_message)
+        self.assertIn("Printer jam replacement copy", latest_message)
 
     def test_save_action_keeps_prescription_status_unchanged(self):
         line = self._create_order_line(quantity=5.0)

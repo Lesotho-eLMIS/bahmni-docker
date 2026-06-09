@@ -59,15 +59,21 @@
           </t>
           <DropdownItem
             class="'lesotho_navbar_dropdown_item'"
+            onSelected="() => this.openLesothoShortcut('lesotho_base.action_create_new_prescription_placeholder')"
+          >
+            Create New Prescription
+          </DropdownItem>
+          <DropdownItem
+            class="'lesotho_navbar_dropdown_item'"
             onSelected="() => this.openLesothoShortcut('sale.action_quotations_with_onboarding')"
           >
-            New Prescriptions
+            View New Prescriptions
           </DropdownItem>
           <DropdownItem
             class="'lesotho_navbar_dropdown_item'"
             onSelected="() => this.openLesothoShortcut('sale.action_orders')"
           >
-            Served Prescriptions
+            View Served Prescriptions
           </DropdownItem>
         </Dropdown>
       </div>

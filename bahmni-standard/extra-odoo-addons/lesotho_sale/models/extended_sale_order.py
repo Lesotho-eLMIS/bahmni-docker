@@ -69,6 +69,26 @@ class ExtendedSaleOrder(models.Model):
         readonly=True,
         help="Lifecycle status the prescription had before it was placed on hold.",
     )
+    label_status = fields.Selection(
+        selection=[
+            ("not_required", "Not Required"),
+            ("pending", "Pending"),
+            ("generated", "Generated"),
+            ("printed", "Printed"),
+            ("print_failed", "Print Failed"),
+            ("reprinted", "Reprinted"),
+        ],
+        string="Label Status",
+        default="not_required",
+        copy=False,
+        index=True,
+        help="Tracks prescription label generation separately from clinical dispensing.",
+    )
+    label_last_error = fields.Text(
+        string="Last Label Error",
+        copy=False,
+        readonly=True,
+    )
     is_on_hold = fields.Boolean(
         string="On Hold",
         default=False,
@@ -383,7 +403,7 @@ class ExtendedSaleOrder(models.Model):
         self.ensure_one()
         return self._get_internal_prescription_lines().filtered(
             lambda line: float_compare(
-                line.product_uom_qty or 0.0,
+                line._get_prescription_quantities()[1],
                 0.0,
                 precision_rounding=line.product_uom.rounding or 0.0001,
             )
@@ -413,8 +433,7 @@ class ExtendedSaleOrder(models.Model):
             if status == "served_externally":
                 continue
 
-            prescribed_qty = line.prescribed_qty_base_units or line.product_uom_qty or 0.0
-            dispensed_qty = line.product_uom_qty or 0.0
+            prescribed_qty, dispensed_qty = line._get_prescription_quantities()
             total_prescribed += prescribed_qty
             total_dispensed += dispensed_qty
 
@@ -517,6 +536,134 @@ class ExtendedSaleOrder(models.Model):
         self.ensure_one()
         return self._get_dispensed_internal_lines()
 
+    def _get_dispensing_label_items(self):
+        self.ensure_one()
+        label_items = []
+        for line in self._get_internal_prescription_lines():
+            if line.dispensing_component_ids:
+                for component in line.dispensing_component_ids:
+                    if float_compare(
+                        component.dispensed_qty_base_units or 0.0,
+                        0.0,
+                        precision_rounding=line.product_uom.rounding or 0.0001,
+                    ) <= 0:
+                        continue
+                    label_items.append(
+                        {
+                            "product_name": component.product_id.display_name or "",
+                            "quantity": component.dispensed_qty_base_units or 0.0,
+                            "uom_name": line.prescribed_uom_id.name
+                            or line.product_uom.name
+                            or "",
+                            "batch_number": component.batch_number or "",
+                            "expiry_date": self._get_dispensing_component_expiry(component),
+                            "directions": line._get_dosage_instruction_text(),
+                        }
+                    )
+                continue
+            if float_compare(
+                line.product_uom_qty or 0.0,
+                0.0,
+                precision_rounding=line.product_uom.rounding or 0.0001,
+            ) <= 0:
+                continue
+            label_items.append(
+                {
+                    "product_name": line.product_id.display_name
+                    if line.product_id
+                    else (
+                        line.prescribed_product_id.display_name
+                        if line.prescribed_product_id
+                        else ""
+                    ),
+                    "quantity": line.product_uom_qty or 0.0,
+                    "uom_name": line.product_uom.name or "",
+                    "batch_number": line.dispensing_batch_number or "",
+                    "expiry_date": self._get_dispensing_line_expiry(line),
+                    "directions": line._get_dosage_instruction_text(),
+                }
+            )
+        return label_items
+
+    def _prepare_label_report_action(self):
+        self.ensure_one()
+        report = self.env.ref("lesotho_sale.action_report_prescription_labels")
+        return {
+            "type": "ir.actions.act_url",
+            "url": "/report/pdf/%s/%s?download=true" % (report.report_name, self.id),
+            "target": "new",
+        }
+
+    def _label_generation_failed_payload(self, error):
+        self.ensure_one()
+        message = str(error) or _("Label generation failed.")
+        return {
+            "type": "lesotho_sale.label_generation_failed",
+            "message": message,
+            "data": self.fetch_prescription_dispensing(),
+        }
+
+    def _generate_label_action(self, success_status="generated"):
+        self.ensure_one()
+        if not self._get_dispensing_label_items():
+            self.write(
+                {
+                    "label_status": "not_required",
+                    "label_last_error": False,
+                }
+            )
+            return False
+
+        self.write({"label_status": "pending", "label_last_error": False})
+        try:
+            action = self._prepare_label_report_action()
+        except Exception as error:
+            self.write(
+                {
+                    "label_status": "print_failed",
+                    "label_last_error": str(error),
+                }
+            )
+            self.message_post(
+                body=_(
+                    "Prescription label generation failed for %(user)s. Error: %(error)s",
+                    user=self.env.user.display_name,
+                    error=str(error),
+                )
+            )
+            return self._label_generation_failed_payload(error)
+
+        self.write({"label_status": success_status, "label_last_error": False})
+        return action
+
+    def action_retry_label_generation_from_ui(self):
+        self.ensure_one()
+        if self.label_status != "print_failed":
+            raise UserError(_("Retry is only available after label generation fails."))
+        if not self._get_dispensing_label_items():
+            raise UserError(_("There are no dispensed internal lines to label."))
+        return self._generate_label_action(success_status="generated")
+
+    def action_reprint_prescription_labels_from_ui(self, reason):
+        self.ensure_one()
+        reason = (reason or "").strip()
+        if not reason:
+            raise UserError(_("Enter a reason before reprinting labels."))
+        if not self._get_dispensing_label_items():
+            raise UserError(_("Only already dispensed internal lines can be reprinted."))
+
+        action = self._generate_label_action(success_status="reprinted")
+        if action and action.get("type") != "lesotho_sale.label_generation_failed":
+            self.message_post(
+                body=_(
+                    "Prescription labels reprinted by %(user)s on %(datetime)s. Reason: %(reason)s",
+                    user=self.env.user.display_name,
+                    datetime=fields.Datetime.to_string(fields.Datetime.now()),
+                    reason=reason,
+                )
+            )
+        return action
+
     def _create_prescription_backorder(self):
         self.ensure_one()
         backorder = self.copy(
@@ -537,8 +684,7 @@ class ExtendedSaleOrder(models.Model):
                 copied_line.unlink()
                 continue
 
-            prescribed_qty = original_line.prescribed_qty_base_units or original_line.product_uom_qty or 0.0
-            dispensed_qty = original_line.product_uom_qty or 0.0
+            prescribed_qty, dispensed_qty = original_line._get_prescription_quantities()
             remaining_qty = prescribed_qty - dispensed_qty
             if float_compare(
                 remaining_qty,
@@ -643,8 +789,6 @@ class ExtendedSaleOrder(models.Model):
 
         summary = self._get_prescription_line_fulfillment_summary()
         internal_lines = summary["internal_lines"]
-        label_lines = self._get_dispensed_internal_lines()
-
         if internal_lines and not summary["has_dispensed_internal_lines"]:
             raise UserError(
                 _(
@@ -693,14 +837,9 @@ class ExtendedSaleOrder(models.Model):
             )
         )
 
-        if label_lines:
-            report = self.env.ref("lesotho_sale.action_report_prescription_labels")
-            return {
-                "type": "ir.actions.act_url",
-                "url": "/report/pdf/%s/%s?download=true"
-                % (report.report_name, self.id),
-                "target": "new",
-            }
+        label_action = self._generate_label_action(success_status="generated")
+        if label_action:
+            return label_action
 
         return self.env.ref("sale.action_quotations_with_onboarding").read()[0]
 
@@ -727,6 +866,27 @@ class ExtendedSaleOrder(models.Model):
             ),
         }
 
+    def _get_dispensing_line_pack_unit_qty(self, line, product=False):
+        product = product or line.product_id or line.prescribed_product_id
+        if product and product.is_dispensing_pack and product.pack_unit_qty:
+            return product.pack_unit_qty
+        return 1.0
+
+    def _get_dispensing_stock_qty_from_pack_count(self, line, pack_count, product=False):
+        product = product or line.product_id or line.prescribed_product_id
+        if product and product.is_dispensing_pack:
+            return pack_count
+        pack_unit_qty = self._get_dispensing_line_pack_unit_qty(line, product=product)
+        return pack_count * pack_unit_qty
+
+    def _get_dispensing_line_pack_count(self, line, quantity_dispensed=False):
+        pack_unit_qty = self._get_dispensing_line_pack_unit_qty(line)
+        if quantity_dispensed is False:
+            quantity_dispensed = line._get_prescription_quantities()[1] if line.served_internally else 0
+        if quantity_dispensed:
+            return quantity_dispensed / pack_unit_qty
+        return 1.0
+
     def _serialize_dispensing_line(self, line):
         self.ensure_one()
         prescribed_product = line.prescribed_product_id or line.product_id
@@ -734,6 +894,8 @@ class ExtendedSaleOrder(models.Model):
         backorder_lines = line.prescription_backorder_line_ids.filtered(
             lambda item: item.order_id
         )
+        quantity_dispensed = line._get_prescription_quantities()[1] if line.served_internally else 0
+        dispensed_product = line.product_id or prescribed_product
         return {
             "id": line.id,
             "is_existing_prescription": line.is_existing_prescription,
@@ -741,8 +903,12 @@ class ExtendedSaleOrder(models.Model):
             "prescribed_product_id": prescribed_product.id if prescribed_product else False,
             "dispensed_product": line.product_id.display_name if line.product_id else (prescribed_product.display_name if prescribed_product else ""),
             "product_id": line.product_id.id if line.product_id else (prescribed_product.id if prescribed_product else False),
+            "is_prepack": bool(dispensed_product and dispensed_product.is_dispensing_pack),
+            "isPrepack": bool(dispensed_product and dispensed_product.is_dispensing_pack),
             "quantity_prescribed": line.prescribed_qty_base_units or line.product_uom_qty or 0,
-            "quantity_dispensed": (line.product_uom_qty or 0) if line.served_internally else 0,
+            "pack_count": self._get_dispensing_line_pack_count(line, quantity_dispensed),
+            "pack_unit_qty": self._get_dispensing_line_pack_unit_qty(line),
+            "quantity_dispensed": quantity_dispensed,
             "dose": self._format_prescription_option_value(line.dose) if line.dose else "",
             "dose_unit": line.dose_units or "",
             "frequency": line.frequency or "",
@@ -784,6 +950,35 @@ class ExtendedSaleOrder(models.Model):
             "out_of_stock": line.out_of_stock,
             "is_pack_substituted": line.is_pack_substituted,
             "comments": line.dispensing_comments or "",
+            "components": [
+                self._serialize_dispensing_component(component)
+                for component in line.dispensing_component_ids
+            ],
+        }
+
+    def _serialize_dispensing_component(self, component):
+        self.ensure_one()
+        component.ensure_one()
+        return {
+            "id": component.id,
+            "product_id": component.product_id.id,
+            "dispensed_product": component.product_id.display_name or "",
+            "is_prepack": bool(component.product_id and component.product_id.is_dispensing_pack),
+            "isPrepack": bool(component.product_id and component.product_id.is_dispensing_pack),
+            "pack_count": component.pack_count or 0,
+            "pack_unit_qty": component.pack_unit_qty or 0,
+            "quantity_dispensed": component.dispensed_qty_base_units or 0,
+            "product_uom_id": component.product_uom_id.id,
+            "uom": component.product_uom_id.name or "",
+            "batch_number": component.batch_number or "",
+            "expiry_date": self._get_dispensing_component_expiry(component),
+            "batch_options": component._get_dispensing_batch_options(),
+            "selected_batch_available_qty": component.selected_batch_available_qty or 0,
+            "barcode": component.barcode or "",
+            "stock_on_hand": component.stock_on_hand or 0,
+            "out_of_stock": component.out_of_stock,
+            "is_substitution": component.is_substitution,
+            "comments": component.comments or "",
         }
 
     def _get_dispensing_line_expiry(self, line):
@@ -806,6 +1001,18 @@ class ExtendedSaleOrder(models.Model):
                 return self._format_dispensing_expiry(getattr(lot, field_name), lot._fields[field_name])
         return ""
 
+    def _get_dispensing_component_expiry(self, component):
+        lot = component._find_dispensing_lot()
+        if not lot:
+            return ""
+        for field_name in ("expiration_date", "use_date", "removal_date", "alert_date"):
+            if field_name in lot._fields and getattr(lot, field_name):
+                return self._format_dispensing_expiry(
+                    getattr(lot, field_name),
+                    lot._fields[field_name],
+                )
+        return ""
+
     def _format_dispensing_expiry(self, value, field):
         if not value:
             return ""
@@ -818,7 +1025,10 @@ class ExtendedSaleOrder(models.Model):
         dispensing_lines = self.order_line.filtered(lambda l: not l.display_type)
         if not self._is_prescription_closed():
             for line in dispensing_lines.filtered(
-                lambda l: l.served_internally and l.product_id and not l.dispensing_batch_number
+                lambda l: l.served_internally
+                and not l.dispensing_component_ids
+                and l.product_id
+                and not l.dispensing_batch_number
             ):
                 default_lot = line._get_default_dispensing_lot(
                     line.product_id,
@@ -838,12 +1048,20 @@ class ExtendedSaleOrder(models.Model):
             "height": self.height or "",
             "bmi": self.bmi or "",
             "bp": self.bp_display or "",
+            "allergies": self.partner_id.allergy_summary or _("No known allergies"),
             "date": fields.Datetime.to_string(self.date_order) if self.date_order else "",
             "prescriber": self.provider_name or "",
             "care_setting": self.care_setting or "",
             "dispensary": self.shop_id.display_name if self.shop_id else "",
             "medication_explanation_confirmed": self.medication_explanation_confirmed,
             "prescription_status": self.prescription_status,
+            "label_status": self.label_status,
+            "label_status_label": dict(self._fields["label_status"].selection).get(
+                self.label_status,
+                self.label_status or "",
+            ),
+            "label_last_error": self.label_last_error or "",
+            "has_label_lines": bool(self._get_dispensing_label_items()),
             "previous_status": self.previous_status,
             "is_on_hold": self.is_on_hold,
             "on_hold_reason": self.on_hold_reason or "",
@@ -871,8 +1089,246 @@ class ExtendedSaleOrder(models.Model):
             {
                 "id": product.id,
                 "name": product.display_name,
+                "is_prepack": bool(product.is_dispensing_pack),
+                "isPrepack": bool(product.is_dispensing_pack),
+                "pack_unit_qty": product.pack_unit_qty if product.is_dispensing_pack else 1.0,
             }
             for product in products
+        ]
+
+    @api.model
+    def get_prescription_create_form_options(self):
+        partners = self.env["res.partner"].with_context(active_test=False).search(
+            [("is_patient", "=", True)],
+            order="name, id",
+            limit=500,
+        )
+        if not partners:
+            partners = self.env["res.partner"].with_context(active_test=False).search(
+                [],
+                order="name, id",
+                limit=500,
+            )
+
+        sex_labels = dict(self.env["res.partner"]._fields["sex"].selection)
+
+        def patient_display_name(partner):
+            return " | ".join(
+                [
+                    partner.name or "",
+                    str(partner.age or ""),
+                    sex_labels.get(partner.sex, partner.sex or ""),
+                    partner.village_id.display_name if partner.village_id else "",
+                ]
+            )
+
+        return {
+            "patients": [
+                {
+                    "id": partner.id,
+                    "name": patient_display_name(partner),
+                    "weight": self._format_prescription_option_value(partner.weight) if partner.weight else "",
+                    "height": self._format_prescription_option_value(partner.height) if partner.height else "",
+                    "bmi": (
+                        self._format_prescription_option_value(
+                            round(partner.weight / ((partner.height / 100.0) ** 2), 2)
+                        )
+                        if partner.weight and partner.height
+                        else ""
+                    ),
+                    "bp": (
+                        f"{partner.diastolic}/{partner.systolic}"
+                        if partner.diastolic and partner.systolic
+                        else self._format_prescription_option_value(partner.systolic)
+                        if partner.systolic
+                        else ""
+                    ),
+                    "allergies": partner.allergy_summary or "No known allergies",
+                }
+                for partner in partners
+            ],
+            "products": self._get_dispensing_product_options(),
+            "direction_options": self._get_prescription_direction_options(
+                self.env["sale.order.line"]
+            ),
+            "care_settings": self._get_prescription_care_setting_options(),
+            "dispensaries": self._get_prescription_dispensary_options(),
+        }
+
+    @api.model
+    def create_prescription_from_ui(self, payload):
+        payload = payload or {}
+        partner = self.env["res.partner"].browse(int(payload.get("patient_id") or 0)).exists()
+        if not partner:
+            raise UserError(_("Please select a patient."))
+
+        lines_payload = payload.get("lines") or []
+        if not lines_payload:
+            raise UserError(_("Please add at least one prescribed item."))
+
+        order_vals = {
+            "partner_id": partner.id,
+            "origin": _("Manual Prescription"),
+            "provider_name": self.env.user.name,
+        }
+        if payload.get("care_setting") and "care_setting" in self._fields:
+            order_vals["care_setting"] = payload["care_setting"]
+        if payload.get("dispensary_id") and "shop_id" in self._fields:
+            shop = self.env["sale.shop"].browse(int(payload["dispensary_id"])).exists()
+            if shop:
+                order_vals["shop_id"] = shop.id
+                if "location_name" in self._fields:
+                    order_vals["location_name"] = shop.display_name
+
+        order = self.create(order_vals)
+        line_model = self.env["sale.order.line"].with_context(skip_prescription_init=True)
+        for line_payload in lines_payload:
+            product = self.env["product.product"].browse(
+                int(line_payload.get("product_id") or 0)
+            ).exists()
+            if not product:
+                raise UserError(_("Every prescribed item must have a product."))
+
+            prescribed_qty = self._get_ui_prescribed_quantity(line_payload)
+            if float_compare(prescribed_qty, 0.0, precision_digits=6) <= 0:
+                raise UserError(_("Every prescribed item must have a prescribed quantity greater than zero."))
+
+            line_model.create(
+                {
+                    "order_id": order.id,
+                    "product_id": product.id,
+                    "name": product.display_name,
+                    "product_uom_qty": prescribed_qty,
+                    "product_uom": product.uom_id.id,
+                    "price_unit": 0.0,
+                    "prescribed_product_id": product.id,
+                    "prescribed_qty_base_units": prescribed_qty,
+                    "prescribed_uom_id": product.uom_id.id,
+                    "base_product_id": product.id,
+                    "served_internally": True,
+                    "dispensed": False,
+                    "dose": float(line_payload.get("dose") or 0.0),
+                    "dose_units": line_payload.get("dose_unit") or "",
+                    "frequency": line_payload.get("frequency") or "",
+                    "route": line_payload.get("route") or "",
+                    "duration": int(float(line_payload.get("duration") or 0.0)),
+                    "duration_units": line_payload.get("duration_unit") or "",
+                    "administration_instructions": line_payload.get("instructions") or "",
+                    "additional_instructions": line_payload.get("additional_instructions") or "",
+                }
+            )
+
+        return {
+            "id": order.id,
+            "name": order.name,
+            "action": order.action_open_prescription_dispense_page(),
+        }
+
+    def _get_ui_prescribed_quantity(self, line_payload):
+        try:
+            dose = float(line_payload.get("dose") or 0.0)
+            duration = float(line_payload.get("duration") or 0.0)
+        except (TypeError, ValueError):
+            return 0.0
+        frequency = self._get_ui_frequency_multiplier(line_payload.get("frequency"))
+        duration_multiplier = self._get_ui_duration_unit_multiplier(
+            line_payload.get("duration_unit")
+        )
+        return dose * frequency * duration * duration_multiplier
+
+    def _get_ui_frequency_multiplier(self, value):
+        frequency = (value or "").strip().lower()
+        if not frequency:
+            return 0.0
+        try:
+            return float(frequency)
+        except ValueError:
+            pass
+        if (
+            "immediate" in frequency
+            or "stat" in frequency
+            or "once" in frequency
+            or "daily" in frequency
+            or frequency in ("od", "qd")
+            or "q24h" in frequency
+        ):
+            return 1.0
+        if (
+            "twice" in frequency
+            or "bid" in frequency
+            or "bd" in frequency
+            or "q12h" in frequency
+        ):
+            return 2.0
+        if (
+            "three" in frequency
+            or "tid" in frequency
+            or "tds" in frequency
+            or "q8h" in frequency
+        ):
+            return 3.0
+        if (
+            "four" in frequency
+            or "qid" in frequency
+            or "qds" in frequency
+            or "q6h" in frequency
+        ):
+            return 4.0
+        return 0.0
+
+    def _get_ui_duration_unit_multiplier(self, value):
+        unit = (value or "").strip().lower()
+        if "hour" in unit:
+            return 1.0 / 24.0
+        if "week" in unit:
+            return 7.0
+        if "month" in unit:
+            return 30.0
+        if "year" in unit:
+            return 365.0
+        return 1.0
+
+    def _get_prescription_care_setting_options(self):
+        options = []
+        field = self._fields.get("care_setting")
+        if field and field.type == "selection":
+            if isinstance(field.selection, str):
+                selection = getattr(self, field.selection)()
+            elif callable(field.selection):
+                selection = field.selection(self)
+            else:
+                selection = field.selection
+            options.extend(
+                {"value": value, "label": label}
+                for value, label in selection
+                if value and label
+            )
+
+        if field:
+            existing_values = self.search_read(
+                [("care_setting", "!=", False)],
+                ["care_setting"],
+                limit=100,
+                order="care_setting",
+            )
+            for value in existing_values:
+                care_setting = value.get("care_setting")
+                if isinstance(care_setting, (list, tuple)):
+                    care_setting = care_setting[1] if len(care_setting) > 1 else care_setting[0]
+                if care_setting:
+                    options.append({"value": care_setting, "label": care_setting})
+
+        unique_options = {option["value"]: option for option in options}
+        return sorted(unique_options.values(), key=lambda option: option["label"])
+
+    def _get_prescription_dispensary_options(self):
+        shops = self.env["sale.shop"].with_context(active_test=False).search([], order="name, id")
+        return [
+            {
+                "id": shop.id,
+                "name": shop.display_name,
+            }
+            for shop in shops
         ]
 
     def _get_prescription_direction_options(self, current_lines):
@@ -1064,6 +1520,20 @@ class ExtendedSaleOrder(models.Model):
             if not product:
                 raise UserError(_("Selected product was not found."))
             write_vals.update(line._prepare_dispensing_product_change_vals(product))
+            if "pack_count" not in vals:
+                pack_count = self._get_dispensing_line_pack_count(line)
+                write_vals["product_uom_qty"] = self._get_dispensing_stock_qty_from_pack_count(
+                    line,
+                    pack_count,
+                    product=product,
+                )
+        if "pack_count" in vals:
+            pack_count = vals.get("pack_count") or 0.0
+            write_vals["product_uom_qty"] = self._get_dispensing_stock_qty_from_pack_count(
+                line,
+                pack_count,
+                product=product,
+            )
         if write_vals:
             line.with_context(skip_prescription_init=True).write(write_vals)
         if product:
@@ -1073,6 +1543,113 @@ class ExtendedSaleOrder(models.Model):
             line._sync_dispensing_batch_selection(requested_batch_number, product=product)
         elif requested_batch_number is not None:
             line._sync_dispensing_batch_selection(requested_batch_number)
+        return self._serialize_dispensing_line(line)
+
+    def add_prescription_dispensing_component(self, line_id):
+        self.ensure_one()
+        self._ensure_prescription_is_editable()
+        line = self.order_line.filtered(lambda l: l.id == line_id and not l.display_type)
+        if not line:
+            raise UserError(_("Prescription line not found."))
+        product = line.prescribed_product_id or line.product_id
+        if not product:
+            raise UserError(_("Select a product before adding a prepack panel."))
+        pack_unit_qty = (
+            product.pack_unit_qty
+            if product.is_dispensing_pack and product.pack_unit_qty
+            else 1.0
+        )
+        pack_count = 1.0
+        if not line.dispensing_component_ids:
+            current_dispensed_qty = line._get_prescription_quantities()[1]
+            if current_dispensed_qty:
+                pack_count = current_dispensed_qty / pack_unit_qty
+        component = self.env["sale.order.line.dispensing.component"].create(
+            {
+                "sale_order_line_id": line.id,
+                "product_id": product.id,
+                "product_uom_id": product.uom_id.id,
+                "pack_count": pack_count,
+                "pack_unit_qty": pack_unit_qty,
+            }
+        )
+        default_lot = component._get_default_dispensing_lot()
+        if default_lot:
+            component._sync_batch_selection(default_lot.name)
+        return self._serialize_dispensing_line(line)
+
+    def update_prescription_dispensing_component(self, line_id, component_id, vals):
+        self.ensure_one()
+        self._ensure_prescription_is_editable()
+        line = self.order_line.filtered(lambda l: l.id == line_id and not l.display_type)
+        if not line:
+            raise UserError(_("Prescription line not found."))
+        component = line.dispensing_component_ids.filtered(lambda item: item.id == component_id)
+        if not component:
+            raise UserError(_("Dispensing component not found."))
+
+        write_vals = {}
+        field_map = {
+            "pack_count": "pack_count",
+            "pack_unit_qty": "pack_unit_qty",
+            "comments": "comments",
+        }
+        for source, target in field_map.items():
+            if source in vals:
+                write_vals[target] = vals[source]
+        requested_batch_number = vals["batch_number"] if "batch_number" in vals else None
+        product = False
+        if vals.get("product_id"):
+            product = self.env["product.product"].browse(vals["product_id"]).exists()
+            if not product:
+                raise UserError(_("Selected product was not found."))
+            write_vals.update(
+                {
+                    "product_id": product.id,
+                    "product_uom_id": product.uom_id.id,
+                    "pack_unit_qty": product.pack_unit_qty
+                    if product.is_dispensing_pack and product.pack_unit_qty
+                    else 1.0,
+                }
+            )
+        if write_vals:
+            component.write(write_vals)
+        if product and requested_batch_number is None:
+            default_lot = component._get_default_dispensing_lot()
+            requested_batch_number = default_lot.name if default_lot else False
+        if requested_batch_number is not None:
+            component._sync_batch_selection(requested_batch_number)
+        return self._serialize_dispensing_line(line)
+
+    def apply_prescription_dispensing_component_barcode(self, line_id, component_id, barcode):
+        self.ensure_one()
+        self._ensure_prescription_is_editable()
+        line = self.order_line.filtered(lambda l: l.id == line_id and not l.display_type)
+        if not line:
+            raise UserError(_("Prescription line not found."))
+        component = line.dispensing_component_ids.filtered(lambda item: item.id == component_id)
+        if not component:
+            raise UserError(_("Dispensing component not found."))
+        component.action_apply_barcode_scan(barcode)
+        return self._serialize_dispensing_line(line)
+
+    def remove_prescription_dispensing_component(self, line_id, component_id):
+        self.ensure_one()
+        self._ensure_prescription_is_editable()
+        line = self.order_line.filtered(lambda l: l.id == line_id and not l.display_type)
+        if not line:
+            return True
+        component = line.dispensing_component_ids.filtered(lambda item: item.id == component_id)
+        if component:
+            component.unlink()
+            if not line.dispensing_component_ids:
+                line.with_context(skip_prescription_init=True).write(
+                    {
+                        "product_uom_qty": 0.0,
+                        "dispensing_batch_number": False,
+                        "barcode_scan": False,
+                    }
+                )
         return self._serialize_dispensing_line(line)
 
     def remove_prescription_dispensing_line(self, line_id):
