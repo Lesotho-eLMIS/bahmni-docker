@@ -305,7 +305,7 @@
                                         <div class="o_lesotho_group_grid o_lesotho_group_grid_top">
                                             <label class="o_lesotho_field o_lesotho_field_wide">
                                                 <span>Dispensed Product</span>
-                                                <select t-att-disabled="state.readOnly || this.hasComponents(line) || !line.is_pack_substituted" t-att-value="line.product_id || ''" t-on-change="(ev) => this.onProductChanged(line, ev.target.value)">
+                                                <select t-att-disabled="state.readOnly || !line.is_pack_substituted" t-att-value="line.product_id || ''" t-on-change="(ev) => this.onProductChanged(line, ev.target.value)">
                                                     <t t-foreach="state.productOptions" t-as="product" t-key="product.id">
                                                         <option t-att-value="product.id" t-att-selected="product.id === line.product_id"><t t-esc="product.name"/></option>
                                                     </t>
@@ -337,7 +337,7 @@
                                                 <div class="o_lesotho_quantity_stack">
                                                     <label class="o_lesotho_field o_lesotho_pack_unit_field">
                                                         <span>Pack(s)</span>
-                                                        <input type="number" step="1" t-att-disabled="state.readOnly || this.hasComponents(line)" t-att-value="line.pack_count" t-on-change="(ev) => this.onFieldChanged(line, 'pack_count', ev.target.value)"/>
+                                                        <input type="number" step="1" t-att-disabled="state.readOnly" t-att-value="line.pack_count" t-on-change="(ev) => this.onFieldChanged(line, 'pack_count', ev.target.value)"/>
                                                     </label>
                                                     <label class="o_lesotho_field o_lesotho_quantity_dispensed_field">
                                                         <span>Quantity Dispensed</span>
@@ -377,7 +377,7 @@
                                                 </label>
                                                 <label class="o_lesotho_field o_lesotho_barcode_field">
                                                     <span>Barcode</span>
-                                                    <input class="o_lesotho_barcode" t-att-disabled="state.readOnly || this.hasComponents(line)" t-att-value="line.barcode" t-on-input="(ev) => this.updateLocal(line, 'barcode', ev.target.value)" t-on-keydown="(ev) => this.scanBarcode(line, line_index, ev)"/>
+                                                    <input class="o_lesotho_barcode" t-att-disabled="state.readOnly" t-att-value="line.barcode" t-on-input="(ev) => this.updateLocal(line, 'barcode', ev.target.value)" t-on-keydown="(ev) => this.scanBarcode(line, line_index, ev)"/>
                                                 </label>
                                                 <label class="o_lesotho_field o_lesotho_checkbox_field o_lesotho_served_internally_field">
                                                     <span>Served Internally</span>
@@ -493,7 +493,7 @@
                                             <t t-esc="line.dispensed_product"/>
                                             <span t-if="line.dispensed_product &amp;&amp; line.dispensed_product !== line.prescribed_product" class="o_lesotho_review_badge">Modified</span>
                                         </td>
-                                        <td><t t-esc="line.quantity_dispensed"/></td>
+                                        <td><t t-esc="line.total_quantity_dispensed || line.quantity_dispensed"/></td>
                                         <td><t t-esc="line.dose"/></td>
                                         <td><t t-esc="line.dose_unit"/></td>
                                         <td><t t-esc="line.frequency"/></td>

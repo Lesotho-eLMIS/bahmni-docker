@@ -882,7 +882,7 @@ class ExtendedSaleOrder(models.Model):
     def _get_dispensing_line_pack_count(self, line, quantity_dispensed=False):
         pack_unit_qty = self._get_dispensing_line_pack_unit_qty(line)
         if quantity_dispensed is False:
-            quantity_dispensed = line._get_prescription_quantities()[1] if line.served_internally else 0
+            quantity_dispensed = line._get_line_dispensed_qty_base_units() if line.served_internally else 0
         if quantity_dispensed:
             return quantity_dispensed / pack_unit_qty
         return 1.0
@@ -894,7 +894,8 @@ class ExtendedSaleOrder(models.Model):
         backorder_lines = line.prescription_backorder_line_ids.filtered(
             lambda item: item.order_id
         )
-        quantity_dispensed = line._get_prescription_quantities()[1] if line.served_internally else 0
+        quantity_dispensed = line._get_line_dispensed_qty_base_units() if line.served_internally else 0
+        total_quantity_dispensed = line._get_prescription_quantities()[1] if line.served_internally else 0
         dispensed_product = line.product_id or prescribed_product
         return {
             "id": line.id,
@@ -909,6 +910,7 @@ class ExtendedSaleOrder(models.Model):
             "pack_count": self._get_dispensing_line_pack_count(line, quantity_dispensed),
             "pack_unit_qty": self._get_dispensing_line_pack_unit_qty(line),
             "quantity_dispensed": quantity_dispensed,
+            "total_quantity_dispensed": total_quantity_dispensed,
             "dose": self._format_prescription_option_value(line.dose) if line.dose else "",
             "dose_unit": line.dose_units or "",
             "frequency": line.frequency or "",
@@ -1076,15 +1078,21 @@ class ExtendedSaleOrder(models.Model):
                 for backorder in self.prescription_backorder_ids
             ],
             "direction_options": self._get_prescription_direction_options(dispensing_lines),
-            "product_options": self._get_dispensing_product_options(),
+            "product_options": self._get_dispensing_product_options(only_prepacks=True),
             "lines": [
                 self._serialize_dispensing_line(line)
                 for line in dispensing_lines
             ],
         }
 
-    def _get_dispensing_product_options(self):
-        products = self.env["product.product"].with_context(active_test=False).search([], order="name, id")
+    def _get_dispensing_product_options(self, only_prepacks=False):
+        domain = []
+        if only_prepacks:
+            domain = [
+                ("is_dispensing_pack", "=", True),
+                ("dispensing_pack_enabled", "=", True),
+            ]
+        products = self.env["product.product"].with_context(active_test=False).search(domain, order="name, id")
         return [
             {
                 "id": product.id,
@@ -1521,7 +1529,7 @@ class ExtendedSaleOrder(models.Model):
                 raise UserError(_("Selected product was not found."))
             write_vals.update(line._prepare_dispensing_product_change_vals(product))
             if "pack_count" not in vals:
-                pack_count = self._get_dispensing_line_pack_count(line)
+                pack_count = 1.0
                 write_vals["product_uom_qty"] = self._get_dispensing_stock_qty_from_pack_count(
                     line,
                     pack_count,
@@ -1559,17 +1567,12 @@ class ExtendedSaleOrder(models.Model):
             if product.is_dispensing_pack and product.pack_unit_qty
             else 1.0
         )
-        pack_count = 1.0
-        if not line.dispensing_component_ids:
-            current_dispensed_qty = line._get_prescription_quantities()[1]
-            if current_dispensed_qty:
-                pack_count = current_dispensed_qty / pack_unit_qty
         component = self.env["sale.order.line.dispensing.component"].create(
             {
                 "sale_order_line_id": line.id,
                 "product_id": product.id,
                 "product_uom_id": product.uom_id.id,
-                "pack_count": pack_count,
+                "pack_count": 1.0,
                 "pack_unit_qty": pack_unit_qty,
             }
         )
@@ -1607,6 +1610,7 @@ class ExtendedSaleOrder(models.Model):
                 {
                     "product_id": product.id,
                     "product_uom_id": product.uom_id.id,
+                    "pack_count": 1.0,
                     "pack_unit_qty": product.pack_unit_qty
                     if product.is_dispensing_pack and product.pack_unit_qty
                     else 1.0,

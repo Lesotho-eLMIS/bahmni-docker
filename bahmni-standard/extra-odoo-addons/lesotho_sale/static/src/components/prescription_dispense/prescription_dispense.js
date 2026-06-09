@@ -108,7 +108,7 @@ export class PrescriptionDispense extends Component {
             return "Balance Waived";
         }
         const prescribed = Number(line.quantity_prescribed || 0);
-        const dispensed = Number(line.quantity_dispensed || 0);
+        const dispensed = Number(line.total_quantity_dispensed || line.quantity_dispensed || 0);
         if (dispensed <= 0) {
             return "Not Dispensed";
         }
@@ -137,7 +137,7 @@ export class PrescriptionDispense extends Component {
             return false;
         }
         const prescribed = Number(line.quantity_prescribed || 0);
-        const dispensed = Number(line.quantity_dispensed || 0);
+        const dispensed = Number(line.total_quantity_dispensed || line.quantity_dispensed || 0);
         return dispensed < prescribed;
     }
 
@@ -365,9 +365,6 @@ export class PrescriptionDispense extends Component {
         if (this.state.readOnly) {
             return;
         }
-        if (this.hasComponents(line)) {
-            return;
-        }
         const productId = value ? parseInt(value, 10) : false;
         if (productId) {
             const product = this.state.productOptions.find((item) => item.id === productId);
@@ -375,9 +372,13 @@ export class PrescriptionDispense extends Component {
             this.updateLocal(line, "dispensed_product", product ? product.name : "");
             this.updateLocal(line, "is_prepack", Boolean(product && product.is_prepack));
             this.updateLocal(line, "isPrepack", Boolean(product && product.isPrepack));
+            let packUnitQty = Number(line.pack_unit_qty || 1);
             if (product) {
-                this.updateLocal(line, "pack_unit_qty", Number(product.pack_unit_qty || 1));
+                packUnitQty = Number(product.pack_unit_qty || 1);
+                this.updateLocal(line, "pack_unit_qty", packUnitQty);
             }
+            this.updateLocal(line, "pack_count", 1);
+            this.updateLocal(line, "quantity_dispensed", packUnitQty);
             this.updateLocal(line, "batch_number", "");
             this.updateLocal(line, "expiry_date", "");
             this.updateLocal(line, "batch_options", []);
@@ -408,7 +409,7 @@ export class PrescriptionDispense extends Component {
         if (this.state.readOnly) {
             return;
         }
-        if (this.hasComponents(line) && ["product_id", "pack_count", "quantity_dispensed", "batch_number"].includes(field)) {
+        if (this.hasComponents(line) && field === "batch_number") {
             return;
         }
         if (field === "served_internally" && !value) {
@@ -452,9 +453,13 @@ export class PrescriptionDispense extends Component {
             this.updateLocal(line, "dispensed_product", product ? product.name : "");
             this.updateLocal(line, "is_prepack", Boolean(product && product.is_prepack));
             this.updateLocal(line, "isPrepack", Boolean(product && product.isPrepack));
+            let packUnitQty = Number(line.pack_unit_qty || 1);
             if (product) {
-                this.updateLocal(line, "pack_unit_qty", Number(product.pack_unit_qty || 1));
+                packUnitQty = Number(product.pack_unit_qty || 1);
+                this.updateLocal(line, "pack_unit_qty", packUnitQty);
             }
+            this.updateLocal(line, "pack_count", 1);
+            this.updateLocal(line, "quantity_dispensed", packUnitQty);
         }
         const saveKey = `${line.id}:${field}`;
         this.clearSaveError(saveKey);
@@ -480,6 +485,7 @@ export class PrescriptionDispense extends Component {
         }
         if (checked) {
             // When enabling substitute, mark it as pack substituted
+            this.updateLocal(line, "is_pack_substituted", true);
             this.saveLine(line, "is_pack_substituted", true);
             return;
         }
@@ -514,9 +520,6 @@ export class PrescriptionDispense extends Component {
 
     async scanBarcode(line, index, ev) {
         if (this.state.readOnly) {
-            return;
-        }
-        if (this.hasComponents(line)) {
             return;
         }
         if (ev.key !== "Enter") {
@@ -574,9 +577,13 @@ export class PrescriptionDispense extends Component {
         this.updateComponentLocal(component, "dispensed_product", product ? product.name : "");
         this.updateComponentLocal(component, "is_prepack", Boolean(product && product.is_prepack));
         this.updateComponentLocal(component, "isPrepack", Boolean(product && product.isPrepack));
+        let packUnitQty = Number(component.pack_unit_qty || 1);
         if (product) {
-            this.updateComponentLocal(component, "pack_unit_qty", Number(product.pack_unit_qty || 1));
+            packUnitQty = Number(product.pack_unit_qty || 1);
+            this.updateComponentLocal(component, "pack_unit_qty", packUnitQty);
         }
+        this.updateComponentLocal(component, "pack_count", 1);
+        this.updateComponentLocal(component, "quantity_dispensed", packUnitQty);
         this.updateComponentLocal(component, "batch_number", "");
         this.updateComponentLocal(component, "expiry_date", "");
         this.updateComponentLocal(component, "batch_options", []);

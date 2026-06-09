@@ -518,11 +518,9 @@ class ExtendedSaleOrderLine(models.Model):
     def _get_prescription_quantities(self):
         self.ensure_one()
         prescribed_qty = self.prescribed_qty_base_units or self.product_uom_qty or 0.0
-        served_qty = self._get_total_component_dispensed_qty()
-        if not self.dispensing_component_ids:
-            served_qty = self.product_uom_qty or 0.0
-            if self.product_id and self.product_id.is_dispensing_pack and self.product_id.pack_unit_qty:
-                served_qty *= self.product_id.pack_unit_qty
+        served_qty = self._get_line_dispensed_qty_base_units()
+        if self.dispensing_component_ids:
+            served_qty += self._get_total_component_dispensed_qty()
         return prescribed_qty, served_qty
 
     def _get_total_component_dispensed_qty(self):
@@ -531,30 +529,26 @@ class ExtendedSaleOrderLine(models.Model):
             return 0.0
         return sum(self.dispensing_component_ids.mapped("dispensed_qty_base_units"))
 
+    def _get_line_dispensed_qty_base_units(self):
+        self.ensure_one()
+        if not self.served_internally:
+            return 0.0
+        served_qty = self.product_uom_qty or 0.0
+        if self.product_id and self.product_id.is_dispensing_pack and self.product_id.pack_unit_qty:
+            served_qty *= self.product_id.pack_unit_qty
+        return served_qty
+
     def _sync_component_total_to_line(self):
         for line in self:
             if not line.dispensing_component_ids:
                 continue
-            total_qty = line._get_total_component_dispensed_qty()
             vals = {
-                "product_uom_qty": total_qty,
                 "served_internally": True,
-                "is_pack_substituted": any(
+                "is_pack_substituted": line.is_pack_substituted or any(
                     component.is_substitution
                     for component in line.dispensing_component_ids
                 ),
             }
-            first_component = line.dispensing_component_ids.sorted("id")[:1]
-            vals["dispensing_batch_number"] = first_component.batch_number or False
-            vals["barcode_scan"] = first_component.barcode or False
-            parent_lot = line._get_default_dispensing_lot(line.product_id, total_qty or 1.0)
-            if parent_lot:
-                vals.update(
-                    line._prepare_dispensing_batch_selection_vals(
-                        parent_lot.name,
-                        product=line.product_id,
-                    )
-                )
             line.with_context(skip_prescription_init=True).write(vals)
 
     def _has_outstanding_prescription_balance(self):
@@ -1278,7 +1272,6 @@ class ExtendedSaleOrderLine(models.Model):
         for line in self:
             if line.dispensing_component_ids:
                 line.dispensing_component_ids._check_dispensing_batch_available()
-                continue
             if (
                 line.display_type
                 or not line.served_internally
@@ -1714,14 +1707,6 @@ class SaleOrderLineDispensingComponent(models.Model):
         lines = self.mapped("sale_order_line_id")
         result = super().unlink()
         lines._sync_component_total_to_line()
-        for line in lines.filtered(lambda item: not item.dispensing_component_ids):
-            line.with_context(skip_prescription_init=True).write(
-                {
-                    "product_uom_qty": 0.0,
-                    "dispensing_batch_number": False,
-                    "barcode_scan": False,
-                }
-            )
         return result
 
     def _normalize_vals(self, vals, current_component=None):
