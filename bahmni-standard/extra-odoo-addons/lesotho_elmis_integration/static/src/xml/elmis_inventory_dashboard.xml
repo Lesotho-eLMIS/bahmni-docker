@@ -1,0 +1,389 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+  <t t-name="lesotho_elmis_integration.InventoryDashboard" owl="1">
+    <div class="o_elmis_inventory_dashboard" t-ref="dashboard">
+      <div class="o_elmis_inventory_sync_bar" t-att-class="syncClass">
+        <div class="o_elmis_inventory_sync_summary">
+          <span class="o_elmis_inventory_sync_dot"/>
+          <div>
+            <strong t-esc="syncHeadline"/>
+            <span t-esc="syncMeta"/>
+          </div>
+        </div>
+        <div class="o_elmis_inventory_sync_actions">
+          <button class="btn btn-link" type="button" t-on-click="() => this.openAction('history')">
+            History
+          </button>
+          <button class="btn btn-outline-light" type="button" t-on-click="() => this.openAction('sync')">
+            <i class="fa fa-refresh me-1"/> Sync now
+          </button>
+        </div>
+      </div>
+
+      <div class="o_elmis_inventory_header">
+        <div>
+          <h1>Inventory Overview</h1>
+          <p>
+            <t t-if="state.selectedLocation">
+              <t t-esc="state.selectedLocation.name"/>
+              <span t-if="state.selectedLocation.facility_code">
+                · <t t-esc="state.selectedLocation.facility_code"/>
+              </span>
+            </t>
+          </p>
+        </div>
+        <div class="o_elmis_inventory_header_actions">
+          <button class="btn btn-secondary" type="button" t-on-click="exportInventory">
+            <i class="fa fa-download me-1"/> Export CSV
+          </button>
+          <button class="btn btn-secondary" type="button" t-on-click="() => this.openAction('detail')">
+            <i class="fa fa-list me-1"/> Detailed inventory
+          </button>
+          <button class="btn btn-secondary" type="button" t-on-click="() => this.openAction('outbox')">
+            <i class="fa fa-paper-plane me-1"/> Integration events
+          </button>
+          <button class="btn btn-primary" type="button" t-on-click="() => this.openAction('adjustments')">
+            <i class="fa fa-balance-scale me-1"/> Adjust stock
+          </button>
+        </div>
+      </div>
+
+      <div class="o_elmis_inventory_metrics" t-if="!state.loading">
+        <button class="o_elmis_inventory_metric" type="button"
+                t-att-class="state.status === 'all' ? 'is-active' : ''"
+                t-on-click="() => this.filterStatus('all')">
+          <span>Products</span>
+          <strong t-esc="state.summary.total || 0"/>
+        </button>
+        <button class="o_elmis_inventory_metric is-positive" type="button"
+                t-att-class="state.status === 'available' ? 'is-active' : ''"
+                t-on-click="() => this.filterStatus('available')">
+          <span>Available</span>
+          <strong t-esc="state.summary.available || 0"/>
+        </button>
+        <button class="o_elmis_inventory_metric is-warning" type="button"
+                t-att-class="state.status === 'low' ? 'is-active' : ''"
+                t-on-click="() => this.filterStatus('low')">
+          <span>Low stock</span>
+          <strong t-esc="state.summary.low || 0"/>
+        </button>
+        <button class="o_elmis_inventory_metric is-danger" type="button"
+                t-att-class="state.status === 'out' ? 'is-active' : ''"
+                t-on-click="() => this.filterStatus('out')">
+          <span>Out of stock</span>
+          <strong t-esc="state.summary.out || 0"/>
+        </button>
+        <button class="o_elmis_inventory_metric is-warning" type="button"
+                t-att-class="state.status === 'expiring_soon' ? 'is-active' : ''"
+                t-on-click="() => this.filterStatus('expiring_soon')">
+          <span>Expiring soon</span>
+          <strong t-esc="state.summary.expiring_soon || 0"/>
+        </button>
+        <button class="o_elmis_inventory_metric is-danger" type="button"
+                t-att-class="state.status === 'expired' ? 'is-active' : ''"
+                t-on-click="() => this.filterStatus('expired')">
+          <span>Expired</span>
+          <strong t-esc="state.summary.expired || 0"/>
+        </button>
+      </div>
+
+      <div class="o_elmis_inventory_alerts" t-if="!state.loading">
+        <button t-if="state.summary.out" type="button" class="is-danger"
+                t-on-click="() => this.filterStatus('out')">
+          <i class="fa fa-ban"/>
+          <span><strong t-esc="state.summary.out"/> out-of-stock product(s)</span>
+        </button>
+        <button t-if="state.summary.low" type="button" class="is-warning"
+                t-on-click="() => this.filterStatus('low')">
+          <i class="fa fa-exclamation-triangle"/>
+          <span><strong t-esc="state.summary.low"/> product(s) below reorder level</span>
+        </button>
+        <button t-if="state.summary.expiring_soon" type="button" class="is-warning"
+                t-on-click="() => this.filterStatus('expiring_soon')">
+          <i class="fa fa-calendar"/>
+          <span><strong t-esc="state.summary.expiring_soon"/> product(s) expire within 90 days</span>
+        </button>
+        <button t-if="state.sync.outbox &amp;&amp; (state.sync.outbox.failed || state.sync.outbox.stuck_sent)"
+                type="button" class="is-danger" t-on-click="() => this.openAction('dlq')">
+          <i class="fa fa-chain-broken"/>
+          <span>Integration failures require reconciliation</span>
+        </button>
+      </div>
+
+      <div class="o_elmis_inventory_batch_alerts" t-if="!state.loading &amp;&amp; hasBatchAlerts">
+        <div class="o_elmis_inventory_batch_alert_heading">
+          <i class="fa fa-calendar-times-o"/>
+          <div>
+            <strong>Batch expiry exposure</strong>
+            <span>Stock quantities at the selected location, grouped into non-overlapping expiry windows.</span>
+          </div>
+        </div>
+        <div class="o_elmis_inventory_batch_alert_grid">
+          <button type="button" class="is-danger"
+                  t-att-class="state.status === 'expired' ? 'is-active' : ''"
+                  t-on-click="() => this.filterStatus('expired')">
+            <span>Expired stock</span>
+            <strong t-esc="formatQuantity(state.summary.expired_quantity)"/>
+            <small>units require action</small>
+          </button>
+          <button type="button" class="is-urgent"
+                  t-att-class="state.status === 'expiring_0_30' ? 'is-active' : ''"
+                  t-on-click="() => this.filterStatus('expiring_0_30')">
+            <span>Due in 0–30 days</span>
+            <strong t-esc="formatQuantity(state.summary.expiring_0_30_quantity)"/>
+            <small>units at immediate risk</small>
+          </button>
+          <button type="button" class="is-warning"
+                  t-att-class="state.status === 'expiring_31_60' ? 'is-active' : ''"
+                  t-on-click="() => this.filterStatus('expiring_31_60')">
+            <span>Due in 31–60 days</span>
+            <strong t-esc="formatQuantity(state.summary.expiring_31_60_quantity)"/>
+            <small>units to monitor</small>
+          </button>
+          <button type="button" class="is-watch"
+                  t-att-class="state.status === 'expiring_61_90' ? 'is-active' : ''"
+                  t-on-click="() => this.filterStatus('expiring_61_90')">
+            <span>Due in 61–90 days</span>
+            <strong t-esc="formatQuantity(state.summary.expiring_61_90_quantity)"/>
+            <small>units in the watch window</small>
+          </button>
+        </div>
+      </div>
+
+      <div class="o_elmis_inventory_toolbar">
+        <div class="o_elmis_inventory_quantity_toggle"
+             role="group" aria-label="Quantity display">
+          <button type="button"
+                  t-att-class="state.quantityMode === 'packs' ? 'is-active' : ''"
+                  t-att-aria-pressed="state.quantityMode === 'packs'"
+                  t-on-click="() => this.setQuantityMode('packs')">
+            Packs
+          </button>
+          <button type="button"
+                  t-att-class="state.quantityMode === 'units' ? 'is-active' : ''"
+                  t-att-aria-pressed="state.quantityMode === 'units'"
+                  t-on-click="() => this.setQuantityMode('units')">
+            Units
+          </button>
+        </div>
+        <div class="o_elmis_inventory_search">
+          <i class="fa fa-search"/>
+          <input type="search" placeholder="Search product, code, generic name, or batch"
+                 t-att-value="state.search" t-on-input="onSearchInput"/>
+        </div>
+        <select t-on-change="onLocationChange" title="Inventory location">
+          <t t-foreach="state.locations" t-as="location" t-key="location.id">
+            <option t-att-value="location.id"
+                    t-att-selected="state.selectedLocation &amp;&amp; state.selectedLocation.id === location.id">
+              <t t-esc="location.name"/>
+            </option>
+          </t>
+        </select>
+        <select t-on-change="onProgramChange" title="eLMIS program">
+          <option value="" t-att-selected="!state.programId">All programs</option>
+          <t t-foreach="state.programs" t-as="program" t-key="program.id">
+            <option t-att-value="program.id" t-att-selected="state.programId === program.id">
+              <t t-esc="program.name"/>
+            </option>
+          </t>
+        </select>
+        <select t-on-change="onSortChange" title="Sort inventory">
+          <option value="name" t-att-selected="state.sort === 'name'">Product name</option>
+          <option value="quantity_desc" t-att-selected="state.sort === 'quantity_desc'">Highest stock</option>
+          <option value="expiry" t-att-selected="state.sort === 'expiry'">Earliest expiry</option>
+        </select>
+        <button t-if="state.search || state.programId || state.status !== 'all' || state.sort !== 'name'"
+                class="btn btn-link" type="button" t-on-click="clearFilters">
+          Clear filters
+        </button>
+      </div>
+
+      <div t-if="state.loading" class="o_elmis_inventory_loading">
+        <i class="fa fa-spinner fa-spin"/>
+        <span>Loading location inventory…</span>
+      </div>
+
+      <div t-else="" class="o_elmis_inventory_table_wrap" t-ref="table">
+        <table class="o_elmis_inventory_table">
+          <thead>
+            <tr>
+              <th class="o_expand_col"/>
+              <th>Product</th>
+              <th>Program</th>
+              <th class="text-end">Stock on hand</th>
+              <th class="text-end">Available</th>
+              <th>Lots</th>
+              <th>Earliest expiry</th>
+              <th>Status</th>
+              <th class="o_action_col"/>
+            </tr>
+          </thead>
+          <tbody>
+            <t t-if="!state.products.length">
+              <tr>
+                <td colspan="9" class="o_elmis_inventory_empty">
+                  <i class="fa fa-search"/>
+                  <strong>No inventory matches these filters</strong>
+                  <span>Change the location or clear one of the active filters.</span>
+                </td>
+              </tr>
+            </t>
+            <t t-foreach="state.products" t-as="product" t-key="product.id">
+              <tr class="o_elmis_inventory_product_row"
+                  t-att-class="isExpanded(product.id) ? 'is-expanded' : ''">
+                <td>
+                  <button class="o_elmis_inventory_expand" type="button"
+                          t-att-title="isExpanded(product.id) ? 'Hide batches' : 'Show batches'"
+                          t-on-click="() => this.toggleProduct(product.id)">
+                    <i t-att-class="isExpanded(product.id) ? 'fa fa-chevron-down' : 'fa fa-chevron-right'"/>
+                  </button>
+                </td>
+                <td>
+                  <div class="o_elmis_inventory_product">
+                    <strong t-esc="product.name"/>
+                    <span>
+                      <t t-esc="product.code"/>
+                      <t t-if="product.generic_name"> · <t t-esc="product.generic_name"/></t>
+                      <t t-if="product.dosage_form"> · <t t-esc="product.dosage_form"/></t>
+                    </span>
+                  </div>
+                </td>
+                <td>
+                  <div class="o_elmis_inventory_tags">
+                    <span t-foreach="product.programs" t-as="program" t-key="program" t-esc="program"/>
+                  </div>
+                </td>
+                <td class="text-end o_quantity">
+                  <strong t-esc="formatStockQuantity(product.quantity, product)"
+                          t-att-title="canonicalQuantityTitle(product.quantity, product)"/>
+                  <span t-esc="quantityUnitHint(product)"/>
+                </td>
+                <td class="text-end o_quantity">
+                  <strong t-esc="formatStockQuantity(product.available, product)"
+                          t-att-title="canonicalQuantityTitle(product.available, product)"/>
+                  <span t-if="product.reserved">
+                    Reserved <t t-esc="formatStockQuantity(product.reserved, product)"/>
+                  </span>
+                </td>
+                <td>
+                  <span class="o_elmis_inventory_lot_count">
+                    <t t-esc="product.lot_count"/> batch<t t-if="product.lot_count !== 1">es</t>
+                  </span>
+                </td>
+                <td>
+                  <span t-esc="formatDate(product.earliest_expiry)"/>
+                  <span class="o_elmis_inventory_expiry"
+                        t-att-class="'is-' + product.expiry_status"
+                        t-esc="expiryLabel(product.expiry_status)"/>
+                </td>
+                <td>
+                  <span class="o_elmis_inventory_status"
+                        t-att-class="'is-' + product.stock_status"
+                        t-esc="stockLabel(product.stock_status)"/>
+                  <small t-if="product.reorder_minimum">
+                    Reorder at <t t-esc="formatStockQuantity(product.reorder_minimum, product)"/>
+                  </small>
+                </td>
+                <td>
+                  <button class="btn btn-link btn-sm" type="button"
+                          title="Open detailed stock records"
+                          t-on-click="() => this.openProduct(product)">
+                    Details
+                  </button>
+                </td>
+              </tr>
+              <t t-if="isExpanded(product.id)">
+                <tr class="o_elmis_inventory_lot_header">
+                  <td/>
+                  <td>Batch</td>
+                  <td/>
+                  <td class="text-end">Stock on hand</td>
+                  <td class="text-end">Available</td>
+                  <td/>
+                  <td>Expiry</td>
+                  <td>Status</td>
+                  <td/>
+                </tr>
+                <tr t-if="!product.lots.length" class="o_elmis_inventory_lot_row">
+                  <td/>
+                  <td colspan="8">No batches have stock at this location.</td>
+                </tr>
+                <tr t-foreach="product.lots" t-as="lot" t-key="lot.id"
+                    class="o_elmis_inventory_lot_row">
+                  <td/>
+                  <td><strong t-esc="lot.name"/></td>
+                  <td/>
+                  <td class="text-end"
+                      t-att-title="canonicalQuantityTitle(lot.quantity, product)"
+                      t-esc="formatStockQuantity(lot.quantity, product)"/>
+                  <td class="text-end"
+                      t-att-title="canonicalQuantityTitle(lot.available, product)"
+                      t-esc="formatStockQuantity(lot.available, product)"/>
+                  <td/>
+                  <td>
+                    <t t-esc="formatDate(lot.expiry)"/>
+                    <small t-if="lot.days_to_expiry !== false">
+                      <t t-esc="lot.days_to_expiry"/> days
+                    </small>
+                  </td>
+                  <td>
+                    <span class="o_elmis_inventory_expiry"
+                          t-att-class="'is-' + lot.expiry_status"
+                          t-esc="expiryWindowLabel(lot)"/>
+                  </td>
+                  <td>
+                    <button class="btn btn-link btn-sm" type="button"
+                            title="Open batch stock card"
+                            t-on-click="() => this.openStockCard(product, lot)">
+                      Stock card
+                    </button>
+                  </td>
+                </tr>
+              </t>
+            </t>
+          </tbody>
+        </table>
+        <div class="o_elmis_inventory_footer">
+          <span>
+            Showing <strong t-esc="state.products.length"/> of
+            <strong t-esc="state.total"/> products
+          </span>
+          <div class="o_elmis_inventory_pager">
+            <button type="button" title="First page"
+                    t-att-disabled="state.page &lt;= 1"
+                    t-on-click="() => this.goToPage(1)">
+              <i class="fa fa-angle-double-left"/>
+            </button>
+            <button type="button" title="Previous page"
+                    t-att-disabled="state.page &lt;= 1"
+                    t-on-click="() => this.goToPage(state.page - 1)">
+              <i class="fa fa-chevron-left"/>
+            </button>
+            <div class="o_elmis_inventory_page_numbers">
+              <t t-foreach="pageItems" t-as="item" t-key="item.key">
+                <span t-if="item.type === 'ellipsis'" class="o_elmis_inventory_page_ellipsis">…</span>
+                <button t-else="" type="button"
+                        t-att-title="'Page ' + item.page"
+                        t-att-class="item.page === state.page ? 'is-current' : ''"
+                        t-att-aria-current="item.page === state.page ? 'page' : undefined"
+                        t-on-click="() => this.goToPage(item.page)">
+                  <t t-esc="item.page"/>
+                </button>
+              </t>
+            </div>
+            <button type="button" title="Next page"
+                    t-att-disabled="state.page &gt;= state.pages"
+                    t-on-click="() => this.goToPage(state.page + 1)">
+              <i class="fa fa-chevron-right"/>
+            </button>
+            <button type="button" title="Last page"
+                    t-att-disabled="state.page &gt;= state.pages"
+                    t-on-click="() => this.goToPage(state.pages)">
+              <i class="fa fa-angle-double-right"/>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </t>
+</templates>

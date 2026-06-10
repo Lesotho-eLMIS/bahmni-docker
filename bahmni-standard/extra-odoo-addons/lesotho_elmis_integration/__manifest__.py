@@ -33,8 +33,15 @@
     "assets": {
         "web.assets_backend": [
             "lesotho_elmis_integration/static/src/scss/elmis_sync_status.scss",
+            "lesotho_elmis_integration/static/src/scss/elmis_inventory_dashboard.scss",
+            "lesotho_elmis_integration/static/src/scss/elmis_stock_card.scss",
+            "lesotho_elmis_integration/static/src/scss/elmis_inventory_workspace.scss",
             "lesotho_elmis_integration/static/src/js/elmis_sync_status.js",
+            "lesotho_elmis_integration/static/src/js/elmis_inventory_dashboard.js",
+            "lesotho_elmis_integration/static/src/js/elmis_stock_card.js",
             "lesotho_elmis_integration/static/src/xml/elmis_sync_status.xml",
+            "lesotho_elmis_integration/static/src/xml/elmis_inventory_dashboard.xml",
+            "lesotho_elmis_integration/static/src/xml/elmis_stock_card.xml",
         ],
     },
     "installable": True,

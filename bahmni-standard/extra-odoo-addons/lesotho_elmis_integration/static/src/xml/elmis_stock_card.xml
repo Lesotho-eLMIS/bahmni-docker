@@ -1,0 +1,176 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+  <t t-name="lesotho_elmis_integration.StockCard" owl="1">
+    <div class="o_elmis_stock_card">
+      <div class="o_elmis_stock_card_header">
+        <div>
+          <button class="btn btn-link o_elmis_stock_card_back" type="button"
+                  t-on-click="backToInventory">
+            <i class="fa fa-arrow-left"/> Inventory overview
+          </button>
+          <h1>Batch Stock Card</h1>
+          <p>Complete movement history for one product, batch, and stock location.</p>
+        </div>
+        <button class="btn btn-secondary" type="button"
+                t-on-click="exportStockCard">
+          <i class="fa fa-download me-1"/> Export CSV
+        </button>
+      </div>
+
+      <div t-if="state.loading" class="o_elmis_stock_card_loading">
+        <i class="fa fa-spinner fa-spin"/>
+        <span>Loading stock movements…</span>
+      </div>
+
+      <t t-else="">
+        <div class="o_elmis_stock_card_identity">
+          <div class="o_elmis_stock_card_product">
+            <span>Product</span>
+            <strong t-esc="state.product.name"/>
+            <small t-esc="state.product.code"/>
+          </div>
+          <div>
+            <span>Batch</span>
+            <strong t-esc="state.lot.name"/>
+            <small>Expires <t t-esc="formatDate(state.lot.expiry)"/></small>
+          </div>
+          <div>
+            <span>Location</span>
+            <strong t-esc="state.location.name"/>
+            <small t-esc="state.location.facility_code"/>
+          </div>
+        </div>
+
+        <div class="o_elmis_stock_card_metrics">
+          <div>
+            <span>Opening balance</span>
+            <strong t-esc="formatQuantity(state.summary.opening_balance)"/>
+          </div>
+          <div class="is-positive">
+            <span>Stock in</span>
+            <strong t-esc="formatQuantity(state.summary.quantity_in)"/>
+          </div>
+          <div class="is-danger">
+            <span>Stock out</span>
+            <strong t-esc="formatQuantity(state.summary.quantity_out)"/>
+          </div>
+          <div class="is-current">
+            <span>Current balance</span>
+            <strong t-esc="formatQuantity(state.summary.current_balance)"/>
+          </div>
+        </div>
+
+        <div class="o_elmis_stock_card_toolbar">
+          <div class="o_elmis_stock_card_quantity_toggle"
+               role="group" aria-label="Quantity display">
+            <button type="button"
+                    t-att-class="state.quantityMode === 'packs' ? 'is-active' : ''"
+                    t-on-click="() => this.setQuantityMode('packs')">
+              Packs
+            </button>
+            <button type="button"
+                    t-att-class="state.quantityMode === 'units' ? 'is-active' : ''"
+                    t-on-click="() => this.setQuantityMode('units')">
+              Units
+            </button>
+          </div>
+          <select title="Movement type" t-on-change="onMovementTypeChange">
+            <option value="all" t-att-selected="state.movementType === 'all'">
+              All movements
+            </option>
+            <t t-foreach="state.movementTypes" t-as="type" t-key="type.value">
+              <option t-att-value="type.value"
+                      t-att-selected="state.movementType === type.value"
+                      t-esc="type.label"/>
+            </t>
+          </select>
+          <label>
+            <span>From</span>
+            <input type="date" t-att-value="state.dateFrom"
+                   t-on-change="onDateFromChange"/>
+          </label>
+          <label>
+            <span>To</span>
+            <input type="date" t-att-value="state.dateTo"
+                   t-on-change="onDateToChange"/>
+          </label>
+          <button t-if="state.movementType !== 'all' || state.dateFrom || state.dateTo"
+                  class="btn btn-link" type="button" t-on-click="clearFilters">
+            Clear filters
+          </button>
+        </div>
+
+        <div class="o_elmis_stock_card_table_wrap">
+          <table class="o_elmis_stock_card_table">
+            <thead>
+              <tr>
+                <th>Date and time</th>
+                <th>Movement</th>
+                <th>Reference</th>
+                <th>From / To</th>
+                <th>Performed by</th>
+                <th class="text-end">In</th>
+                <th class="text-end">Out</th>
+                <th class="text-end">Balance</th>
+                <th>eLMIS</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr t-if="!state.rows.length">
+                <td colspan="9" class="o_elmis_stock_card_empty">
+                  <i class="fa fa-exchange"/>
+                  <strong>No movements match these filters</strong>
+                  <span>Clear the filters or select a wider date range.</span>
+                </td>
+              </tr>
+              <tr t-foreach="state.rows" t-as="row" t-key="row.id">
+                <td t-esc="formatDateTime(row.date)"/>
+                <td>
+                  <span class="o_elmis_stock_card_movement"
+                        t-att-class="'is-' + row.direction"
+                        t-esc="row.movement_label"/>
+                  <small t-esc="row.reason"/>
+                </td>
+                <td>
+                  <button class="btn btn-link btn-sm" type="button"
+                          t-on-click="() => this.openSource(row)"
+                          t-esc="row.reference"/>
+                </td>
+                <td t-esc="row.counterparty_location"/>
+                <td t-esc="row.performed_by"/>
+                <td class="text-end is-positive">
+                  <t t-if="row.quantity_in" t-esc="formatQuantity(row.quantity_in)"/>
+                  <t t-else="">—</t>
+                </td>
+                <td class="text-end is-danger">
+                  <t t-if="row.quantity_out" t-esc="formatQuantity(row.quantity_out)"/>
+                  <t t-else="">—</t>
+                </td>
+                <td class="text-end">
+                  <strong t-esc="formatQuantity(row.balance_after)"/>
+                </td>
+                <td>
+                  <span class="o_elmis_stock_card_status"
+                        t-att-class="'is-' + row.elmis_status"
+                        t-esc="row.elmis_status_label"/>
+                  <small t-if="row.message_id" t-att-title="row.message_id">
+                    <t t-esc="row.message_id.slice(0, 8)"/>…
+                  </small>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+          <div class="o_elmis_stock_card_footer">
+            <span>
+              <strong t-esc="state.summary.movement_count"/> movement(s)
+            </span>
+            <span>
+              Quantities are stored and exported in
+              <strong t-esc="state.product.uom || 'units'"/>.
+            </span>
+          </div>
+        </div>
+      </t>
+    </div>
+  </t>
+</templates>
