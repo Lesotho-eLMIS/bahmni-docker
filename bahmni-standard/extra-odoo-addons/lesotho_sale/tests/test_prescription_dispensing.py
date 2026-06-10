@@ -352,6 +352,69 @@ class TestPrescriptionDispensing(SavepointCase):
         self.assertEqual(line.prescription_status, "fully_served")
         self.assertEqual(order.prescription_status, "fully_served")
 
+    def test_standard_confirmation_is_blocked_in_prescription_workflow(self):
+        line = self._create_order_line(quantity=5.0)
+
+        with self.assertRaisesRegex(
+            UserError,
+            "Do not confirm a prescription before dispensing it",
+        ):
+            line.order_id.with_context(
+                open_prescription_dispense_page=True
+            ).action_confirm()
+
+        self.assertEqual(line.order_id.state, "draft")
+
+    def test_serving_records_selected_product_and_batch_on_stock_move(self):
+        self.env["ir.config_parameter"].sudo().set_param(
+            "bahmni_sale.is_delivery_automated",
+            True,
+        )
+        line = self._create_order_line(quantity=5.0)
+        order = line.order_id
+        order.write({"medication_explanation_confirmed": True})
+        order.fetch_prescription_dispensing()
+
+        order.action_serve_prescription_from_ui(False)
+
+        done_move_lines = line.move_ids.filtered(
+            lambda move: move.state == "done"
+        ).mapped("move_line_ids").filtered(
+            lambda move_line: move_line.state == "done"
+            and move_line.location_id == self.dispensing_location
+            and move_line.location_dest_id.usage == "customer"
+        )
+        self.assertTrue(done_move_lines)
+        self.assertEqual(done_move_lines.mapped("product_id"), line.product_id)
+        self.assertEqual(done_move_lines.mapped("lot_id"), self.product_lot_1)
+        self.assertEqual(sum(done_move_lines.mapped("qty_done")), 5.0)
+
+    def test_serving_rejects_product_changed_after_completed_delivery(self):
+        self.env["ir.config_parameter"].sudo().set_param(
+            "bahmni_sale.is_delivery_automated",
+            True,
+        )
+        line = self._create_order_line(quantity=5.0)
+        order = line.order_id
+        order.fetch_prescription_dispensing()
+        order.action_confirm()
+        order.update_prescription_dispensing_line(
+            line.id,
+            {
+                "product_id": self.alt_product.id,
+                "batch_number": self.alt_product_lot_1.name,
+            },
+        )
+        order.write({"medication_explanation_confirmed": True})
+
+        with self.assertRaisesRegex(
+            UserError,
+            "stock movement does not match the selected item",
+        ):
+            order.action_serve_prescription_from_ui(False)
+
+        self.assertFalse(line.dispensed)
+
     def test_serving_uses_per_line_status_not_aggregate_totals(self):
         line = self._create_order_line(quantity=5.0)
         order = line.order_id

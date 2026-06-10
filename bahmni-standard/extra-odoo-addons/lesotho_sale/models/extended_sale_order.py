@@ -307,6 +307,33 @@ class ExtendedSaleOrder(models.Model):
             "context": {"active_id": self.id},
         }
 
+    def _uses_prescription_dispensing_workflow(self):
+        self.ensure_one()
+        return bool(
+            self.env.context.get("open_prescription_dispense_page")
+            or self.origin == "API FEED SYNC"
+            or self.order_line.filtered(
+                lambda line: not line.display_type
+                and (line.is_existing_prescription or line.has_prescription_data)
+            )
+        )
+
+    def action_confirm(self):
+        blocked_orders = self.filtered(
+            lambda order: not self.env.context.get("prescription_serving")
+            and order._uses_prescription_dispensing_workflow()
+            and not order._is_prescription_closed()
+        )
+        if blocked_orders:
+            raise UserError(
+                _(
+                    "Do not confirm a prescription before dispensing it. "
+                    "Open Dispense Prescription, select the actual product and batch, "
+                    "then use Serve Prescription so Odoo records the correct stock movement."
+                )
+            )
+        return super().action_confirm()
+
     def action_save_prescription_from_ui(self):
         self.ensure_one()
         self._ensure_prescription_is_editable()
@@ -625,6 +652,68 @@ class ExtendedSaleOrder(models.Model):
         lines_to_dispense.write({"dispensed": True})
         return True
 
+    def _check_dispensing_stock_traceability(self, lines):
+        self.ensure_one()
+        delivery_is_automated = self.env["ir.config_parameter"].sudo().get_param(
+            "bahmni_sale.is_delivery_automated"
+        )
+        if str(delivery_is_automated).lower() not in ("1", "true", "yes"):
+            return
+        for line in lines.filtered(
+            lambda item: item.served_internally
+            and item.product_id
+            and float_compare(
+                item.product_uom_qty or 0.0,
+                0.0,
+                precision_rounding=item.product_uom.rounding or 0.0001,
+            )
+            > 0
+        ):
+            expected_lot = line._find_dispensing_lot(
+                line.product_id,
+                line.dispensing_batch_number,
+            )
+            done_move_lines = line.move_ids.filtered(
+                lambda move: move.state == "done"
+            ).mapped("move_line_ids").filtered(
+                lambda move_line: move_line.state == "done"
+                and move_line.product_id == line.product_id
+                and move_line.location_id.usage == "internal"
+                and move_line.location_dest_id.usage == "customer"
+                and (not expected_lot or move_line.lot_id == expected_lot)
+            )
+            delivered_qty = sum(
+                move_line.product_uom_id._compute_quantity(
+                    move_line.qty_done,
+                    line.product_uom,
+                )
+                for move_line in done_move_lines
+            )
+            if float_compare(
+                delivered_qty,
+                line.product_uom_qty,
+                precision_rounding=line.product_uom.rounding or 0.0001,
+            ) < 0:
+                batch_label = expected_lot.name if expected_lot else _("no batch")
+                raise UserError(
+                    _(
+                        "Dispensing cannot be completed because Odoo's stock movement "
+                        "does not match the selected item.\n\n"
+                        "Selected: %(product)s, batch %(batch)s, quantity %(selected)s %(uom)s.\n"
+                        "Recorded delivery: %(delivered)s %(uom)s.\n\n"
+                        "This prescription may have been confirmed before the pharmacist "
+                        "selected the dispensed product. Reconcile the earlier delivery "
+                        "before retrying; no additional eLMIS event has been created."
+                    )
+                    % {
+                        "product": line.product_id.display_name,
+                        "batch": batch_label,
+                        "selected": line.product_uom_qty,
+                        "delivered": delivered_qty,
+                        "uom": line.product_uom.display_name,
+                    }
+                )
+
     def action_serve_prescription(
         self,
         create_backorder=False,
@@ -674,7 +763,11 @@ class ExtendedSaleOrder(models.Model):
             )
 
         if self.state in ("draft", "sent"):
-            self.action_confirm()
+            self.with_context(prescription_serving=True).action_confirm()
+
+        self._check_dispensing_stock_traceability(
+            self._get_internal_prescription_lines().exists()
+        )
 
         self.write(
             {

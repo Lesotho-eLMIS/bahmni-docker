@@ -232,6 +232,11 @@ class StockMoveLine(models.Model):
         self.ensure_one()
         if self.move_id.scrapped or self.move_id.scrap_ids or self._is_from_stock_scrap():
             return False
+        if (
+            self.location_id.usage != "internal"
+            or self.location_dest_id.usage != "internal"
+        ):
+            return False
         if not self.product_id.is_elmis_product:
             return False
         if self.location_id == self.location_dest_id:
@@ -252,15 +257,7 @@ class StockMoveLine(models.Model):
 
     def _get_expected_elmis_transfer_outbox_count(self):
         self.ensure_one()
-        if not self.product_id.is_elmis_product:
-            return 0
-        if self.location_id == self.location_dest_id:
-            return 0
-        if float_compare(
-            self.qty_done,
-            0,
-            precision_rounding=self.product_uom_id.rounding,
-        ) <= 0:
+        if not self._requires_elmis_internal_transfer_outbox():
             return 0
         expected_count = 0
         if self.location_id.elmis_facility_code:
