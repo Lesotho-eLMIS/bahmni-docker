@@ -1,30 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <odoo noupdate="1">
-    <record id="ir_config_parameter_elmis_base_url" model="ir.config_parameter">
-        <field name="key">lesotho_elmis_integration.base_url</field>
-        <field name="value">https://dev.elmis.gov.ls/api/</field>
-    </record>
-    <record id="ir_config_parameter_elmis_program_codes" model="ir.config_parameter">
-        <field name="key">lesotho_elmis_integration.program_codes</field>
-        <field name="value">art,epi,fp,lab,medical_supplies,nutrition,ois,oral,tb,other,em</field>
-    </record>
-    <record id="ir_config_parameter_elmis_sync_cron_active" model="ir.config_parameter">
-        <field name="key">lesotho_elmis_integration.sync_cron_active</field>
-        <field name="value">False</field>
-    </record>
-    <record id="ir_config_parameter_elmis_mirror_location_ids" model="ir.config_parameter">
-        <field name="key">lesotho_elmis_integration.mirror_location_ids</field>
-        <field name="value"/>
-    </record>
-    <record id="ir_config_parameter_elmis_sync_interval_number" model="ir.config_parameter">
-        <field name="key">lesotho_elmis_integration.sync_interval_number</field>
-        <field name="value">6</field>
-    </record>
-    <record id="ir_config_parameter_elmis_sync_interval_type" model="ir.config_parameter">
-        <field name="key">lesotho_elmis_integration.sync_interval_type</field>
-        <field name="value">hours</field>
-    </record>
-
     <record id="elmis_program_art" model="elmis.program">
         <field name="code">art</field>
         <field name="name">ART</field>

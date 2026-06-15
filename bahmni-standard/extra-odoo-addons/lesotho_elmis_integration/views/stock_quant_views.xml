@@ -26,4 +26,189 @@
             </xpath>
         </field>
     </record>
+
+    <record id="view_stock_quant_search_location_inventory" model="ir.ui.view">
+        <field name="name">stock.quant.search.location.inventory</field>
+        <field name="model">stock.quant</field>
+        <field name="arch" type="xml">
+            <search string="Location Inventory">
+                <field name="location_id"/>
+                <field name="product_id"/>
+                <field name="elmis_product_code"/>
+                <field name="lot_id"/>
+                <field name="elmis_program_ids" string="eLMIS Program"/>
+                <filter name="in_stock" string="In Stock" domain="[('quantity', '&gt;', 0)]"/>
+                <filter name="elmis_products" string="eLMIS Products" domain="[('product_id.is_elmis_product', '=', True)]"/>
+                <filter name="elmis_mirror_locations" string="eLMIS Mirror Locations" domain="[('location_id.elmis_facility_code', '!=', False)]"/>
+                <filter name="reserved_stock" string="Reserved Stock" domain="[('reserved_quantity', '&gt;', 0)]"/>
+                <filter name="expired" string="Expired" domain="[('lot_id.expiration_date', '&lt;', context_today().strftime('%Y-%m-%d 00:00:00'))]"/>
+                <filter name="expiring_soon" string="Expiring Soon" domain="[('lot_id.expiration_date', '&gt;=', context_today().strftime('%Y-%m-%d 00:00:00')), ('lot_id.expiration_date', '&lt;=', (context_today() + relativedelta(days=90)).strftime('%Y-%m-%d 23:59:59'))]"/>
+                <separator/>
+                <group expand="0" string="Group By">
+                    <filter name="group_location" string="Location" context="{'group_by': 'location_id'}"/>
+                    <filter name="group_product" string="Product" context="{'group_by': 'product_id'}"/>
+                    <filter name="group_batch" string="Batch" context="{'group_by': 'lot_id'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <record id="view_stock_quant_tree_location_inventory" model="ir.ui.view">
+        <field name="name">stock.quant.tree.location.inventory</field>
+        <field name="model">stock.quant</field>
+        <field name="arch" type="xml">
+            <tree string="Detailed Stock Records" create="false" edit="false" delete="false"
+                  class="o_elmis_workspace_list o_elmis_detailed_stock_list"
+                  decoration-danger="elmis_expiry_status == 'expired' or elmis_stock_status == 'out'"
+                  decoration-warning="elmis_expiry_status == 'expiring_soon' or elmis_stock_status == 'reserved'">
+                <field name="location_id"/>
+                <field name="elmis_location_facility_code" optional="show"/>
+                <field name="elmis_product_code" optional="show"/>
+                <field name="product_id"/>
+                <field name="elmis_program_ids" widget="many2many_tags" optional="show"/>
+                <field name="lot_id"/>
+                <field name="elmis_lot_expiration_date" optional="show"/>
+                <field name="elmis_days_to_expiry" optional="show"/>
+                <field name="quantity" string="Stock On Hand"/>
+                <field name="reserved_quantity" string="Reserved"/>
+                <field name="available_quantity" string="Available"/>
+                <field name="elmis_stock_status" widget="badge"
+                       decoration-success="elmis_stock_status == 'available'"
+                       decoration-warning="elmis_stock_status == 'reserved'"
+                       decoration-danger="elmis_stock_status == 'out'"
+                       optional="show"/>
+                <field name="elmis_expiry_status" widget="badge"
+                       decoration-success="elmis_expiry_status == 'valid'"
+                       decoration-warning="elmis_expiry_status == 'expiring_soon'"
+                       decoration-danger="elmis_expiry_status == 'expired'"
+                       optional="show"/>
+                <field name="product_uom_id"/>
+                <button name="action_open_elmis_batch_stock_card"
+                        type="object"
+                        string="Stock Card"
+                        icon="fa-exchange"
+                        attrs="{'invisible': [('lot_id', '=', False)]}"/>
+            </tree>
+        </field>
+    </record>
+
+    <record id="view_stock_quant_tree_elmis_adjustment" model="ir.ui.view">
+        <field name="name">stock.quant.inventory.tree.elmis.adjustment</field>
+        <field name="model">stock.quant</field>
+        <field name="inherit_id" ref="stock.view_stock_quant_tree_inventory_editable"/>
+        <field name="mode">primary</field>
+        <field name="arch" type="xml">
+            <xpath expr="//tree" position="attributes">
+                <attribute name="string">eLMIS Inventory Adjustments</attribute>
+                <attribute name="class" add="o_elmis_workspace_list o_elmis_adjustment_list" separator=" "/>
+            </xpath>
+            <xpath expr="//field[@name='product_id']" position="after">
+                <field name="elmis_program_ids" widget="many2many_tags" optional="hide"/>
+                <field name="elmis_inventory_program_id" string="eLMIS Program" optional="show"/>
+                <field name="elmis_inventory_adjustment_reason" string="Adjustment Reason" optional="show"/>
+            </xpath>
+            <xpath expr="//field[@name='quantity']" position="attributes">
+                <attribute name="string">System Stock</attribute>
+            </xpath>
+            <xpath expr="//field[@name='inventory_quantity']" position="attributes">
+                <attribute name="string">Counted Stock</attribute>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="action_elmis_inventory_adjustments" model="ir.actions.act_window">
+        <field name="name">Inventory Adjustments</field>
+        <field name="res_model">stock.quant</field>
+        <field name="view_mode">tree</field>
+        <field name="view_id" ref="view_stock_quant_tree_elmis_adjustment"/>
+        <field name="search_view_id" ref="view_stock_quant_search_elmis_integration"/>
+        <field name="domain">[('product_id.is_elmis_product', '=', True), ('location_id.usage', '=', 'internal'), ('location_id.elmis_facility_code', '!=', False)]</field>
+        <field name="context">{'inventory_mode': True, 'search_default_internal_loc': 1, 'search_default_elmis_stock': 1}</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                No eLMIS inventory records match the selected filters.
+            </p>
+            <p>
+                Enter the counted stock, select the eLMIS program and adjustment
+                reason, then apply the inventory adjustment.
+            </p>
+        </field>
+    </record>
+
+    <record id="view_stock_quant_pivot_location_inventory" model="ir.ui.view">
+        <field name="name">stock.quant.pivot.location.inventory</field>
+        <field name="model">stock.quant</field>
+        <field name="arch" type="xml">
+            <pivot string="Location Inventory Summary" disable_linking="1">
+                <field name="location_id" type="row"/>
+                <field name="product_id" type="row"/>
+                <field name="quantity" type="measure" string="Stock On Hand"/>
+                <field name="reserved_quantity" type="measure" string="Reserved"/>
+            </pivot>
+        </field>
+    </record>
+
+    <record id="view_stock_quant_graph_location_inventory" model="ir.ui.view">
+        <field name="name">stock.quant.graph.location.inventory</field>
+        <field name="model">stock.quant</field>
+        <field name="arch" type="xml">
+            <graph string="Location Inventory by Location" type="bar" stacked="True">
+                <field name="location_id"/>
+                <field name="quantity" type="measure" string="Stock On Hand"/>
+            </graph>
+        </field>
+    </record>
+
+    <record id="action_location_inventory" model="ir.actions.act_window">
+        <field name="name">Detailed Stock Records</field>
+        <field name="res_model">stock.quant</field>
+        <field name="view_mode">tree,pivot,graph</field>
+        <field name="search_view_id" ref="view_stock_quant_search_location_inventory"/>
+        <field name="domain">[('location_id.usage', '=', 'internal'), ('quantity', '!=', 0)]</field>
+        <field name="context">{'search_default_in_stock': 1, 'search_default_elmis_products': 1, 'search_default_elmis_mirror_locations': 1, 'search_default_group_location': 1}</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                No stock found for the selected location filters.
+            </p>
+            <p>
+                Use this screen to review stock by location, product, batch, expiry date,
+                stock on hand, reserved quantity, and available quantity.
+            </p>
+        </field>
+    </record>
+
+    <record id="action_location_inventory_tree_view" model="ir.actions.act_window.view">
+        <field name="sequence" eval="1"/>
+        <field name="view_mode">tree</field>
+        <field name="view_id" ref="view_stock_quant_tree_location_inventory"/>
+        <field name="act_window_id" ref="action_location_inventory"/>
+    </record>
+
+    <record id="action_location_inventory_pivot_view" model="ir.actions.act_window.view">
+        <field name="sequence" eval="2"/>
+        <field name="view_mode">pivot</field>
+        <field name="view_id" ref="view_stock_quant_pivot_location_inventory"/>
+        <field name="act_window_id" ref="action_location_inventory"/>
+    </record>
+
+    <record id="action_location_inventory_graph_view" model="ir.actions.act_window.view">
+        <field name="sequence" eval="3"/>
+        <field name="view_mode">graph</field>
+        <field name="view_id" ref="view_stock_quant_graph_location_inventory"/>
+        <field name="act_window_id" ref="action_location_inventory"/>
+    </record>
+
+    <record id="action_elmis_inventory_dashboard" model="ir.actions.client">
+        <field name="name">Inventory Overview</field>
+        <field name="tag">lesotho_elmis_integration.inventory_dashboard</field>
+        <field name="target">current</field>
+    </record>
+
+    <menuitem
+        id="menu_location_inventory"
+        name="Inventory Overview"
+        parent="stock.menu_stock_warehouse_mgmt"
+        action="action_elmis_inventory_dashboard"
+        sequence="14"
+        groups="stock.group_stock_user"/>
 </odoo>

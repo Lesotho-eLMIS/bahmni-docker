@@ -1,0 +1,396 @@
+.o_elmis_stock_card {
+  --elmis-ink: #172536;
+  --elmis-muted: #66758a;
+  --elmis-line: #dbe3ec;
+  --elmis-soft: #f5f7fa;
+  --elmis-blue: #245f91;
+  --elmis-green: #287a4f;
+  --elmis-red: #a33b35;
+
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+  padding: 22px 24px 28px;
+  overflow: auto;
+  background: #f4f6f9;
+  color: var(--elmis-ink);
+  letter-spacing: 0;
+
+  button,
+  input,
+  select {
+    letter-spacing: 0;
+  }
+}
+
+.o_elmis_stock_card_header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+
+  h1 {
+    margin: 4px 0 0;
+    font-size: 24px;
+    line-height: 1.2;
+    font-weight: 700;
+  }
+
+  p {
+    margin: 4px 0 0;
+    color: var(--elmis-muted);
+    font-size: 13px;
+  }
+}
+
+.o_elmis_stock_card_back {
+  padding: 0;
+  color: var(--elmis-blue);
+  font-size: 12px;
+}
+
+.o_elmis_stock_card_loading {
+  min-height: 320px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  color: var(--elmis-muted);
+}
+
+.o_elmis_stock_card_identity {
+  margin-top: 18px;
+  display: grid;
+  grid-template-columns: 1.4fr 0.8fr 1fr;
+  border: 1px solid var(--elmis-line);
+  background: #fff;
+
+  > div {
+    min-width: 0;
+    padding: 14px 16px;
+    border-right: 1px solid var(--elmis-line);
+
+    &:last-child {
+      border-right: 0;
+    }
+  }
+
+  span,
+  strong,
+  small {
+    display: block;
+  }
+
+  span {
+    color: var(--elmis-muted);
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+  }
+
+  strong {
+    margin-top: 3px;
+    overflow-wrap: anywhere;
+    font-size: 14px;
+  }
+
+  small {
+    margin-top: 2px;
+    color: var(--elmis-muted);
+  }
+}
+
+.o_elmis_stock_card_metrics {
+  margin-top: 12px;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  border: 1px solid var(--elmis-line);
+  background: #fff;
+
+  > div {
+    min-height: 72px;
+    padding: 12px 16px;
+    border-right: 1px solid var(--elmis-line);
+
+    &:last-child {
+      border-right: 0;
+    }
+  }
+
+  span,
+  strong {
+    display: block;
+  }
+
+  span {
+    color: var(--elmis-muted);
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+  }
+
+  strong {
+    margin-top: 5px;
+    font-size: 18px;
+  }
+
+  .is-positive strong {
+    color: var(--elmis-green);
+  }
+
+  .is-danger strong {
+    color: var(--elmis-red);
+  }
+
+  .is-current {
+    box-shadow: inset 0 -3px var(--elmis-blue);
+  }
+}
+
+.o_elmis_stock_card_toolbar {
+  margin-top: 12px;
+  padding: 10px 12px;
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  border: 1px solid var(--elmis-line);
+  background: #fff;
+
+  select,
+  input {
+    height: 34px;
+    padding: 5px 9px;
+    border: 1px solid #cbd5df;
+    border-radius: 4px;
+    background: #fff;
+  }
+
+  > select {
+    min-width: 180px;
+    flex: 1 1 260px;
+  }
+
+  label {
+    flex: 0 0 160px;
+    margin: 0;
+
+    span {
+      display: block;
+      margin-bottom: 2px;
+      color: var(--elmis-muted);
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+  }
+}
+
+.o_elmis_stock_card_quantity_toggle {
+  height: 34px;
+  min-width: 136px;
+  flex: 0 0 136px;
+  display: flex;
+  border: 1px solid #cbd5df;
+  border-radius: 4px;
+  overflow: hidden;
+
+  button {
+    min-width: 0;
+    flex: 1 1 50%;
+    padding: 0 10px;
+    border: 0;
+    border-right: 1px solid #cbd5df;
+    background: #fff;
+    color: var(--elmis-muted);
+    font-weight: 600;
+
+    &:last-child {
+      border-right: 0;
+    }
+
+    &.is-active {
+      background: var(--elmis-blue);
+      color: #fff;
+    }
+  }
+}
+
+.o_elmis_stock_card_table_wrap {
+  margin-top: 12px;
+  border: 1px solid var(--elmis-line);
+  background: #fff;
+  overflow-x: auto;
+}
+
+.o_elmis_stock_card_table {
+  width: 100%;
+  min-width: 1120px;
+  border-collapse: collapse;
+
+  th,
+  td {
+    padding: 9px 10px;
+    border-bottom: 1px solid var(--elmis-line);
+    vertical-align: middle;
+    font-size: 12px;
+  }
+
+  th {
+    background: #e9eef4;
+    color: #405066;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+
+  tbody tr:hover td {
+    background: #f8fafc;
+  }
+
+  td.is-positive {
+    color: var(--elmis-green);
+  }
+
+  td.is-danger {
+    color: var(--elmis-red);
+  }
+
+  small {
+    display: block;
+    margin-top: 2px;
+    color: var(--elmis-muted);
+    font-size: 10px;
+  }
+}
+
+.o_elmis_stock_card_movement,
+.o_elmis_stock_card_status {
+  display: inline-block;
+  padding: 3px 7px;
+  border-radius: 10px;
+  background: #edf1f5;
+  color: #526173;
+  font-size: 10px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.o_elmis_stock_card_movement {
+  &.is-in {
+    background: #e8f5ed;
+    color: var(--elmis-green);
+  }
+
+  &.is-out {
+    background: #fdebea;
+    color: var(--elmis-red);
+  }
+}
+
+.o_elmis_stock_card_status {
+  &.is-delivered {
+    background: #e8f5ed;
+    color: var(--elmis-green);
+  }
+
+  &.is-pending,
+  &.is-sent {
+    background: #fff3dd;
+    color: #8a570d;
+  }
+
+  &.is-failed,
+  &.is-dlq {
+    background: #fdebea;
+    color: var(--elmis-red);
+  }
+}
+
+.o_elmis_stock_card_empty {
+  height: 220px;
+  color: var(--elmis-muted);
+  text-align: center;
+
+  i,
+  strong,
+  span {
+    display: block;
+  }
+
+  i {
+    margin-bottom: 8px;
+    font-size: 24px;
+  }
+
+  span {
+    margin-top: 3px;
+  }
+}
+
+.o_elmis_stock_card_footer {
+  min-height: 44px;
+  padding: 8px 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: var(--elmis-soft);
+  color: var(--elmis-muted);
+  font-size: 11px;
+}
+
+@media (max-width: 900px) {
+  .o_elmis_stock_card_header {
+    flex-direction: column;
+  }
+
+  .o_elmis_stock_card_identity,
+  .o_elmis_stock_card_metrics {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .o_elmis_stock_card_identity > div:nth-child(2),
+  .o_elmis_stock_card_metrics > div:nth-child(2) {
+    border-right: 0;
+  }
+
+  .o_elmis_stock_card_toolbar {
+    align-items: stretch;
+    flex-wrap: wrap;
+
+    > select {
+      min-width: 220px;
+    }
+  }
+}
+
+@media (max-width: 560px) {
+  .o_elmis_stock_card {
+    padding: 14px 12px 22px;
+  }
+
+  .o_elmis_stock_card_identity,
+  .o_elmis_stock_card_metrics {
+    grid-template-columns: 1fr;
+  }
+
+  .o_elmis_stock_card_toolbar {
+    > select,
+    label {
+      min-width: 100%;
+      flex-basis: 100%;
+    }
+  }
+
+  .o_elmis_stock_card_identity > div,
+  .o_elmis_stock_card_metrics > div {
+    border-right: 0;
+    border-bottom: 1px solid var(--elmis-line);
+  }
+
+  .o_elmis_stock_card_footer {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}

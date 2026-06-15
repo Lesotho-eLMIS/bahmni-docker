@@ -12,6 +12,7 @@ class TestStockMoveLineElmisTransfer(TransactionCase):
         cls.source_location = cls._create_location("Clinical Pharmacy", "A2681-cp")
         cls.destination_location = cls._create_location("Unserviceable", "A2681-uns")
         cls.unmapped_location = cls._create_location("Local Shelf", False)
+        cls.customer_location = cls.env.ref("stock.stock_location_customers")
         cls.program_art = cls.env.ref("lesotho_elmis_integration.elmis_program_art")
         cls.program_em = cls.env.ref("lesotho_elmis_integration.elmis_program_em")
         cls.elmis_product = cls._create_product(
@@ -228,6 +229,16 @@ class TestStockMoveLineElmisTransfer(TransactionCase):
         self.assertEqual(len(outbox), 1)
         self.assertEqual(outbox.stock_move_line_side, "source")
         self.assertEqual(outbox.facility_code, "A2681-cp")
+
+    def test_customer_delivery_does_not_create_internal_transfer_outbox(self):
+        line = self._create_done_move_line(destination=self.customer_location)
+
+        self.assertFalse(
+            self.env["elmis.outbox"].search(
+                [("source_stock_move_line_id", "=", line.id)]
+            )
+        )
+        self.assertEqual(line.elmis_transfer_sync_status, "not_applicable")
 
     def test_non_elmis_product_internal_transfer_creates_no_outbox(self):
         line = self._create_done_move_line(

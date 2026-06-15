@@ -1,7 +1,7 @@
 {
     "name": "Lesotho eLMIS Integration",
     "summary": "Foundation model extensions for OpenLMIS product and lot sync",
-    "version": "16.0.1.0.0",
+    "version": "16.0.1.0.1",
     "category": "Inventory",
     "author": "MOH Lesotho",
     "website": "",
@@ -33,10 +33,18 @@
     "assets": {
         "web.assets_backend": [
             "lesotho_elmis_integration/static/src/scss/elmis_sync_status.scss",
+            "lesotho_elmis_integration/static/src/scss/elmis_inventory_dashboard.scss",
+            "lesotho_elmis_integration/static/src/scss/elmis_stock_card.scss",
+            "lesotho_elmis_integration/static/src/scss/elmis_inventory_workspace.scss",
             "lesotho_elmis_integration/static/src/js/elmis_sync_status.js",
+            "lesotho_elmis_integration/static/src/js/elmis_inventory_dashboard.js",
+            "lesotho_elmis_integration/static/src/js/elmis_stock_card.js",
             "lesotho_elmis_integration/static/src/xml/elmis_sync_status.xml",
+            "lesotho_elmis_integration/static/src/xml/elmis_inventory_dashboard.xml",
+            "lesotho_elmis_integration/static/src/xml/elmis_stock_card.xml",
         ],
     },
+    "post_init_hook": "post_init_hook",
     "installable": True,
     "application": False,
 }
