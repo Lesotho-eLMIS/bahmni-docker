@@ -104,6 +104,7 @@ class ResConfigSettings(models.TransientModel):
     def get_values(self):
         values = super().get_values()
         sync = self.env["elmis.inventory.sync"]
+        cron = sync._get_sync_cron()
         for field_name, key in [
             ("elmis_base_url", "base_url"),
             ("elmis_program_codes", "program_codes"),
@@ -123,6 +124,14 @@ class ResConfigSettings(models.TransientModel):
         if location_ids:
             self._write_mirror_location_params(location_ids)
         values["elmis_mirror_location_ids"] = [(6, 0, location_ids)]
+        if cron:
+            values.update(
+                {
+                    "elmis_sync_cron_active": bool(cron.active),
+                    "elmis_sync_interval_number": cron.interval_number,
+                    "elmis_sync_interval_type": cron.interval_type,
+                }
+            )
         return values
 
     def _get_existing_elmis_config_values(self):

@@ -2,6 +2,8 @@ from unittest.mock import patch
 
 from odoo.tests import TransactionCase, tagged
 
+from odoo.addons.lesotho_elmis_integration.hooks import DEFAULT_CONFIG
+
 
 @tagged("post_install", "-at_install")
 class TestElmisConfigSettings(TransactionCase):
@@ -32,6 +34,25 @@ class TestElmisConfigSettings(TransactionCase):
         self.assertTrue(params.get_param("lesotho_elmis_integration.program_codes"))
         self.assertTrue(params.get_param("lesotho_elmis_integration.sync_interval_number"))
         self.assertTrue(params.get_param("lesotho_elmis_integration.sync_interval_type"))
+
+    def test_install_defaults_do_not_overwrite_existing_config_parameters(self):
+        params = self.env["ir.config_parameter"].sudo()
+        params.set_param(
+            "lesotho_elmis_integration.base_url",
+            "http://openhim-core:5001/api/",
+        )
+
+        existing_keys = set(
+            params.search([("key", "in", list(DEFAULT_CONFIG))]).mapped("key")
+        )
+        for key, value in DEFAULT_CONFIG.items():
+            if key not in existing_keys:
+                params.set_param(key, value)
+
+        self.assertEqual(
+            params.get_param("lesotho_elmis_integration.base_url"),
+            "http://openhim-core:5001/api/",
+        )
 
     def test_settings_can_store_credentials_and_mirror_location_for_local_testing(self):
         settings = self.env["res.config.settings"].create(
@@ -151,6 +172,30 @@ class TestElmisConfigSettings(TransactionCase):
             params.get_param("lesotho_elmis_integration.sync_interval_type"),
             "minutes",
         )
+
+    def test_settings_load_schedule_from_cron_instead_of_boolean_parameter_string(self):
+        params = self.env["ir.config_parameter"].sudo()
+        params.set_param("lesotho_elmis_integration.sync_cron_active", "False")
+        cron = self.env.ref("lesotho_elmis_integration.ir_cron_elmis_inventory_sync")
+        cron.write(
+            {
+                "active": False,
+                "interval_number": 45,
+                "interval_type": "minutes",
+            }
+        )
+
+        values = self.env["res.config.settings"].default_get(
+            [
+                "elmis_sync_cron_active",
+                "elmis_sync_interval_number",
+                "elmis_sync_interval_type",
+            ]
+        )
+
+        self.assertFalse(values["elmis_sync_cron_active"])
+        self.assertEqual(values["elmis_sync_interval_number"], 45)
+        self.assertEqual(values["elmis_sync_interval_type"], "minutes")
 
     def test_settings_test_connection_button_returns_notification(self):
         settings = self.env["res.config.settings"].create({})
