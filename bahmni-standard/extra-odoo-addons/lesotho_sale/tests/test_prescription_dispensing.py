@@ -229,6 +229,24 @@ class TestPrescriptionDispensing(SavepointCase):
         )
         self.assertEqual(line_payload["batch_options"][0]["available_qty"], 15.0)
 
+    def test_fetch_prescription_dispensing_product_options_include_all_products(self):
+        line = self._create_order_line(quantity=3.0)
+
+        payload = line.order_id.fetch_prescription_dispensing()
+        product_options = {
+            option["id"]: option
+            for option in payload["product_options"]
+            if option["id"] in (self.product.id, self.alt_product.id, self.pack10.id)
+        }
+
+        self.assertEqual(
+            set(product_options),
+            {self.product.id, self.alt_product.id, self.pack10.id},
+        )
+        self.assertFalse(product_options[self.product.id]["is_prepack"])
+        self.assertFalse(product_options[self.alt_product.id]["is_prepack"])
+        self.assertTrue(product_options[self.pack10.id]["is_prepack"])
+
     def test_product_change_auto_selects_fefo_batch_and_returns_metadata(self):
         line = self._create_order_line(quantity=4.0)
 

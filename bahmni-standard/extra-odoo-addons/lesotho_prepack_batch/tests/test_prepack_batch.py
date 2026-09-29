@@ -153,6 +153,44 @@ class TestPrepackBatchElmisTraceability(TransactionCase):
         batch.location_dest_id = release_location.id
         return batch, source_location, release_location
 
+    def test_submit_prepack_batch_allows_missing_packaging_material(self):
+        source_location = self.env["stock.location"].create(
+            {
+                "name": "Prepack Source Without Packaging",
+                "usage": "internal",
+                "location_id": self.stock_location.id,
+                "company_id": self.env.company.id,
+            }
+        )
+        self.env["stock.quant"]._update_available_quantity(
+            self.bulk_product,
+            source_location,
+            500.0,
+            lot_id=self.bulk_lot,
+        )
+
+        result = self.env["bahmni.prepack.batch"].submit_prepack_batch(
+            [
+                {
+                    "id": self.bulk_product.id,
+                    "lot_id": self.bulk_lot.id,
+                    "location_id": source_location.id,
+                    "targets": [
+                        {
+                            "size": 30,
+                            "qty": 10,
+                        }
+                    ],
+                }
+            ],
+            location_src_id=source_location.id,
+        )
+        batch = self.env["bahmni.prepack.batch"].browse(result["id"])
+
+        self.assertEqual(batch.state, "pending_auth")
+        self.assertEqual(len(batch.line_ids), 1)
+        self.assertFalse(batch.line_ids.packaging_material_id)
+
     def test_release_consumes_bulk_and_receives_finished_prepacks(self):
         batch, source_location, release_location = self._create_release_batch()
         self.assertEqual(batch.location_src_id, source_location)
