@@ -96,6 +96,9 @@ services:
       HOST: ${ODOO_DB_HOST}
       USER: ${ODOO_DB_USER}
       PASSWORD: ${ODOO_DB_PASSWORD}
+      # Limit numerical-library threads when bahmni_reports imports NumPy.
+      OPENBLAS_NUM_THREADS: "1"
+      OMP_NUM_THREADS: "1"
     logging: *log-config
     restart: ${RESTART_POLICY}
 
