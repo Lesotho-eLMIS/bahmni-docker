@@ -1171,7 +1171,7 @@ class ExtendedSaleOrder(models.Model):
                 for backorder in self.prescription_backorder_ids
             ],
             "direction_options": self._get_prescription_direction_options(dispensing_lines),
-            "product_options": self._get_dispensing_product_options(only_prepacks=True),
+            "product_options": self._get_dispensing_product_options(),
             "lines": [
                 self._serialize_dispensing_line(line)
                 for line in dispensing_lines

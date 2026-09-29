@@ -477,10 +477,6 @@ export class PrepackDashboard extends Component {
         isValid = false;
       }
       const validTargets = item.targets.filter(t => t.size > 0 && t.qty > 0);
-      if (validTargets.some(t => !t.packaging_material_id)) {
-        this.notification.add(`Select packaging material for ${item.name}.`, { type: "danger" });
-        isValid = false;
-      }
       if (validTargets.length > 0) {
         hasTargets = true;
         payload.push({

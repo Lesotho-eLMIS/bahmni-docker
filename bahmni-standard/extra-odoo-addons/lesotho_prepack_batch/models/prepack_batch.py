@@ -372,10 +372,6 @@ class BahmniPrepackBatch(models.Model):
                 if size <= 0 or qty <= 0:
                     continue
                 packaging_material_id = target.get("packaging_material_id")
-                if not packaging_material_id:
-                    raise UserError(
-                        _("Please select packaging material for every prepack line.")
-                    )
 
                 prepack_product = self._get_or_create_prepack_product(
                     bulk_product, size
