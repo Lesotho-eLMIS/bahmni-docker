@@ -8,6 +8,71 @@ from odoo.tools.float_utils import float_compare, float_is_zero
 _logger = logging.getLogger(__name__)
 
 
+SESOTHO_DOSE_UNITS = {
+    "tablet": "pilisi",
+    "capsule": "khapetlele",
+    "drop": "lerotholi",
+    "tablespoon": "khaba",
+    "teaspoon": "khabana",
+    "unit": "yuniti",
+}
+
+SESOTHO_FREQUENCIES = {
+    "immediately": "hang-hang",
+    "once a day": "hang ka letsatsi",
+    "twice a day": "habeli ka letsatsi",
+    "thrice a day": "hararo ka letsatsi",
+    "four times a day": "makhetlo a mane ka letsatsi",
+    "five times a day": "makhetlo a mahlano ka letsatsi",
+    "every hour": "hora e 'ngoe le e 'ngoe",
+    "every 2 hours": "lihora tse ling le tse ling tse peli",
+    "every 3 hours": "lihora tse ling le tse ling tse tharo",
+    "every 4 hours": "lihora tse ling le tse ling tse 'ne",
+    "every 6 hours": "lihora tse ling le tse ling tse tšeletseng",
+    "every 8 hours": "lihora tse ling le tse ling tse robeli",
+    "every 12 hours": "lihora tse ling le tse ling tse leshome le metso e 'meli",
+    "on alternate days": "ka matsatsi a fapanyetsanang",
+    "once a week": "hang ka beke",
+    "twice a week": "habeli ka beke",
+    "thrice a week": "hararo ka beke",
+    "every 2 weeks": "libeke tse ling le tse ling tse peli",
+    "every 3 weeks": "libeke tse ling le tse ling tse tharo",
+    "once a month": "hang ka khoeli",
+    "four days a week": "matsatsi a mane ka beke",
+    "five days a week": "matsatsi a mahlano ka beke",
+    "six days a week": "matsatsi a tšeletseng ka beke",
+}
+
+SESOTHO_ROUTES = {
+    "intramuscular": "ka har'a mosifa",
+    "intravenous": "ka mothapong",
+    "oral": "ka molomo",
+    "per vaginal": "ka botšehaling",
+    "sub cutaneous": "tlas'a letlalo",
+    "per rectum": "ka har'a marago",
+    "sub lingual": "tlas'a leleme",
+    "nasogastric": "ka phaephe ea nko ho ea mpeng",
+    "intradermal": "ka har'a letlalo",
+    "intraperitoneal": "ka har'a mpa",
+    "intrathecal": "mokelikeling oa mokokotlo",
+    "intraosseous": "ka lesapong",
+    "topical": "tlotsa letlalong",
+    "nasal": "ka nko",
+    "inhalation": "ka ho hema",
+}
+
+SESOTHO_ADDITIONAL_INSTRUCTIONS = {
+    "before meals": "pele ho lijo",
+    "empty stomach": "ka mpeng e se nang letho",
+    "after meals": "ka mor'a lijo",
+    "in the morning": "hoseng",
+    "in the evening": "mantsiboea",
+    "at bedtime": "nakong ea ho robala",
+    "immediately": "hang-hang",
+    "as directed": "joalokaha u laetsoe",
+}
+
+
 class ExtendedSaleOrderLine(models.Model):
     """
     Extends sale.order.line with prescription details from Bahmni
@@ -481,9 +546,9 @@ class ExtendedSaleOrderLine(models.Model):
         parts = []
 
         if self.dose and self.dose_units:
-            parts.append(f"{self.dose} {self.dose_units}")
+            parts.append(f"{self._format_dosage_number(self.dose)} {self.dose_units}")
         elif self.dose:
-            parts.append(str(self.dose))
+            parts.append(self._format_dosage_number(self.dose))
 
         if self.frequency:
             parts.append(self.frequency)
@@ -492,7 +557,9 @@ class ExtendedSaleOrderLine(models.Model):
             parts.append(f"via {self.route}")
 
         if self.duration and self.duration_units:
-            parts.append(f"for {self.duration} {self.duration_units}")
+            parts.append(
+                f"for {self._format_dosage_number(self.duration)} {self.duration_units}"
+            )
 
         if self.as_needed:
             parts.append("(as needed)")
@@ -501,6 +568,56 @@ class ExtendedSaleOrderLine(models.Model):
             parts.append(self.administration_instructions)
 
         return " ".join(parts) if parts else (self.full_prescription_text or "")
+
+    def _get_dosage_instruction_text_sesotho(self):
+        self.ensure_one()
+        parts = []
+
+        if self.dose:
+            dose = self._format_dosage_number(self.dose)
+            unit = self._get_sesotho_term(self.dose_units, SESOTHO_DOSE_UNITS)
+            parts.append(" ".join(part for part in (dose, unit) if part))
+
+        if self.frequency:
+            parts.append(self._get_sesotho_term(self.frequency, SESOTHO_FREQUENCIES))
+
+        if self.route:
+            parts.append(self._get_sesotho_term(self.route, SESOTHO_ROUTES))
+
+        if self.duration and self.duration_units:
+            duration = self._format_dosage_number(self.duration)
+            duration_unit = self.duration_units.strip().lower()
+            if duration_unit == "days":
+                parts.append(f"matsatsi a {duration}")
+            elif duration_unit == "weeks":
+                parts.append(f"libeke tse {duration}")
+            elif duration_unit == "months":
+                parts.append(f"likhoeli tse {duration}")
+            else:
+                parts.append(f"{duration} {self.duration_units}")
+
+        if self.as_needed:
+            parts.append("ha ho hlokahala")
+
+        if self.administration_instructions:
+            parts.append(
+                self._get_sesotho_term(
+                    self.administration_instructions,
+                    SESOTHO_ADDITIONAL_INSTRUCTIONS,
+                )
+            )
+
+        return " ".join(parts) if parts else (self.full_prescription_text or "")
+
+    @staticmethod
+    def _format_dosage_number(value):
+        number = float(value or 0.0)
+        return str(int(number)) if number.is_integer() else format(number, ".15g")
+
+    @staticmethod
+    def _get_sesotho_term(value, translations):
+        text = (value or "").strip()
+        return translations.get(" ".join(text.lower().split()), text)
 
     @api.depends(
         "display_type",
@@ -847,6 +964,15 @@ class ExtendedSaleOrderLine(models.Model):
         if warehouse and warehouse.lot_stock_id:
             return warehouse.lot_stock_id
         return self.env["stock.location"]
+
+    def _prepare_procurement_values(self, group_id=False):
+        values = super()._prepare_procurement_values(group_id=group_id)
+        self.ensure_one()
+        if self.env.context.get("prescription_serving"):
+            source_location = self._get_dispensing_source_location()
+            if source_location and source_location.usage == "internal":
+                values["prescription_source_location_id"] = source_location
+        return values
 
     def _get_dispensing_lot_available_qty(self, product=None, lot=None):
         self.ensure_one()

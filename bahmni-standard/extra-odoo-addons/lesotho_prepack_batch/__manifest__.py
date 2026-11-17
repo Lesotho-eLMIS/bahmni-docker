@@ -16,6 +16,7 @@
     "data": [
         "security/ir.model.access.csv",
         "data/ir_sequence_data.xml",
+        "data/product_category_data.xml",
         "report/prepack_label_report.xml",
         "views/stock_quant_views.xml",
         "views/prepack_batch_views.xml",

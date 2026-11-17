@@ -18,7 +18,7 @@ class TestElmisInventorySync(TransactionCase):
                 "name": "Clinical Pharmacy",
                 "usage": "internal",
                 "location_id": cls.stock_location.id,
-                "elmis_facility_code": "A2681-cp",
+                "elmis_facility_code": "TEST-A2681-cp",
             }
         )
         cls.location_d = cls.env["stock.location"].create(
@@ -49,7 +49,7 @@ class TestElmisInventorySync(TransactionCase):
 
     def _snapshot(self, stock_on_hand=25):
         return {
-            "facilityDhis2Code": "A2681-cp",
+            "facilityDhis2Code": "TEST-A2681-cp",
             "items": [
                 {
                     "productCode": "TEST-DON-PAR004-TAB001-1000",
@@ -169,7 +169,7 @@ class TestElmisInventorySync(TransactionCase):
             ):
                 self.sync_service.sync_configured_facility_inventory()
 
-        self.assertEqual(calls, ["drain", "sync:A2681-cp"])
+        self.assertEqual(calls, ["drain", "sync:TEST-A2681-cp"])
 
     def test_failed_outbox_drain_prevents_inventory_snapshot_overwrite(self):
         self.sync_service.with_context(elmis_outbox_drained=True).sync_inventory_snapshot(
@@ -239,7 +239,7 @@ class TestElmisInventorySync(TransactionCase):
             {
                 "message_id": "stuck-sent-before-pull",
                 "transaction_type": "DISPENSE",
-                "facility_code": "A2681-cp",
+                "facility_code": "TEST-A2681-cp",
                 "program_id": program.id,
                 "elmis_orderable_id": product.id,
                 "lot_id": lot.id,
@@ -293,13 +293,13 @@ class TestElmisInventorySync(TransactionCase):
     def test_build_elmis_url_adds_query_parameters(self):
         url = self.sync_service._build_elmis_url(
             "https://dev.elmis.gov.ls/api/",
-            "v2/stockCardSummariesResolv",
+            "v2/stockCardSummaries",
             {"facilityId": "facility-id", "programId": ["art-id", "em-id"]},
         )
 
         self.assertEqual(
             url,
-            "https://dev.elmis.gov.ls/api/v2/stockCardSummariesResolv"
+            "https://dev.elmis.gov.ls/api/v2/stockCardSummaries"
             "?facilityId=facility-id&programId=art-id&programId=em-id",
         )
 
@@ -321,12 +321,12 @@ class TestElmisInventorySync(TransactionCase):
             self.assertEqual(base_url, "https://dev.elmis.gov.ls/api/")
             self.assertEqual(token, "test-token")
             if path == "facilities/full":
-                self.assertEqual(query["code"], "A2681-cp")
-                return {"content": [{"id": "facility-id", "code": "A2681-cp"}]}
+                self.assertEqual(query["code"], "TEST-A2681-cp")
+                return {"content": [{"id": "facility-id", "code": "TEST-A2681-cp"}]}
             if path == "programs":
                 self.assertEqual(query["code"], ["art"])
                 return [{"id": "program-id", "code": "art", "name": "ART"}]
-            if path == "v2/stockCardSummariesResolv":
+            if path == "v2/stockCardSummaries":
                 self.assertEqual(query["facilityId"], "facility-id")
                 self.assertEqual(query["programId"], "program-id")
                 return {
@@ -368,7 +368,7 @@ class TestElmisInventorySync(TransactionCase):
             self.fail("Unexpected eLMIS path: %s" % path)
 
         with patch.object(type(self.sync_service), "_elmis_get_json", fake_get_json):
-            result = self.sync_service.sync_facility_inventory("A2681-cp")
+            result = self.sync_service.sync_facility_inventory("TEST-A2681-cp")
 
         self.assertEqual(result["items_processed"], 1)
         product = self.env["product.product"].search(
@@ -391,10 +391,10 @@ class TestElmisInventorySync(TransactionCase):
 
         def fake_get_json(service, base_url, path, token, query=None):
             if path == "facilities/full":
-                return {"content": [{"id": "facility-id", "code": "A2681-cp"}]}
+                return {"content": [{"id": "facility-id", "code": "TEST-A2681-cp"}]}
             if path == "programs":
                 return [{"id": "program-id", "code": "art"}]
-            if path == "v2/stockCardSummariesResolv":
+            if path == "v2/stockCardSummaries":
                 return {
                     "content": [
                         {
@@ -434,7 +434,7 @@ class TestElmisInventorySync(TransactionCase):
             self.fail("Unexpected eLMIS path: %s" % path)
 
         with patch.object(type(self.sync_service), "_elmis_get_json", fake_get_json):
-            result = self.sync_service.sync_facility_inventory("A2681-cp", item_limit=1)
+            result = self.sync_service.sync_facility_inventory("TEST-A2681-cp", item_limit=1)
 
         self.assertEqual(result["items_processed"], 1)
         self.assertTrue(
@@ -454,12 +454,12 @@ class TestElmisInventorySync(TransactionCase):
 
         def fake_get_json(service, base_url, path, token, query=None):
             if path == "facilities/full":
-                self.assertEqual(query["code"], "A2681-cp")
-                return {"content": [{"id": "facility-id", "code": "A2681-cp"}]}
+                self.assertEqual(query["code"], "TEST-A2681-cp")
+                return {"content": [{"id": "facility-id", "code": "TEST-A2681-cp"}]}
             if path == "programs":
                 self.assertEqual(query["code"], ["art"])
                 return [{"id": "program-id", "code": "art"}]
-            if path == "v2/stockCardSummariesResolv":
+            if path == "v2/stockCardSummaries":
                 return {
                     "content": [
                         {
@@ -477,7 +477,7 @@ class TestElmisInventorySync(TransactionCase):
         with patch.object(type(self.sync_service), "_elmis_get_json", fake_get_json):
             result = self.sync_service.test_configured_connection()
 
-        self.assertEqual(result["facility_code"], "A2681-cp")
+        self.assertEqual(result["facility_code"], "TEST-A2681-cp")
         self.assertEqual(result["program_codes"], ["art"])
         self.assertEqual(result["programs_resolved"], 1)
         self.assertEqual(result["stock_entries_found"], 1)

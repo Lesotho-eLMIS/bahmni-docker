@@ -1,6 +1,7 @@
 import base64
 import json
 import logging
+import socket
 from datetime import timedelta
 from urllib import error, parse, request
 
@@ -82,6 +83,10 @@ class ElmisInventorySync(models.Model):
             )
             facility_ids.append(facility["id"])
             for program in programs:
+                _logger.info(
+                    "Testing eLMIS stock summaries for facility %s, program %s",
+                    location.elmis_facility_code, program["code"],
+                )
                 summaries = self._get_elmis_stock_card_summaries(
                     params["base_url"],
                     token,
@@ -481,18 +486,40 @@ class ElmisInventorySync(models.Model):
 
     @api.model
     def _get_elmis_stock_card_summaries(self, base_url, token, facility_id, program_id):
-        response = self._elmis_get_json(
-            base_url,
-            "v2/stockCardSummariesResolv",
-            token,
-            {
-                "facilityId": facility_id,
-                "programId": program_id,
-                "nonEmptyOnly": "true",
-                "size": 2147483647,
-            },
-        )
-        return self._extract_page_content(response)
+        page_size = 20
+        page = 0
+        summaries = []
+        while True:
+            response = self._elmis_get_json(
+                base_url,
+                "v2/stockCardSummaries",
+                token,
+                {
+                    "facilityId": facility_id,
+                    "programId": program_id,
+                    "nonEmptyOnly": "true",
+                    "size": page_size,
+                    "page": page,
+                },
+            )
+            content = self._extract_page_content(response)
+            # Retain compatibility with APIs returning an unpaged list.
+            if isinstance(response, list):
+                return summaries + content
+            if response.get("number", page) != page:
+                raise UserError(_("eLMIS returned an unexpected stock summary page. Please retry the sync."))
+            summaries.extend(content)
+            if "last" in response:
+                finished = response["last"]
+            elif "totalPages" in response:
+                finished = page + 1 >= response["totalPages"]
+            else:
+                finished = len(content) < page_size
+            if finished:
+                return summaries
+            if not content:
+                raise UserError(_("eLMIS returned an empty stock summary page before the last page. Please retry the sync."))
+            page += 1
 
     @api.model
     def _normalize_stock_card_summaries(
@@ -532,10 +559,29 @@ class ElmisInventorySync(models.Model):
                 self._get_elmis_orderables(base_url, token, missing_orderable_ids)
             )
 
+        # The standard summary endpoint returns lot references. Resolve only
+        # the lots being imported, in batches, rather than using the slow
+        # server-side stockCardSummariesResolv enrichment endpoint.
+        lot_ids = list(dict.fromkeys(
+            entry["lot"]["id"]
+            for orderable_id, entry in entries
+            if orderable_id in orderables
+            and (entry.get("lot") or {}).get("id")
+            and "lotCode" not in entry
+        ))
+        lots = self._get_elmis_lots(base_url, token, lot_ids) if lot_ids else {}
+
         items = []
         for orderable_id, entry in entries:
             orderable = orderables.get(orderable_id)
             if orderable:
+                lot_id = (entry.get("lot") or {}).get("id")
+                if lot_id in lots and "lotCode" not in entry:
+                    entry = dict(
+                        entry,
+                        lotCode=lots[lot_id]["lotCode"],
+                        lotExpirationDate=lots[lot_id].get("expirationDate"),
+                    )
                 items.append(
                     self._normalize_stock_card_entry(
                         orderable_id,
@@ -592,6 +638,23 @@ class ElmisInventorySync(models.Model):
         return by_id
 
     @api.model
+    def _get_elmis_lots(self, base_url, token, lot_ids):
+        by_id = {}
+        for chunk in self._chunked(lot_ids, 50):
+            response = self._elmis_get_json(
+                base_url, "lots", token, {"id": chunk, "size": len(chunk)},
+            )
+            by_id.update({lot["id"]: lot for lot in self._extract_page_content(response)})
+        missing = [lot_id for lot_id in lot_ids if not by_id.get(lot_id, {}).get("lotCode")]
+        if missing:
+            raise UserError(
+                _("eLMIS did not return batch details for %(count)s lot(s). "
+                  "Inventory sync stopped to avoid importing stock without batch numbers.")
+                % {"count": len(missing)}
+            )
+        return by_id
+
+    @api.model
     def _chunked(self, values, size):
         for start in range(0, len(values), size):
             yield values[start:start + size]
@@ -638,17 +701,36 @@ class ElmisInventorySync(models.Model):
         request_headers = {"Accept": "application/json"}
         request_headers.update(headers or {})
         req = request.Request(url, data=data, headers=request_headers, method=method)
-        try:
-            with request.urlopen(req, timeout=60) as response:
-                raw = response.read().decode("utf-8")
-        except error.HTTPError as exc:
-            detail = exc.read().decode("utf-8", errors="replace")
-            raise UserError(
-                _("eLMIS request failed: %(status)s %(reason)s\n%(detail)s")
-                % {"status": exc.code, "reason": exc.reason, "detail": detail}
-            ) from exc
-        except error.URLError as exc:
-            raise UserError(_("Could not connect to eLMIS: %(reason)s") % {"reason": exc.reason}) from exc
+        # Retry only the read-only stock query. Never replay stock-event POSTs.
+        attempts = 2 if method == "GET" and path == "v2/stockCardSummaries" else 1
+        for attempt in range(attempts):
+            try:
+                with request.urlopen(req, timeout=60) as response:
+                    raw = response.read().decode("utf-8")
+                break
+            except error.HTTPError as exc:
+                detail = exc.read().decode("utf-8", errors="replace")
+                raise UserError(
+                    _("eLMIS request failed: %(status)s %(reason)s\n%(detail)s")
+                    % {"status": exc.code, "reason": exc.reason, "detail": detail}
+                ) from exc
+            except (socket.timeout, TimeoutError, error.URLError) as exc:
+                timed_out = isinstance(exc, (socket.timeout, TimeoutError)) or isinstance(
+                    getattr(exc, "reason", None), (socket.timeout, TimeoutError),
+                )
+                if not timed_out:
+                    raise UserError(
+                        _("Could not connect to eLMIS: %(reason)s") % {"reason": exc.reason}
+                    ) from exc
+                if attempt + 1 < attempts:
+                    _logger.warning("eLMIS stock summary request timed out; retrying once.")
+                    continue
+                raise UserError(
+                    _("eLMIS did not respond within 60 seconds while requesting %(path)s "
+                      "(%(attempts)s attempt(s)). Please retry; if this continues, "
+                      "check the eLMIS service.")
+                    % {"path": path, "attempts": attempts}
+                ) from exc
 
         return json.loads(raw) if raw else {}
 

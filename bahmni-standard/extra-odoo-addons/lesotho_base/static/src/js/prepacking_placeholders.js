@@ -28,6 +28,7 @@ class CreateNewPrescription extends Component {
       productOptions: [],
       careSettingOptions: [],
       dispensaryOptions: [],
+      quantityRules: { frequencies: {}, single_frequencies: [], duration_units: {} },
       directionOptions: {
         dose_unit: [],
         frequency: [],
@@ -40,6 +41,10 @@ class CreateNewPrescription extends Component {
 
     onWillStart(async () => {
       await this.loadOptions();
+      const patientId = Number(this.props.action.context?.default_partner_id || 0);
+      if (patientId && this.state.patientOptions.some(patient => patient.id === patientId)) {
+        this.updatePatient(patientId);
+      }
     });
   }
 
@@ -62,7 +67,8 @@ class CreateNewPrescription extends Component {
 
   async loadOptions() {
     try {
-      const options = await this.orm.call("sale.order", "get_prescription_create_form_options", []);
+      const options = await this.orm.call("sale.order", "get_prescription_create_form_options", [], { patient_id: this.props.action.context?.default_partner_id || null });
+      this.state.quantityRules = options.quantity_rules || this.state.quantityRules;
       this.state.patientOptions = options.patients || [];
       this.state.productOptions = options.products || [];
       this.state.careSettingOptions = options.care_settings || [];
@@ -195,106 +201,88 @@ class CreateNewPrescription extends Component {
       if (!line.productId) {
         return `Select a product for prescribed item ${index + 1}.`;
       }
+      const item = `Prescribed item ${index + 1}: `;
+      if (!String(line.dose || "").trim()) {
+        return item + "Enter a dose.";
+      }
+      if (!Number.isFinite(Number(line.dose)) || Number(line.dose) <= 0) {
+        return item + "Dose must be a number greater than zero.";
+      }
+      if (!String(line.frequency || "").trim()) {
+        return item + "Select a frequency.";
+      }
+      if (!Number.isFinite(this.getFrequencyMultiplier(line.frequency))) {
+        return item + `Frequency '${line.frequency}' is not supported for automatic quantity calculation. Select a supported frequency.`;
+      }
+      if (!this.isSingleAdministration(line.frequency)) {
+        if (!String(line.duration || "").trim()) {
+          return item + "Enter a duration.";
+        }
+        if (!Number.isFinite(Number(line.duration)) || Number(line.duration) <= 0) {
+          return item + "Duration must be a number greater than zero.";
+        }
+        if (!String(line.durationUnit || "").trim()) {
+          return item + "Select a duration unit.";
+        }
+        if (!Number.isFinite(this.getDurationUnitMultiplier(line.durationUnit))) {
+          return item + `Duration unit '${line.durationUnit}' is not supported for automatic quantity calculation.`;
+        }
+      }
       const prescribedQuantity = this.calculatePrescribedQuantity(line);
-      if (!prescribedQuantity || Number.parseFloat(prescribedQuantity) <= 0) {
-        return `Complete dose, frequency, duration and duration unit for prescribed item ${index + 1}.`;
+      if (!prescribedQuantity || Number(prescribedQuantity) <= 0) {
+        return item + "The calculated quantity must be greater than zero. Review dose and duration.";
       }
     }
     return "";
   }
 
   calculatePrescribedQuantity(line) {
-    const dose = Number.parseFloat(line.dose);
-    const duration = Number.parseFloat(line.duration);
+    const dose = Number(line.dose);
     const frequency = this.getFrequencyMultiplier(line.frequency);
-
-    if (!Number.isFinite(dose) || !Number.isFinite(duration) || !Number.isFinite(frequency)) {
+    if (!Number.isFinite(dose) || dose <= 0 || !Number.isFinite(frequency)) {
       return "";
     }
-
-    const durationMultiplier = this.getDurationUnitMultiplier(line.durationUnit);
-
-    if (!Number.isFinite(durationMultiplier)) {
+    let quantity = dose;
+    if (!this.isSingleAdministration(line.frequency)) {
+      const duration = Number(line.duration);
+      const durationMultiplier = this.getDurationUnitMultiplier(line.durationUnit);
+      if (!Number.isFinite(duration) || duration <= 0 || !Number.isFinite(durationMultiplier)) {
+        return "";
+      }
+      quantity *= frequency * duration * durationMultiplier;
+    }
+    if (!Number.isFinite(quantity) || quantity <= 0) {
       return "";
     }
-
-    const quantity = dose * frequency * duration * durationMultiplier;
     return Number.isInteger(quantity) ? String(quantity) : quantity.toFixed(2);
   }
 
+  normalizeQuantityOption(value) {
+    return String(value || "").trim().toLowerCase().replace(/\s+/g, " ");
+  }
+
+  isSingleAdministration(value) {
+    return this.state.quantityRules.single_frequencies.includes(this.normalizeQuantityOption(value));
+  }
+
   getFrequencyMultiplier(value) {
-    const frequency = String(value || "").trim().toLowerCase();
+    const frequency = this.normalizeQuantityOption(value);
     if (!frequency) {
       return NaN;
     }
-
-    const numeric = Number.parseFloat(frequency);
-    if (Number.isFinite(numeric)) {
-      return numeric;
+    const rate = this.state.quantityRules.frequencies[frequency];
+    if (rate !== undefined) {
+      return rate;
     }
-
-    if (
-      frequency.includes("immediate") ||
-      frequency.includes("stat") ||
-      frequency.includes("once") ||
-      frequency.includes("daily") ||
-      frequency === "od" ||
-      frequency === "qd" ||
-      frequency.includes("q24h")
-    ) {
-      return 1;
+    if (!/^\+?(?:[0-9]+\.?[0-9]*|\.[0-9]+)(?:e[+-]?[0-9]+)?$/.test(frequency)) {
+      return NaN;
     }
-    if (
-      frequency.includes("twice") ||
-      frequency.includes("bid") ||
-      frequency.includes("bd") ||
-      frequency.includes("q12h")
-    ) {
-      return 2;
-    }
-    if (
-      frequency.includes("three") ||
-      frequency.includes("tid") ||
-      frequency.includes("tds") ||
-      frequency.includes("q8h")
-    ) {
-      return 3;
-    }
-    if (
-      frequency.includes("four") ||
-      frequency.includes("qid") ||
-      frequency.includes("qds") ||
-      frequency.includes("q6h")
-    ) {
-      return 4;
-    }
-
-    return NaN;
+    const numeric = Number(frequency);
+    return Number.isFinite(numeric) && numeric > 0 ? numeric : NaN;
   }
 
   getDurationUnitMultiplier(value) {
-    const unit = String(value || "").trim().toLowerCase();
-    if (!unit) {
-      return 1;
-    }
-
-    if (unit.includes("hour")) {
-      return 1 / 24;
-    }
-    if (unit.includes("day")) {
-      return 1;
-    }
-    if (unit.includes("week")) {
-      return 7;
-    }
-    if (unit.includes("month")) {
-      return 30;
-    }
-    if (unit.includes("year")) {
-      return 365;
-    }
-
-    return 1;
+    return this.state.quantityRules.duration_units[this.normalizeQuantityOption(value)] ?? NaN;
   }
 }
 

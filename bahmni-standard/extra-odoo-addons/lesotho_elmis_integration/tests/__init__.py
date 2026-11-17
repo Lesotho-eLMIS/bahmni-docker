@@ -11,3 +11,4 @@ from . import test_stock_move_line_transfer
 from . import test_stock_scrap
 from . import test_elmis_outbox
 from . import test_sale_order_line
+from . import test_elmis_inventory_http

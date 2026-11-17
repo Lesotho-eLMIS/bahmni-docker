@@ -27,9 +27,15 @@ class TestPrescriptionDispensing(SavepointCase):
             }
         )
         cls.partner = cls.env["res.partner"].create({"name": "Dispense Patient"})
-        cls.shop = cls.env["sale.shop"].search([], limit=1)
-        if "location_id" in cls.shop._fields:
-            cls.shop.location_id = cls.dispensing_location
+        cls.shop = cls.env["sale.shop"].create(
+            {
+                "name": "Dispensing Test Shop",
+                "company_id": cls.env.company.id,
+                "warehouse_id": cls.env.ref("stock.warehouse0").id,
+                "location_id": cls.dispensing_location.id,
+                "payment_default_id": cls.env.ref("account.account_payment_term_immediate").id,
+            }
+        )
         cls.lot_expiry_field = cls._get_lot_expiry_field()
 
         cls.product = cls._create_tracked_product("Dispensed Product A")
@@ -200,12 +206,59 @@ class TestPrescriptionDispensing(SavepointCase):
             }
         )
 
-    def _format_expected_expiry(self, lot):
+    def _format_expected_expiry(self, lot, date_only=False):
         field = lot._fields[self.lot_expiry_field]
         value = getattr(lot, self.lot_expiry_field)
         if field.type == "date":
             return fields.Date.to_string(value)
+        if date_only:
+            return fields.Date.to_string(value.date())
         return fields.Datetime.to_string(value)
+
+    def test_prescription_label_formats_quantity_and_bilingual_instructions(self):
+        line = self._create_order_line(quantity=1.0)
+        line.write(
+            {
+                "dose": 1.0,
+                "dose_units": "Tablet",
+                "frequency": "Once a day",
+                "route": "Oral",
+                "duration": 30.0,
+                "duration_units": "Days",
+                "administration_instructions": "After meals",
+            }
+        )
+
+        self.assertEqual(
+            line._get_dosage_instruction_text(),
+            "1 Tablet Once a day via Oral for 30 Days After meals",
+        )
+        self.assertEqual(
+            line._get_dosage_instruction_text_sesotho(),
+            "1 pilisi hang ka letsatsi ka molomo matsatsi a 30 ka mor'a lijo",
+        )
+        self.assertEqual(
+            line.order_id._format_prescription_label_quantity(1.0),
+            "1",
+        )
+        self.assertEqual(
+            line.order_id._format_prescription_label_quantity(1.5),
+            "1.5",
+        )
+
+        line.write(
+            {
+                "frequency": "Every 2 hours",
+                "duration": 2.0,
+                "duration_units": "Weeks",
+                "administration_instructions": "Before meals",
+            }
+        )
+        self.assertEqual(
+            line._get_dosage_instruction_text_sesotho(),
+            "1 pilisi lihora tse ling le tse ling tse peli ka molomo "
+            "libeke tse 2 pele ho lijo",
+        )
 
     def test_fetch_prescription_dispensing_includes_batch_options(self):
         line = self._create_order_line(quantity=3.0)
@@ -225,9 +278,27 @@ class TestPrescriptionDispensing(SavepointCase):
         self.assertEqual(line_payload["selected_batch_available_qty"], 15.0)
         self.assertEqual(
             line_payload["batch_options"][0]["expiry_date"],
-            self._format_expected_expiry(self.product_lot_1),
+            self._format_expected_expiry(self.product_lot_1, date_only=True),
         )
         self.assertEqual(line_payload["batch_options"][0]["available_qty"], 15.0)
+
+    def test_fetch_prescription_dispensing_product_options_include_all_products(self):
+        line = self._create_order_line(quantity=3.0)
+
+        payload = line.order_id.fetch_prescription_dispensing()
+        product_options = {
+            option["id"]: option
+            for option in payload["product_options"]
+            if option["id"] in (self.product.id, self.alt_product.id, self.pack10.id)
+        }
+
+        self.assertEqual(
+            set(product_options),
+            {self.product.id, self.alt_product.id, self.pack10.id},
+        )
+        self.assertFalse(product_options[self.product.id]["is_prepack"])
+        self.assertFalse(product_options[self.alt_product.id]["is_prepack"])
+        self.assertTrue(product_options[self.pack10.id]["is_prepack"])
 
     def test_product_change_auto_selects_fefo_batch_and_returns_metadata(self):
         line = self._create_order_line(quantity=4.0)
@@ -425,6 +496,7 @@ class TestPrescriptionDispensing(SavepointCase):
             "bahmni_sale.is_delivery_automated",
             True,
         )
+        self.dispensing_location.location_id = False
         line = self._create_order_line(quantity=5.0)
         order = line.order_id
         order.write({"medication_explanation_confirmed": True})
@@ -432,6 +504,7 @@ class TestPrescriptionDispensing(SavepointCase):
 
         order.action_serve_prescription_from_ui(False)
 
+        self.assertEqual(order.location_id, self.dispensing_location)
         done_move_lines = line.move_ids.filtered(
             lambda move: move.state == "done"
         ).mapped("move_line_ids").filtered(
@@ -457,7 +530,8 @@ class TestPrescriptionDispensing(SavepointCase):
             line.id,
             {
                 "product_id": self.alt_product.id,
-                "batch_number": self.alt_product_lot_1.name,
+                "pack_count": 5.0,
+                "batch_number": self.alt_product_lot_2.name,
             },
         )
         order.write({"medication_explanation_confirmed": True})
@@ -528,6 +602,9 @@ class TestPrescriptionDispensing(SavepointCase):
         order = line.order_id
         order.write({"medication_explanation_confirmed": True})
 
+        # These cases dispense only the added prepacks, with no loose units.
+        order.update_prescription_dispensing_line(line.id, {"quantity_dispensed": 0.0})
+
         updated = order.add_prescription_dispensing_component(line.id)
         component_10 = updated["components"][0]
         updated = order.update_prescription_dispensing_component(
@@ -548,7 +625,8 @@ class TestPrescriptionDispensing(SavepointCase):
         summary = order.evaluate_prescription_serving()
         label_items = order._get_dispensing_label_items()
 
-        self.assertEqual(updated["quantity_dispensed"], 15.0)
+        self.assertEqual(updated["quantity_dispensed"], 0.0)
+        self.assertEqual(updated["total_quantity_dispensed"], 15.0)
         self.assertEqual(line._get_prescription_quantities(), (15.0, 15.0))
         self.assertEqual(line.prescription_status, "fully_served")
         self.assertEqual(summary["prescription_status"], "fully_served")
@@ -570,6 +648,9 @@ class TestPrescriptionDispensing(SavepointCase):
         line = self._create_order_line(quantity=15.0)
         order = line.order_id
         order.write({"medication_explanation_confirmed": True})
+
+        # These cases dispense only the added prepacks, with no loose units.
+        order.update_prescription_dispensing_line(line.id, {"quantity_dispensed": 0.0})
 
         updated = order.add_prescription_dispensing_component(line.id)
         component = updated["components"][0]

@@ -1,0 +1,92 @@
+.o_patient_registration {
+    height: 100%;
+    overflow-y: auto;
+    background: #f6f8fa;
+    color: #172b40;
+    font-size: 14px;
+
+    .patient-control-panel { background: #fff; border-bottom: 1px solid #d9e1e7; }
+    .patient-breadcrumbs {
+        display: flex; align-items: center; gap: 8px; padding: 10px 18px;
+        border-bottom: 1px solid #e5e5e5; font-size: 18px;
+        button { border: 0; padding: 0; background: transparent; color: #714b67; }
+        strong { font-weight: 500; color: #555; }
+    }
+    .patient-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-height: 42px; padding: 6px 18px; }
+    .patient-save, .patient-cancel, .patient-create-prescription {
+        border: 0; border-radius: 4px; padding: 8px 14px; font-size: 12px;
+        font-weight: 700; text-transform: uppercase;
+    }
+    .patient-save { background: #5b4ee6; color: #fff; &:hover { background: #4b40c9; } }
+    .patient-create-prescription {
+        color: #5145a5; background: #f1efff;
+        &:hover:not(:disabled) { background: #e6e1ff; }
+    }
+    .patient-cancel { background: #f1f4f7; color: #172b40; }
+    button:disabled { opacity: .55; cursor: wait; }
+    .patient-status { margin-left: auto; padding: 6px 12px; border-radius: 20px; background: #eef0ff; color: #5145cd; font-size: 12px; font-weight: 600; }
+    .patient-form-error { margin: 16px 24px; }
+    .patient-ribbon {
+        min-width: 0; margin: 0; padding: 24px; border: 0;
+        display: grid;
+        grid-template-columns: 1fr 1.2fr 1fr 1fr;
+        gap: 20px;
+        align-items: stretch;
+    }
+    .patient-ribbon-panel {
+        min-width: 0;
+        padding: 20px;
+        background: #fff;
+        border: 1px solid #e1e6ef;
+        border-radius: 12px;
+        box-shadow: 0 5px 20px rgba(23, 43, 64, .07);
+        h2 {
+            display: flex; align-items: center; gap: 9px;
+            margin: 0 0 18px; color: #5145a5; font-size: 13px; font-weight: 700;
+            > i {
+                display: inline-flex; align-items: center; justify-content: center;
+                width: 27px; height: 27px; flex: 0 0 27px;
+                border-radius: 7px; background: #f1efff; color: #6554d9; font-size: 13px;
+            }
+        }
+        .patient-field > label { font-size: 12px; font-weight: 500; color: #52647a; }
+        .patient-field input:not([type=checkbox]), .patient-field select { min-height: 36px; }
+        .patient-checkbox { font-size: 12px; color: #52647a; }
+    }
+    .patient-birth-group {
+        margin-top: 16px;
+        padding-top: 16px;
+        border-top: 1px solid #e6eaf0;
+        h3 { margin: 0 0 12px; color: #5145a5; font-size: 12px; font-weight: 600; }
+    }
+    .patient-ribbon-fields { display: grid; gap: 12px; }
+    .patient-ribbon-hint { margin: 14px 0 0; max-width: 240px; font-size: 12px; line-height: 1.6; color: #7b8796; }
+    .patient-optional { margin-left: 4px; color: #8894a3; font-size: 11px; font-weight: 400; }
+    .patient-field {
+        min-width: 0;
+        > label { display: block; font-weight: 600; margin-bottom: 7px; font-size: 12px; }
+        input:not([type=checkbox]), select {
+            display: block; width: 100%; min-width: 0; min-height: 36px; padding: 7px 10px;
+            border: 1px solid #c6d6e5; border-radius: 4px; background: #fff;
+            color: #172b40; font: inherit; font-weight: 500;
+            &:focus { outline: 2px solid rgba(91, 78, 230, .18); border-color: #5b4ee6; }
+        }
+        small { display: block; color: #6b7f92; font-size: 12px; margin-top: 6px; }
+    }
+    .required { color: #c43f51; }
+    .patient-checkbox { display: inline-flex; align-items: center; gap: 8px; margin: 0; font-weight: 500; input { accent-color: #5b4ee6; } }
+    .patient-age-controls {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 10px;
+        input { padding-left: 8px; padding-right: 4px; }
+    }
+    @media (max-width: 1100px) {
+        .patient-ribbon { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+    @media (max-width: 600px) {
+        .patient-ribbon { grid-template-columns: 1fr; padding: 16px; gap: 16px; }
+        .patient-ribbon-panel { padding: 18px; }
+        .patient-ribbon-hint { max-width: none; }
+    }
+}

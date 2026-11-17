@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+    <t t-name="lesotho_sale.PatientRegistration" owl="1">
+        <div class="o_patient_registration">
+            <form t-ref="form" t-on-submit="save" t-on-input="onChange" t-on-change="onChange">
+                <header class="patient-control-panel">
+                    <div class="patient-breadcrumbs"><button type="button" t-on-click="cancel">Patients</button><span>/</span><strong t-esc="state.patientId ? 'Edit Patient' : 'Create New Patient'"/></div>
+                    <div class="patient-actions">
+                        <button type="submit" class="patient-save" t-att-disabled="state.saving"><t t-esc="state.saving ? 'Saving…' : 'Save'"/></button>
+                        <button type="button" class="patient-create-prescription" t-on-click="createPrescription" t-att-disabled="state.saving">Create Prescription</button>
+                        <button type="button" class="patient-cancel" t-on-click="cancel" t-att-disabled="state.saving">Cancel</button>
+                        <span class="patient-status" t-esc="state.patientId ? 'Edit Patient' : 'New Patient'"/>
+                    </div>
+                </header>
+                <div t-if="state.error" class="alert alert-danger patient-form-error" role="alert" t-esc="state.error"/>
+                <fieldset class="patient-ribbon" t-att-disabled="state.saving" aria-label="Patient details">
+                    <section class="patient-ribbon-panel" aria-labelledby="patient-name-heading">
+                        <h2 id="patient-name-heading"><i class="fa fa-user" aria-hidden="true"/>Patient Details</h2>
+                        <div class="patient-ribbon-fields">
+                            <div class="patient-field"><label for="patient-first-name">First Name <span class="required">*</span></label><input id="patient-first-name" type="text" t-model="state.values.first_name" required="required" autocomplete="given-name" placeholder="First name"/></div>
+                            <div class="patient-field"><label for="patient-middle-name">Middle Name</label><input id="patient-middle-name" type="text" t-model="state.values.middle_name" autocomplete="additional-name" placeholder="Middle name"/></div>
+                            <div class="patient-field"><label for="patient-last-name">Last Name</label><input id="patient-last-name" type="text" t-model="state.values.last_name" autocomplete="family-name" placeholder="Last name"/></div>
+                            <div class="patient-field"><label for="patient-gender">Gender <span class="required">*</span></label><select id="patient-gender" t-model="state.values.sex" t-att-required="!state.patientId"><option value="">Select gender</option><option value="M">Male</option><option value="F">Female</option><option value="O">Other</option></select></div>
+                        </div>
+                    </section>
+                    <section class="patient-ribbon-panel" aria-labelledby="patient-age-heading">
+                        <h2 id="patient-age-heading"><i class="fa fa-hourglass-o" aria-hidden="true"/>Age &amp; Birth Details</h2>
+                        <div class="patient-age-controls">
+                            <div class="patient-field"><label for="patient-age-years">Years</label><input id="patient-age-years" type="number" min="0" step="1" placeholder="0" t-model="state.values.age_years" t-on-input="onAgeChange" aria-describedby="patient-age-hint"/></div>
+                            <div class="patient-field"><label for="patient-age-months">Months</label><input id="patient-age-months" type="number" min="0" max="11" step="1" placeholder="0" t-model="state.values.age_months" t-on-input="onAgeChange" aria-describedby="patient-age-hint"/></div>
+                            <div class="patient-field"><label for="patient-age-days">Days</label><input id="patient-age-days" type="number" min="0" max="30" step="1" placeholder="0" t-model="state.values.age_days" t-on-input="onAgeChange" aria-describedby="patient-age-hint"/></div>
+                        </div>
+                        <p class="patient-ribbon-hint" id="patient-age-hint">Enter an age or date of birth. The other is calculated automatically.</p>
+                        <div class="patient-birth-group" role="group" aria-labelledby="patient-birth-heading">
+                            <h3 id="patient-birth-heading">Birth Details</h3>
+                            <div class="patient-ribbon-fields">
+                                <div class="patient-field"><label for="patient-birth-date">Date of Birth</label><input id="patient-birth-date" type="date" t-att-max="state.options.today" t-model="state.values.birth_date" t-on-change="onBirthDateChange"/></div>
+                                <label class="patient-checkbox"><input type="checkbox" t-model="state.values.estimated"/> Estimated date of birth</label>
+                                <div class="patient-field"><label for="patient-birth-time">Birth Time <span class="patient-optional">Optional</span></label><input id="patient-birth-time" type="time" t-model="state.values.birth_time"/></div>
+                            </div>
+                        </div>
+                    </section>
+                    <section class="patient-ribbon-panel" aria-labelledby="patient-contact-heading">
+                        <h2 id="patient-contact-heading"><i class="fa fa-phone" aria-hidden="true"/>Contact Details</h2>
+                        <div class="patient-ribbon-fields">
+                            <div class="patient-field"><label for="patient-phone">Phone Number</label><input id="patient-phone" type="tel" t-model="state.values.phone" autocomplete="tel"/></div>
+                            <div class="patient-field"><label for="patient-alternate-phone">Alternate Phone Number</label><input id="patient-alternate-phone" type="tel" t-model="state.values.mobile"/></div>
+                            <div class="patient-field"><label for="patient-email">Email Address</label><input id="patient-email" type="email" t-model="state.values.email" autocomplete="email"/></div>
+                        </div>
+                    </section>
+                    <section class="patient-ribbon-panel" aria-labelledby="patient-address-heading">
+                        <h2 id="patient-address-heading"><i class="fa fa-map-marker" aria-hidden="true"/>Address Information</h2>
+                        <div class="patient-ribbon-fields">
+                            <div class="patient-field"><label for="patient-locality">Locality / Sector</label><input id="patient-locality" type="text" t-model="state.values.street2" autocomplete="address-line2"/></div>
+                            <div class="patient-field"><label for="patient-city">City / Village</label><input id="patient-city" type="text" t-model="state.values.city" autocomplete="address-level3"/></div>
+                            <div class="patient-field"><label for="patient-postal-code">Postal Code</label><input id="patient-postal-code" type="text" t-model="state.values.zip" autocomplete="postal-code"/></div>
+                            <div class="patient-field"><label for="patient-district">District</label><input id="patient-district" type="text" t-model="state.values.district_name" autocomplete="address-level2"/></div>
+                        </div>
+                    </section>
+                </fieldset>
+            </form>
+        </div>
+    </t>
+</templates>

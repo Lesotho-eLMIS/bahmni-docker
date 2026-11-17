@@ -18,6 +18,7 @@
         "security/ir.model.access.csv",
         "views/menu_overrides.xml",
         "views/navbar_shortcut_actions.xml",
+        "views/patient_registration.xml",
         "views/action_overrides.xml",
         "wizard/dispensing_pack_selection_wizard.xml",
         "report/dispensed_prescription_report.xml",
@@ -29,6 +30,10 @@
     ],
     "assets": {
         "web.assets_backend": [
+            "lesotho_sale/static/src/components/patient_registration/patient_registration.js",
+            "lesotho_sale/static/src/components/patient_registration/patient_list_open.js",
+            "lesotho_sale/static/src/components/patient_registration/patient_registration.xml",
+            "lesotho_sale/static/src/components/patient_registration/patient_registration.scss",
             "lesotho_sale/static/src/components/prescription_dispense/prescription_dispense.js",
             "lesotho_sale/static/src/components/prescription_dispense/prescription_list_open.js",
             "lesotho_sale/static/src/components/prescription_dispense/prescription_dispense.xml",

@@ -40,14 +40,22 @@
             View Prepacks
           </DropdownItem>
         </Dropdown>
-        <button
-          type="button"
-          class="lesotho_navbar_shortcut"
-          role="menuitem"
-          t-on-click="() => this.openLesothoShortcut('account.res_partner_action_customer')"
+        <Dropdown
+          class="'lesotho_navbar_dropdown'"
+          togglerClass="'lesotho_navbar_shortcut lesotho_navbar_dropdown_toggle'"
+          menuClass="'lesotho_navbar_dropdown_menu'"
+          title="'Patients'"
         >
-          Patients
-        </button>
+          <t t-set-slot="toggler"><span>Patients</span></t>
+          <DropdownItem class="'lesotho_navbar_dropdown_item'"
+            onSelected="() => this.openLesothoShortcut('lesotho_sale.action_create_patient')">
+            Create New Patient
+          </DropdownItem>
+          <DropdownItem class="'lesotho_navbar_dropdown_item'"
+            onSelected="() => this.openLesothoShortcut('account.res_partner_action_customer')">
+            View Patients
+          </DropdownItem>
+        </Dropdown>
         <Dropdown
           class="'lesotho_navbar_dropdown'"
           togglerClass="'lesotho_navbar_shortcut lesotho_navbar_dropdown_toggle'"

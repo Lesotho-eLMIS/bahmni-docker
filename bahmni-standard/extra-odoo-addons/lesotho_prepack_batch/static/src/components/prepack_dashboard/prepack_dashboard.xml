@@ -54,12 +54,6 @@
                             <strong t-if="state.step === 3">Release</strong>
                             <strong t-if="state.step === 4">History</strong>
                         </div>
-                        <div class="workflow-step-indicator">
-                            <div id="step1" t-if="(state.mode === 'all' or state.mode === 'create') and state.permissions.can_create" t-attf-class="step {{ state.step === 1 ? 'active' : '' }}" t-on-click="() => this.goToStep(1)">Select Product</div>
-                            <div id="step2" t-if="(state.mode === 'all' or state.mode === 'create') and state.permissions.can_create" t-attf-class="step {{ state.step === 2 ? 'active' : '' }}" t-on-click="() => state.batchItems.length > 0 ? this.goToStep(2) : null">Create Prepacks</div>
-                            <div id="step3" t-if="(state.mode === 'all' or state.mode === 'authorize') and state.permissions.can_authorize" t-attf-class="step {{ state.step === 3 ? 'active' : '' }}" t-on-click="() => this.goToStep(3)">Release</div>
-                            <div id="step4" t-if="state.mode === 'history'" t-attf-class="step {{ state.step === 4 ? 'active' : '' }}" t-on-click="() => this.goToStep(4)">Prepacking History</div>
-                        </div>
                     </div>
 
                     <t t-if="state.step === 1 or state.step === 2 or state.batchId">
@@ -68,9 +62,9 @@
 
                     <!-- STEP 1: QUALITY CHECK -->
                     <div t-if="state.step === 1" id="view-quality-check">
-                        <div class="row">
+                        <div class="row g-4">
                             <div class="col-md-5">
-                                <div class="card shadow-sm mb-4">
+                                <div class="card prepack-selection-card h-100">
                                     <div class="card-header bg-primary text-white py-3">
                                         <h5 class="m-0 fw-bold text-white" style="color: #fff !important;">Select Product to Prepack</h5>
                                     </div>
@@ -83,20 +77,36 @@
                                                 </div>
                                             </div>
                                             <label class="form-label fw-bold required-label" for="prepackProductSearch">Product</label>
-                                            <input
-                                                id="prepackProductSearch"
-                                                class="form-select form-select-lg fw-semibold fs-5"
-                                                list="prepackProductOptions"
-                                                placeholder="-- Search / Select Product --"
-                                                autocomplete="off"
-                                                t-att-value="state.productSearch"
-                                                t-on-input="(ev) => this.onProductSearch(ev)"
-                                            />
-                                            <datalist id="prepackProductOptions">
-                                                <t t-foreach="state.inventory" t-as="item" t-key="item.key">
-                                                    <option t-att-value="this.getProductLabel(item)"></option>
-                                                </t>
-                                            </datalist>
+                                            <div class="prepack-product-picker">
+                                                <input
+                                                    id="prepackProductSearch"
+                                                    class="form-control prepack-product-search"
+                                                    role="combobox"
+                                                    aria-autocomplete="list"
+                                                    aria-controls="prepackProductOptions"
+                                                    t-att-aria-expanded="state.productOptionsOpen ? 'true' : 'false'"
+                                                    t-att-aria-activedescendant="state.productOptionsOpen and state.activeProductIndex >= 0 ? 'prepackProductOption' + state.activeProductIndex : undefined"
+                                                    placeholder="-- Search / Select Product --"
+                                                    autocomplete="off"
+                                                    t-att-value="state.productSearch"
+                                                    t-on-focus="openProductOptions"
+                                                    t-on-blur="closeProductOptions"
+                                                    t-on-keydown="onProductSearchKeydown"
+                                                    t-on-input="onProductSearch"
+                                                />
+                                                <div t-if="state.productOptionsOpen" id="prepackProductOptions" class="prepack-product-options" role="listbox" aria-label="Products">
+                                                    <t t-foreach="this.filteredProducts" t-as="item" t-key="item.key">
+                                                        <button type="button" role="option" tabindex="-1"
+                                                            t-att-id="'prepackProductOption' + item_index"
+                                                            t-att-aria-selected="state.activeProductIndex === item_index ? 'true' : 'false'"
+                                                            t-att-class="'prepack-product-option' + (state.activeProductIndex === item_index ? ' active' : '')"
+                                                            t-on-mousedown.prevent="() => this.chooseProduct(item)">
+                                                            <t t-esc="this.getProductLabel(item)"/>
+                                                        </button>
+                                                    </t>
+                                                    <div t-if="!this.filteredProducts.length" class="prepack-product-empty">No products found</div>
+                                                </div>
+                                            </div>
                                         </div>
 
                                         <div t-if="state.selectedProduct" class="product-meta p-3 rounded mb-4 animate__animated animate__fadeIn">
@@ -120,7 +130,7 @@
                                             </div>
                                             <div class="form-check mb-2">
                                                 <input class="form-check-input" type="checkbox" id="chk2" t-model="state.checks.chk2" t-on-change="() => this.validateChecklist()"/>
-                                                <label class="form-check-label fw-semibold required-label" for="chk2">Expiry date is valid (> 6 months).</label>
+                                                <label class="form-check-label fw-semibold required-label" for="chk2">Expiry valid</label>
                                             </div>
                                             <div t-if="state.selectedProduct and state.selectedProduct.reqLiquidCheck" class="form-check mb-2 text-warning">
                                                 <input class="form-check-input" type="checkbox" id="chk3" t-model="state.checks.chk3" t-on-change="() => this.validateChecklist()"/>
@@ -136,7 +146,7 @@
                             </div>
 
                             <div class="col-md-7">
-                                <div class="card shadow-sm h-100">
+                                <div class="card prepack-selection-card prepack-list-card h-100">
                                     <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
                                         <h5 class="m-0 fw-bold fs-5" style="font-weight: 700 !important;">Prepacking List </h5>
                                         <button t-if="state.batchItems.length > 0" class="btn btn-outline-danger btn-sm fw-semibold" t-on-click="() => this.clearBatch()">
@@ -188,10 +198,10 @@
                     </div>
 
                     <!-- STEP 2: CALCULATIONS -->
-                    <div t-if="state.step === 2" id="view-create-prepack">
-                        <div class="d-flex justify-content-between align-items-center mb-4 border-bottom pb-2">
+                    <div t-if="state.step === 2" id="view-create-prepack" class="prepack-calculation-panel">
+                        <div class="prepack-calculation-header d-flex justify-content-between align-items-center mb-4 border-bottom pb-2">
                             <h2 class="m-0 fw-bold fs-3">Calculate Prepack Sizes</h2>
-                            <button class="btn btn-warning btn-lg px-4 shadow-sm fw-bold" t-att-disabled="state.batchItems.length === 0" t-on-click="() => this.recordDamagedProducts()">
+                            <button class="btn btn-warning btn-lg px-4 shadow-sm fw-bold" disabled="disabled" aria-disabled="true" title="Recording damaged products is currently inactive.">
                                 <i class="fa fa-exclamation-triangle me-2"></i>RECORD DAMAGED PRODUCTS
                             </button>
                         </div>
@@ -216,7 +226,7 @@
                                                     <th class="ps-4 py-3 fs-5 required-label" width="22%">Prepack Size</th>
                                                     <th class="py-3 fs-5 required-label" width="22%">Number of Prepacks</th>
                                                     <th class="py-3 fs-5" width="20%">Bulk Units Required</th>
-                                                    <th class="py-3 fs-5 required-label" width="26%">Packaging Material</th>
+                                                    <th class="py-3 fs-5" width="26%">Packaging Material</th>
                                                     <th class="pe-4 py-3 text-end" width="10%"></th>
                                                 </tr>
                                             </thead>
@@ -225,7 +235,7 @@
                                                     <tr class="align-middle border-bottom border-light">
                                                         <td class="ps-4 py-3">
                                                             <div class="input-group input-group-lg shadow-sm">
-                                                                <input type="text" class="form-control fw-bold fs-5 border-end-0" inputmode="decimal" pattern="[0-9]*[.]?[0-9]*" t-att-value="this.getBlankZeroValue(target.size)" t-on-keydown="(ev) => this.preventNonNumericInput(ev, { allowDecimal: true })" t-on-input="(ev) => this.onNumericFieldInput(target, 'size', ev, { allowDecimal: true })" t-on-change="() => this.autoSave()"/>
+                                                                <input type="text" class="form-control fw-bold fs-5 border-end-0" inputmode="decimal" pattern="[0-9]*[.]?[0-9]*" t-att-value="this.getBlankZeroValue(target.size)" t-on-keydown="(ev) => this.preventNonNumericInput(ev, { allowDecimal: true })" t-on-input="(ev) => this.onPrepackSizeInput(item, target, ev)" t-on-change="() => this.autoSave()"/>
                                                                 <span class="input-group-text bg-white text-muted border-start-0 fw-bold fs-6"><t t-esc="item.uom"/></span>
                                                             </div>
                                                         </td>
@@ -285,7 +295,7 @@
                             </t>
                         </div>
 
-                        <div class="mt-5 pt-4 border-top text-end d-flex justify-content-end align-items-center mb-5">
+                        <div class="prepack-calculation-actions mt-4 pt-4 border-top text-end d-flex justify-content-end align-items-center">
                             <div class="d-inline-flex align-items-center gap-2">
                                 <button class="btn btn-danger btn-lg px-4 shadow-sm fw-bold" t-att-disabled="state.batchItems.length === 0" t-on-click="() => this.clearBatch()">
                                     <i class="fa fa-trash me-2"></i>DELETE BATCH
@@ -634,7 +644,7 @@
                         </t>
                     </div>
 
-                    <div class="prepack-backbar">
+                    <div t-if="state.step !== 1" class="prepack-backbar">
                         <button class="btn btn-outline-secondary prepack-back-button shadow-sm fw-bold" t-on-click="() => this.goBack()">
                             <i class="fa fa-arrow-left me-2"></i><t t-esc="this.getBackLabel()"/>
                         </button>
