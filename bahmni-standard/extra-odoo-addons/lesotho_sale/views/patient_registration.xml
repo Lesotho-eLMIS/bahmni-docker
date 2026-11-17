@@ -1,0 +1,105 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+    <data noupdate="1">
+        <record id="sequence_patient_registration" model="ir.sequence">
+            <field name="name">Patient Identifier</field>
+            <field name="code">lesotho.patient.registration</field>
+            <field name="prefix">ABC</field>
+            <field name="padding">6</field>
+            <field name="company_id" eval="False"/>
+        </record>
+    </data>
+    <record id="action_create_patient" model="ir.actions.client">
+        <field name="name">Create New Patient</field>
+        <field name="tag">lesotho_patient_registration</field>
+    </record>
+    <record id="view_patient_registration_details" model="ir.ui.view">
+        <field name="name">res.partner.patient.registration.details</field>
+        <field name="model">res.partner</field>
+        <field name="inherit_id" ref="base.view_partner_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//notebook" position="inside">
+                <page string="Patient Registration" attrs="{'invisible': [('is_patient', '=', False)]}">
+                    <field name="is_patient" invisible="1"/>
+                    <group>
+                        <group string="Patient Details">
+                            <field name="ref" string="Patient Identifier"/>
+                            <field name="patient_first_name"/>
+                            <field name="patient_middle_name"/>
+                            <field name="patient_last_name"/>
+                            <field name="patient_birth_date"/>
+                            <field name="patient_birth_estimated"/>
+                            <field name="patient_birth_time"/>
+                        </group>
+                        <group string="Address Information">
+                            <field name="street" string="House number / Flat number"/>
+                            <field name="street2" string="Locality / Sector"/>
+                            <field name="city" string="City / Village"/>
+                            <field name="patient_district_name"/>
+                            <field name="patient_state_name"/>
+                            <field name="zip" string="Postal Code"/>
+                            <field name="mobile" string="Alternate Phone Number"/>
+                        </group>
+                    </group>
+                </page>
+            </xpath>
+        </field>
+    </record>
+    <!-- Dedicated views hide New only when browsing through View Patients. -->
+    <record id="view_patients_kanban" model="ir.ui.view">
+        <field name="name">res.partner.patients.kanban</field>
+        <field name="model">res.partner</field>
+        <field name="inherit_id" ref="base.res_partner_kanban_view"/>
+        <field name="mode">primary</field>
+        <field name="priority">99</field>
+        <field name="arch" type="xml">
+            <xpath expr="/kanban" position="attributes">
+                <attribute name="js_class">lesotho_patients_kanban</attribute>
+                <attribute name="create">false</attribute>
+            </xpath>
+        </field>
+    </record>
+    <record id="view_patients_tree" model="ir.ui.view">
+        <field name="name">res.partner.patients.tree</field>
+        <field name="model">res.partner</field>
+        <field name="inherit_id" ref="base.view_partner_tree"/>
+        <field name="mode">primary</field>
+        <field name="priority">99</field>
+        <field name="arch" type="xml">
+            <xpath expr="/tree" position="attributes">
+                <attribute name="js_class">lesotho_patients_list</attribute>
+                <attribute name="create">false</attribute>
+            </xpath>
+        </field>
+    </record>
+    <record id="view_patients_form" model="ir.ui.view">
+        <field name="name">res.partner.patients.form</field>
+        <field name="model">res.partner</field>
+        <field name="inherit_id" ref="base.view_partner_form"/>
+        <field name="mode">primary</field>
+        <field name="priority">99</field>
+        <field name="arch" type="xml">
+            <xpath expr="/form" position="attributes">
+                <attribute name="create">false</attribute>
+            </xpath>
+        </field>
+    </record>
+    <record id="action_patients_view_kanban" model="ir.actions.act_window.view">
+        <field name="sequence">1</field>
+        <field name="view_mode">kanban</field>
+        <field name="view_id" ref="view_patients_kanban"/>
+        <field name="act_window_id" ref="account.res_partner_action_customer"/>
+    </record>
+    <record id="action_patients_view_tree" model="ir.actions.act_window.view">
+        <field name="sequence">2</field>
+        <field name="view_mode">tree</field>
+        <field name="view_id" ref="view_patients_tree"/>
+        <field name="act_window_id" ref="account.res_partner_action_customer"/>
+    </record>
+    <record id="action_patients_view_form" model="ir.actions.act_window.view">
+        <field name="sequence">3</field>
+        <field name="view_mode">form</field>
+        <field name="view_id" ref="view_patients_form"/>
+        <field name="act_window_id" ref="account.res_partner_action_customer"/>
+    </record>
+</odoo>

@@ -79,6 +79,10 @@ services:
   odoo:
     profiles: ["odoo", "bahmni-standard"]
     image: "bahmni/odoo-16:${ODOO_IMAGE_TAG:?[ERROR]}"
+    command:
+      - odoo
+      - -d
+      - ${ODOO_DB_NAME:?}
     ports:
       - "8069:8069"
     volumes:

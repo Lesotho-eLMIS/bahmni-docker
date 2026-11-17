@@ -25,6 +25,8 @@ export class PrepackDashboard extends Component {
       pendingBatches: [],
       historyBatches: [],
       productSearch: "",
+      productOptionsOpen: false,
+      activeProductIndex: -1,
       selectedProductKey: null,
       selectedProduct: null,
       checks: { chk1: false, chk2: false, chk3: false },
@@ -221,12 +223,56 @@ export class PrepackDashboard extends Component {
   onProductSearch(ev) {
     const searchValue = ev.target.value;
     this.state.productSearch = searchValue;
+    this.openProductOptions();
 
     const selectedProduct = this.state.inventory.find((item) => this.getProductLabel(item) === searchValue);
     this.selectProduct(selectedProduct, { keepSearchValue: true });
   }
 
+  get filteredProducts() {
+    const search = this.state.productSearch.trim().toLocaleLowerCase();
+    return this.state.inventory.filter((item) => this.getProductLabel(item).toLocaleLowerCase().includes(search));
+  }
+
+  openProductOptions() {
+    this.state.productOptionsOpen = true;
+    this.state.activeProductIndex = -1;
+  }
+
+  closeProductOptions() {
+    this.state.productOptionsOpen = false;
+    this.state.activeProductIndex = -1;
+  }
+
+  chooseProduct(product) {
+    this.selectProduct(product);
+    this.closeProductOptions();
+  }
+
+  onProductSearchKeydown(ev) {
+    if (ev.key === "Escape") {
+      this.closeProductOptions();
+    } else if (ev.key === "ArrowDown" || ev.key === "ArrowUp") {
+      ev.preventDefault();
+      this.state.productOptionsOpen = true;
+      const count = this.filteredProducts.length;
+      if (count) {
+        const currentIndex = this.state.activeProductIndex;
+        this.state.activeProductIndex = currentIndex < 0
+          ? (ev.key === "ArrowDown" ? 0 : count - 1)
+          : (currentIndex + (ev.key === "ArrowDown" ? 1 : -1) + count) % count;
+        requestAnimationFrame(() => {
+          document.getElementById(`prepackProductOption${this.state.activeProductIndex}`)?.scrollIntoView({ block: "nearest" });
+        });
+      }
+    } else if (ev.key === "Enter" && this.state.productOptionsOpen && this.state.activeProductIndex >= 0) {
+      ev.preventDefault();
+      this.chooseProduct(this.filteredProducts[this.state.activeProductIndex]);
+    }
+  }
+
   resetSelectedProduct() {
+    this.closeProductOptions();
     this.state.selectedProductKey = null;
     this.state.selectedProduct = null;
     this.state.productSearch = "";
@@ -326,6 +372,24 @@ export class PrepackDashboard extends Component {
     } else {
       target[fieldName] = parseInt(numericValue, 10);
     }
+  }
+
+  onPrepackSizeInput(item, target, ev) {
+    this.onNumericFieldInput(target, "size", ev, { allowDecimal: true });
+    const size = Number(target.size || 0);
+    if (size <= 0) {
+      target.qty = "";
+      return;
+    }
+
+    const usedByOtherTargets = item.targets.reduce((total, candidate) => {
+      if (candidate === target) {
+        return total;
+      }
+      return total + Number(candidate.size || 0) * Number(candidate.qty || 0);
+    }, 0);
+    const availableBalance = Math.max(0, Number(item.soh || 0) - usedByOtherTargets);
+    target.qty = Math.floor((availableBalance + 1e-9) / size);
   }
 
   validateChecklist() {

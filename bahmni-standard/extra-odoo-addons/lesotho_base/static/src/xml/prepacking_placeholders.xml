@@ -20,61 +20,48 @@
         </div>
       </div>
 
-      <section class="lesotho_create_prescription_top">
+      <section class="lesotho_create_prescription_top" aria-label="Patient and care information">
         <div class="lesotho_create_prescription_group lesotho_create_prescription_patient">
-          <label>
-            <span>Patient (Name | Age | Sex | Village)</span>
-            <select t-att-value="state.patientId" t-on-change="(ev) => this.updatePatient(ev.target.value)">
-              <option value="">Select patient</option>
+          <h2><i class="fa fa-user" aria-hidden="true"/>Patient</h2>
+          <label for="prescription-patient">
+            <span>Name | Age | Sex | Village</span>
+            <select id="prescription-patient" t-on-change="(ev) => this.updatePatient(ev.target.value)">
+              <option value="" t-att-selected="!state.patientId">Select patient</option>
               <t t-foreach="state.patientOptions" t-as="patient" t-key="patient.id">
-                <option t-att-value="patient.id"><t t-esc="patient.name"/></option>
+                <option t-att-value="patient.id" t-att-selected="patient.id === state.patientId"><t t-esc="patient.name"/></option>
               </t>
             </select>
           </label>
         </div>
 
-        <div class="lesotho_create_prescription_group">
-          <label>
-            <span>Weight (kg)</span>
-            <span class="lesotho_create_prescription_value"><t t-esc="state.patientId ? state.weight : ''"/></span>
-          </label>
-          <label>
-            <span>Height (cm)</span>
-            <span class="lesotho_create_prescription_value"><t t-esc="state.patientId ? state.height : ''"/></span>
-          </label>
-        </div>
-
-        <div class="lesotho_create_prescription_group">
-          <label>
-            <span>BMI (kg/m2)</span>
-            <span class="lesotho_create_prescription_value"><t t-esc="state.patientId ? state.bmi : ''"/></span>
-          </label>
-          <label>
-            <span>BP (mmHg)</span>
-            <span class="lesotho_create_prescription_value"><t t-esc="state.patientId ? state.bp : ''"/></span>
-          </label>
+        <div class="lesotho_create_prescription_group lesotho_create_prescription_vitals">
+          <h2><i class="fa fa-heartbeat" aria-hidden="true"/>Vitals</h2>
+          <div class="lesotho_create_prescription_vitals_grid" aria-live="polite">
+            <div><span class="lesotho_create_prescription_metric_label">Weight (kg)</span><span class="lesotho_create_prescription_value"><t t-esc="state.patientId ? state.weight : ''"/></span></div>
+            <div><span class="lesotho_create_prescription_metric_label">Height (cm)</span><span class="lesotho_create_prescription_value"><t t-esc="state.patientId ? state.height : ''"/></span></div>
+            <div><span class="lesotho_create_prescription_metric_label">BMI (kg/m2)</span><span class="lesotho_create_prescription_value"><t t-esc="state.patientId ? state.bmi : ''"/></span></div>
+            <div><span class="lesotho_create_prescription_metric_label">BP (mmHg)</span><span class="lesotho_create_prescription_value"><t t-esc="state.patientId ? state.bp : ''"/></span></div>
+          </div>
         </div>
 
         <div class="lesotho_create_prescription_group lesotho_create_prescription_allergies">
-          <label>
-            <span>Allergies</span>
-            <span class="lesotho_create_prescription_value"><t t-esc="state.patientId ? state.allergies : ''"/></span>
-          </label>
+          <h2><i class="fa fa-medkit" aria-hidden="true"/>Allergies</h2>
+          <div class="lesotho_create_prescription_value" aria-live="polite"><t t-esc="state.patientId ? state.allergies : ''"/></div>
         </div>
 
-        <div class="lesotho_create_prescription_group">
-          <label>
+        <div class="lesotho_create_prescription_group lesotho_create_prescription_care">
+          <label for="prescription-care-setting">
             <span>Care Setting</span>
-            <select t-att-value="state.careSetting" t-on-change="(ev) => state.careSetting = ev.target.value">
+            <select id="prescription-care-setting" t-att-value="state.careSetting" t-on-change="(ev) => state.careSetting = ev.target.value">
               <option value=""></option>
               <t t-foreach="state.careSettingOptions" t-as="option" t-key="option.value">
                 <option t-att-value="option.value"><t t-esc="option.label"/></option>
               </t>
             </select>
           </label>
-          <label>
+          <label for="prescription-dispensary">
             <span>Dispensary</span>
-            <select t-att-value="state.dispensaryId" t-on-change="(ev) => state.dispensaryId = ev.target.value">
+            <select id="prescription-dispensary" t-att-value="state.dispensaryId" t-on-change="(ev) => state.dispensaryId = ev.target.value">
               <option value=""></option>
               <t t-foreach="state.dispensaryOptions" t-as="dispensary" t-key="dispensary.id">
                 <option t-att-value="dispensary.id"><t t-esc="dispensary.name"/></option>

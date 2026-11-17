@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo noupdate="1">
+    <record id="product_category_packaging_materials" model="product.category">
+        <field name="name">Packaging Materials</field>
+        <field name="parent_id" ref="product.product_category_all"/>
+    </record>
+</odoo>

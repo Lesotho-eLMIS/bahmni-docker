@@ -88,6 +88,88 @@ USERNAME LINK STYLE: comment this block to show the default avatar/user menu aga
    **************************** */
 
 /* ************************ LESOTHO CUSTOMIZATION
+   NOTIFICATION STATUS COLOURS
+   ************************ */
+.o_notification_manager {
+  right: 16px !important;
+  left: auto !important;
+  width: min(430px, calc(100vw - 32px)) !important;
+  max-width: calc(100vw - 32px) !important;
+}
+
+.o_notification_manager .o_notification.border-success {
+  background-color: #22c55e !important;
+  border-color: #22c55e !important;
+  color: #052e16 !important;
+}
+
+.o_notification_manager .o_notification.border-danger {
+  background-color: #dc2626 !important;
+  border-color: #dc2626 !important;
+  color: #ffffff !important;
+}
+
+.o_notification_manager .o_notification.border-success,
+.o_notification_manager .o_notification.border-danger {
+  box-sizing: border-box !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  min-height: 76px !important;
+  border-width: 0 !important;
+  border-radius: 8px !important;
+  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.28) !important;
+  font-size: 16px !important;
+  line-height: 1.45 !important;
+  overflow: hidden !important;
+}
+
+.o_notification_manager .o_notification.border-success .o_notification_content,
+.o_notification_manager .o_notification.border-danger .o_notification_content {
+  overflow-wrap: anywhere !important;
+  word-break: normal !important;
+}
+
+.o_notification_manager .o_notification.border-success .o_notification_title,
+.o_notification_manager .o_notification.border-danger .o_notification_title {
+  padding: 16px 20px 4px !important;
+  font-size: 18px !important;
+  font-weight: 700 !important;
+}
+
+.o_notification_manager .o_notification.border-success .o_notification_body,
+.o_notification_manager .o_notification.border-danger .o_notification_body {
+  padding: 18px 22px !important;
+  font-size: 16px !important;
+  font-weight: 600 !important;
+}
+
+.o_notification_manager .o_notification.border-success .o_notification_title + .o_notification_body,
+.o_notification_manager .o_notification.border-danger .o_notification_title + .o_notification_body {
+  padding-top: 8px !important;
+}
+
+.o_notification_manager .o_notification.border-success .o_notification_close,
+.o_notification_manager .o_notification.border-danger .o_notification_close {
+  display: none !important;
+}
+
+.o_notification_manager .o_notification.border-danger .o_notification_title,
+.o_notification_manager .o_notification.border-danger .o_notification_body,
+.o_notification_manager .o_notification.border-danger .o_notification_close,
+.o_notification_manager .o_notification.border-danger .btn-link {
+  color: #ffffff !important;
+}
+
+.o_notification_manager .o_notification.border-success .o_notification_title,
+.o_notification_manager .o_notification.border-success .o_notification_body,
+.o_notification_manager .o_notification.border-success .o_notification_close,
+.o_notification_manager .o_notification.border-success .btn-link {
+  color: #052e16 !important;
+}
+/* end of notification status colours block
+   **************************** */
+
+/* ************************ LESOTHO CUSTOMIZATION
    HIDE CONVERSATIONS AND ACTIVITIES
    ************************
    Comment this block to show conversations and activities in the navigation bar again */
@@ -241,61 +323,41 @@ USERNAME LINK STYLE: comment this block to show the default avatar/user menu aga
 
 .lesotho_create_prescription_page {
   box-sizing: border-box;
-  height: calc(100vh - 118px);
-  padding: 0 18px 32px;
-  background: #f4f7fb;
-  color: #17202a;
+  height: 100%;
+  padding: 0 0 32px;
+  background: #f6f8fa;
+  color: #172b40;
+  font-size: 14px;
   overflow-x: hidden;
   overflow-y: auto;
-  scrollbar-color: #a9b8c2 #f5f8fa;
+  scrollbar-color: #a9b8c2 #f6f8fa;
 }
 
-.lesotho_create_prescription_page::-webkit-scrollbar {
-  width: 8px;
-}
-
-.lesotho_create_prescription_page::-webkit-scrollbar-thumb {
-  border-radius: 999px;
-  background: #a9b8c2;
-}
-
-.lesotho_create_prescription_page::-webkit-scrollbar-track {
-  background: #f5f8fa;
-}
+.lesotho_create_prescription_page::-webkit-scrollbar { width: 8px; }
+.lesotho_create_prescription_page::-webkit-scrollbar-thumb { border-radius: 999px; background: #a9b8c2; }
+.lesotho_create_prescription_page::-webkit-scrollbar-track { background: #f6f8fa; }
 
 .lesotho_create_prescription_header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: flex-start;
-  width: 100vw;
-  margin-left: calc(50% - 50vw);
-  margin-right: calc(50% - 50vw);
-  min-height: 62px;
-  padding: 6px 18px;
-  border-bottom: 1px solid #d8d8d8;
-  background: #ffffff;
-  box-shadow: 0 4px 14px rgba(31, 47, 60, .05);
+  width: 100%;
+  border-bottom: 1px solid #d9e1e7;
+  background: #fff;
 }
 
-.lesotho_create_prescription_header_left {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 6px;
-}
+.lesotho_create_prescription_header_left { width: 100%; }
 
 .lesotho_create_prescription_breadcrumbs {
-  display: inline-flex;
+  display: flex;
   align-items: center;
-  gap: 5px;
-  color: #6b7785;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 10px 18px;
+  border-bottom: 1px solid #e5e5e5;
+  color: #52647a;
   font-size: 18px;
-  font-weight: 400;
-  line-height: 1.25;
+  line-height: 1.4;
 }
 
 .lesotho_create_prescription_breadcrumbs button {
-  appearance: none;
   padding: 0;
   border: 0;
   background: transparent;
@@ -304,360 +366,174 @@ USERNAME LINK STYLE: comment this block to show the default avatar/user menu aga
   cursor: pointer;
 }
 
-.lesotho_create_prescription_breadcrumbs button:hover {
-  text-decoration: none;
-}
-
-.lesotho_create_prescription_breadcrumbs strong {
-  color: #6b7785;
-  font-weight: 400;
-}
+.lesotho_create_prescription_breadcrumbs strong { color: #555; font-weight: 500; }
 
 .lesotho_create_prescription_actions {
-  display: inline-flex;
+  display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 8px;
+  min-height: 42px;
+  padding: 6px 18px;
 }
 
 .lesotho_create_prescription_actions button,
 .lesotho_create_prescription_add_item,
 .lesotho_create_prescription_bottom_create {
-  min-height: 32px;
+  min-height: 34px;
   padding: 8px 14px;
   border: 0;
   border-radius: 4px;
   font-size: 12px;
-  font-weight: 800;
-  line-height: 1;
-  transition: background-color .16s ease, box-shadow .16s ease, transform .16s ease;
+  font-weight: 700;
+  line-height: 1.2;
+  cursor: pointer;
+  transition: background-color .16s ease;
 }
 
+.lesotho_create_prescription_actions button { text-transform: uppercase; }
 .lesotho_create_prescription_save,
 .lesotho_create_prescription_add_item,
-.lesotho_create_prescription_bottom_create {
-  background: #4950e0;
-  color: #ffffff;
-  box-shadow: 0 8px 18px rgba(73, 80, 224, .18);
-}
-
-.lesotho_create_prescription_add_item {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-}
-
-.lesotho_create_prescription_add_item span {
-  font-size: 20px;
-  font-weight: 900;
-  line-height: .8;
-}
-
+.lesotho_create_prescription_bottom_create { background: #5b4ee6; color: #fff; }
 .lesotho_create_prescription_save:hover:not(:disabled),
 .lesotho_create_prescription_add_item:hover,
-.lesotho_create_prescription_bottom_create:hover:not(:disabled) {
-  background: #3f45c8;
-  box-shadow: 0 10px 22px rgba(73, 80, 224, .24);
-  transform: translateY(-1px);
-}
-
+.lesotho_create_prescription_bottom_create:hover:not(:disabled) { background: #4b40c9; }
 .lesotho_create_prescription_save:disabled,
-.lesotho_create_prescription_bottom_create:disabled {
-  cursor: not-allowed;
-  opacity: .48;
-  box-shadow: none;
-}
+.lesotho_create_prescription_bottom_create:disabled { opacity: .55; cursor: not-allowed; }
+.lesotho_create_prescription_secondary { background: #f1f4f7; color: #172b40; }
+.lesotho_create_prescription_secondary:hover { background: #e8edf2; }
+.lesotho_create_prescription_add_item { display: inline-flex; align-items: center; gap: 7px; }
+.lesotho_create_prescription_add_item span { font-size: 18px; line-height: 1; }
 
-.lesotho_create_prescription_secondary {
-  background: transparent;
-  color: #4c4a73;
-}
+.lesotho_create_prescription_top,
+.lesotho_create_prescription_footer { width: min(calc(100% - 48px), 1240px); margin-left: auto; margin-right: auto; }
 
-.lesotho_create_prescription_secondary:hover {
-  background: #f1f2ff;
-}
+.lesotho_create_prescription_workspace { width: calc(100% - 48px); margin-left: auto; margin-right: auto; }
 
 .lesotho_create_prescription_top {
   display: grid;
-  grid-template-columns: 1.25fr .52fr .52fr .82fr 1.06fr;
-  width: 100vw;
-  margin-left: calc(50% - 50vw);
-  margin-right: calc(50% - 50vw);
-  border: 1px solid #d7e1e8;
-  border-left: 0;
-  border-right: 0;
-  border-radius: 0;
-  background: linear-gradient(180deg, #ffffff 0%, #fbfdff 100%);
-  box-shadow: 0 10px 28px rgba(31, 47, 60, .075);
+  grid-template-columns: 1.3fr 1fr 1fr;
+  margin-top: 24px;
+  margin-bottom: 24px;
+  border: 1px solid #e1e6ef;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 5px 20px rgba(23, 43, 64, .07);
   overflow: hidden;
 }
 
-.lesotho_create_prescription_group {
+.lesotho_create_prescription_group { min-width: 0; padding: 22px 24px; }
+.lesotho_create_prescription_vitals,
+.lesotho_create_prescription_allergies { border-left: 1px solid #e6eaf0; }
+.lesotho_create_prescription_group h2 {
   display: flex;
-  flex-direction: column;
+  align-items: center;
+  gap: 9px;
+  margin: 0 0 18px;
+  color: #5145a5;
+  font-size: 13px;
+  font-weight: 700;
+}
+.lesotho_create_prescription_group h2 i {
+  display: inline-flex;
+  align-items: center;
   justify-content: center;
-  gap: 8px;
-  min-width: 0;
-  min-height: 78px;
-  padding: 12px 18px;
+  width: 27px;
+  height: 27px;
+  flex: 0 0 27px;
+  border-radius: 7px;
+  background: #f1efff;
+  color: #6554d9;
 }
-
-.lesotho_create_prescription_group + .lesotho_create_prescription_group {
-  border-left: 1px solid #d7e1e8;
-}
-
 .lesotho_create_prescription_group label,
 .lesotho_create_prescription_line label {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 7px;
   min-width: 0;
   margin: 0;
 }
-
-.lesotho_create_prescription_group label {
-  display: grid;
-  grid-template-columns: minmax(92px, 34%) minmax(0, 1fr);
-  align-items: center;
-  gap: 10px;
-}
-
-.lesotho_create_prescription_patient > label {
-  display: flex;
-  gap: 8px;
-}
-
-.lesotho_create_prescription_group span,
-.lesotho_create_prescription_line span {
-  color: #334556;
+.lesotho_create_prescription_group label > span:first-child,
+.lesotho_create_prescription_metric_label,
+.lesotho_create_prescription_line label > span:first-child {
+  color: #52647a;
   font-size: 12px;
-  font-weight: 750;
-  line-height: 1.2;
-  white-space: nowrap;
+  font-weight: 600;
+  line-height: 1.4;
 }
+.lesotho_create_prescription_vitals h2 { margin-bottom: 12px; }
+.lesotho_create_prescription_vitals_grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 16px; }
+.lesotho_create_prescription_vitals_grid > div { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.lesotho_create_prescription_metric_label { margin-bottom: 0; white-space: nowrap; }
+.lesotho_create_prescription_vitals_grid .lesotho_create_prescription_value { white-space: nowrap; }
+.lesotho_create_prescription_value { display: block; color: #172b40; font-size: 14px; font-weight: 600; line-height: 1.6; overflow-wrap: anywhere; }
+.lesotho_create_prescription_value:empty::before { content: "—"; color: #9aa6b3; }
+.lesotho_create_prescription_allergies .lesotho_create_prescription_value { font-weight: 500; }
 
-.lesotho_create_prescription_group label > span:first-child {
-  color: #173a55;
-  font-size: 11px;
-  font-weight: 850;
-  line-height: 1.15;
+.lesotho_create_prescription_care {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-column: 1 / -1;
+  gap: 24px;
+  border-top: 1px solid #e6eaf0;
+  background: #fbfcfe;
 }
-
-.lesotho_create_prescription_group .lesotho_create_prescription_value {
-  color: #24313d;
-  font-size: 13px;
-  font-weight: 750;
-  min-height: 20px;
-  padding: 2px 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.lesotho_create_prescription_allergies .lesotho_create_prescription_value {
-  white-space: normal;
-}
+.lesotho_create_prescription_care label { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 12px; }
 
 .lesotho_create_prescription_group input,
 .lesotho_create_prescription_group select,
 .lesotho_create_prescription_line input,
 .lesotho_create_prescription_line select {
   box-sizing: border-box;
-  min-width: 0;
   width: 100%;
-  min-height: 36px;
+  min-width: 0;
+  min-height: 38px;
   padding: 8px 10px;
-  border: 1px solid #c7d5df;
-  border-radius: 6px;
-  background: #fbfdff;
-  color: #17202a;
+  border: 1px solid #c6d6e5;
+  border-radius: 4px;
+  background: #fff;
+  color: #172b40;
+  font-family: inherit;
   font-size: 13px;
-  font-weight: 700;
-  transition: border-color .16s ease, box-shadow .16s ease, background-color .16s ease;
+  font-weight: 500;
 }
-
-.lesotho_create_prescription_group input:hover,
-.lesotho_create_prescription_group select:hover,
-.lesotho_create_prescription_line input:hover,
-.lesotho_create_prescription_line select:hover {
-  border-color: #aebdc7;
-}
-
 .lesotho_create_prescription_group input:focus,
 .lesotho_create_prescription_group select:focus,
 .lesotho_create_prescription_line input:focus,
 .lesotho_create_prescription_line select:focus {
   outline: 0;
-  border-color: #4950e0;
-  box-shadow: 0 0 0 3px rgba(73, 80, 224, .13);
+  border-color: #5b4ee6;
+  box-shadow: 0 0 0 3px rgba(91, 78, 230, .13);
 }
+.lesotho_create_prescription_page button:focus-visible { outline: 2px solid #5b4ee6; outline-offset: 3px; }
+.lesotho_create_prescription_line input[readonly] { background: #f5f4ff; color: #5145a5; font-weight: 600; }
 
-.lesotho_create_prescription_line input[readonly] {
-  background: #f4f7f9;
-  color: #425466;
-}
-
-.lesotho_create_prescription_workspace {
-  display: block;
-  width: min(100%, 1760px);
-  margin: 28px auto 0;
-}
-
-.lesotho_create_prescription_line_actions {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  margin-bottom: 6px;
-}
-
-.lesotho_create_prescription_lines {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  min-width: 0;
-}
-
+.lesotho_create_prescription_line_actions { display: flex; justify-content: flex-end; }
+.lesotho_create_prescription_lines { display: flex; flex-direction: column; gap: 18px; min-width: 0; }
 .lesotho_create_prescription_line {
   display: flex;
   flex-direction: column;
-  gap: 14px;
-  padding: 14px;
-  border: 1px solid #dfe7ed;
-  border-radius: 8px;
-  background: #ffffff;
-  box-shadow: 0 8px 22px rgba(31, 47, 60, .055);
-  transition: border-color .16s ease, box-shadow .16s ease;
+  gap: 20px;
+  padding: 22px 24px;
+  border: 1px solid #e1e6ef;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 5px 20px rgba(23, 43, 64, .07);
 }
-
-.lesotho_create_prescription_line:hover {
-  border-color: #cbd8e0;
-  box-shadow: 0 12px 28px rgba(31, 47, 60, .075);
-}
-
-.lesotho_create_prescription_line header {
-  display: flex;
-  align-items: center;
-  justify-content: flex-start;
-  gap: 8px;
-  min-height: 32px;
-}
-
-.lesotho_create_prescription_line_number {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
-  flex: 0 0 24px;
-  border-radius: 50%;
-  background: #173a55;
-  color: #ffffff !important;
-  font-size: 12px;
-  font-weight: 850;
-  line-height: 1;
-}
-
-.lesotho_create_prescription_line header strong {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 24px;
-  padding: 4px 12px;
-  border-radius: 999px;
-  background: #eaf0ff;
-  color: #315cad;
-  font-size: 12px;
-  font-weight: 850;
-  line-height: 1;
-}
-
-.lesotho_create_prescription_remove {
-  margin-left: auto;
-  width: 32px;
-  min-width: 32px;
-  height: 32px;
-  padding: 0;
-  border: 0;
-  border-radius: 4px;
-  background: #d92d20;
-  color: #ffffff;
-  font-size: 0;
-  transition: background-color .16s ease, transform .16s ease;
-}
-
-.lesotho_create_prescription_remove::before {
-  content: "\00d7";
-  color: #ffffff;
-  font-family: Arial, sans-serif;
-  font-size: 24px;
-  font-weight: 700;
-  line-height: 30px;
-}
-
-.lesotho_create_prescription_remove:hover {
-  background: #b42318;
-  transform: translateY(-1px);
-}
-
-.lesotho_create_prescription_product {
-  display: grid;
-  grid-template-columns: minmax(360px, 1fr) minmax(150px, .16fr);
-  gap: 14px;
-}
-
-.lesotho_create_prescription_product .lesotho_create_prescription_wide {
-  min-width: 0;
-}
-
-.lesotho_create_prescription_product .lesotho_create_prescription_quantity {
-  min-width: 0;
-}
-
+.lesotho_create_prescription_line header { display: flex; align-items: center; gap: 9px; padding-bottom: 14px; border-bottom: 1px solid #edf0f5; }
+.lesotho_create_prescription_line_number { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; flex: 0 0 26px; border-radius: 7px; background: #f1efff; color: #6554d9; font-size: 12px; font-weight: 700; }
+.lesotho_create_prescription_line header strong { color: #5145a5; font-size: 13px; font-weight: 700; }
+.lesotho_create_prescription_remove { margin-left: auto; width: 28px; height: 28px; padding: 0; border: 0; border-radius: 4px; background: #fff0ef; color: #b42318; font-size: 0; cursor: pointer; }
+.lesotho_create_prescription_remove::before { content: "\00d7"; font-family: Arial, sans-serif; font-size: 22px; line-height: 28px; }
+.lesotho_create_prescription_remove:hover { background: #ffe0dd; }
+.lesotho_create_prescription_product { display: grid; grid-template-columns: minmax(0, 1fr) 170px; gap: 20px; }
 .lesotho_create_prescription_directions {
   display: grid;
-  grid-template-columns:
-    minmax(62px, .5fr)
-    minmax(96px, .82fr)
-    minmax(130px, 1.12fr)
-    minmax(120px, 1fr)
-    minmax(70px, .58fr)
-    minmax(106px, .92fr)
-    minmax(150px, 1.22fr)
-    minmax(190px, 1.55fr);
-  gap: 14px;
-  max-width: 100%;
-  overflow-x: visible;
-  scrollbar-color: #a9b8c2 #f5f8fa;
+  grid-template-columns: minmax(0, .6fr) minmax(0, .85fr) minmax(0, 1.2fr) minmax(0, 1fr) minmax(0, .65fr) minmax(0, 1fr) minmax(0, 1.2fr) minmax(0, 1.5fr);
+  gap: 12px;
 }
-
-.lesotho_create_prescription_directions::-webkit-scrollbar {
-  height: 8px;
-}
-
-.lesotho_create_prescription_directions::-webkit-scrollbar-thumb {
-  border-radius: 999px;
-  background: #a9b8c2;
-}
-
-.lesotho_create_prescription_directions::-webkit-scrollbar-track {
-  background: #f5f8fa;
-}
-
-.lesotho_create_prescription_directions label {
-  min-width: 0;
-}
-
-.lesotho_create_prescription_footer {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  width: min(100%, 1760px);
-  margin: 18px auto 0;
-  padding-bottom: 4px;
-}
-
-.lesotho_create_prescription_bottom_create {
-  min-width: 180px;
-  min-height: 38px;
-}
+.lesotho_create_prescription_footer { display: flex; justify-content: center; margin-top: 24px; }
+.lesotho_create_prescription_bottom_create { min-width: 180px; min-height: 38px; }
 
 .lesotho_create_prescription_modal_backdrop {
   position: fixed;
@@ -711,32 +587,26 @@ USERNAME LINK STYLE: comment this block to show the default avatar/user menu aga
   line-height: 1;
 }
 
-@media (max-width: 1280px) {
-  .lesotho_create_prescription_directions {
-    grid-template-columns: repeat(4, minmax(120px, 1fr));
-  }
+
+@media (max-width: 900px) {
+  .lesotho_create_prescription_top { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .lesotho_create_prescription_allergies { grid-column: 1 / -1; border-left: 0; border-top: 1px solid #e6eaf0; }
+  .lesotho_create_prescription_directions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .lesotho_create_prescription_care label { display: flex; align-items: stretch; }
 }
 
-@media (max-width: 980px) {
-  .lesotho_create_prescription_top {
-    grid-template-columns: 1fr;
-  }
-
-  .lesotho_create_prescription_group + .lesotho_create_prescription_group {
-    border-left: 0;
-    border-top: 1px solid #dfe7ed;
-  }
-
+@media (max-width: 600px) {
+  .lesotho_create_prescription_top,
+  .lesotho_create_prescription_workspace,
+  .lesotho_create_prescription_footer { width: calc(100% - 32px); }
+  .lesotho_create_prescription_top { grid-template-columns: 1fr; margin-top: 16px; margin-bottom: 20px; }
+  .lesotho_create_prescription_group { padding: 18px; }
+  .lesotho_create_prescription_vitals { border-left: 0; border-top: 1px solid #e6eaf0; }
+  .lesotho_create_prescription_care,
   .lesotho_create_prescription_product,
-  .lesotho_create_prescription_directions {
-    grid-template-columns: 1fr;
-  }
-
-  .lesotho_create_prescription_group label {
-    grid-template-columns: 1fr;
-    gap: 6px;
-  }
-
+  .lesotho_create_prescription_directions { grid-template-columns: 1fr; gap: 16px; }
+  .lesotho_create_prescription_line { padding: 18px; }
+  .lesotho_create_prescription_breadcrumbs { font-size: 16px; }
 }
 /* end of prepacking placeholder pages block
    **************************** */

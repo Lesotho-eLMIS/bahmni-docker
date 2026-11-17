@@ -215,6 +215,51 @@ class TestPrescriptionDispensing(SavepointCase):
             return fields.Date.to_string(value.date())
         return fields.Datetime.to_string(value)
 
+    def test_prescription_label_formats_quantity_and_bilingual_instructions(self):
+        line = self._create_order_line(quantity=1.0)
+        line.write(
+            {
+                "dose": 1.0,
+                "dose_units": "Tablet",
+                "frequency": "Once a day",
+                "route": "Oral",
+                "duration": 30.0,
+                "duration_units": "Days",
+                "administration_instructions": "After meals",
+            }
+        )
+
+        self.assertEqual(
+            line._get_dosage_instruction_text(),
+            "1 Tablet Once a day via Oral for 30 Days After meals",
+        )
+        self.assertEqual(
+            line._get_dosage_instruction_text_sesotho(),
+            "1 pilisi hang ka letsatsi ka molomo matsatsi a 30 ka mor'a lijo",
+        )
+        self.assertEqual(
+            line.order_id._format_prescription_label_quantity(1.0),
+            "1",
+        )
+        self.assertEqual(
+            line.order_id._format_prescription_label_quantity(1.5),
+            "1.5",
+        )
+
+        line.write(
+            {
+                "frequency": "Every 2 hours",
+                "duration": 2.0,
+                "duration_units": "Weeks",
+                "administration_instructions": "Before meals",
+            }
+        )
+        self.assertEqual(
+            line._get_dosage_instruction_text_sesotho(),
+            "1 pilisi lihora tse ling le tse ling tse peli ka molomo "
+            "libeke tse 2 pele ho lijo",
+        )
+
     def test_fetch_prescription_dispensing_includes_batch_options(self):
         line = self._create_order_line(quantity=3.0)
 
@@ -451,6 +496,7 @@ class TestPrescriptionDispensing(SavepointCase):
             "bahmni_sale.is_delivery_automated",
             True,
         )
+        self.dispensing_location.location_id = False
         line = self._create_order_line(quantity=5.0)
         order = line.order_id
         order.write({"medication_explanation_confirmed": True})
@@ -458,6 +504,7 @@ class TestPrescriptionDispensing(SavepointCase):
 
         order.action_serve_prescription_from_ui(False)
 
+        self.assertEqual(order.location_id, self.dispensing_location)
         done_move_lines = line.move_ids.filtered(
             lambda move: move.state == "done"
         ).mapped("move_line_ids").filtered(

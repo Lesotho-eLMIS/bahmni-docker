@@ -1,5 +1,7 @@
+from datetime import timedelta
 from unittest.mock import patch
 
+from odoo import fields
 from odoo.exceptions import UserError
 from odoo.tests import TransactionCase, tagged
 
@@ -74,6 +76,78 @@ class TestPrepackBatchElmisTraceability(TransactionCase):
         self.assertEqual(prepack_product.bulk_product_id, self.bulk_product)
         self.assertEqual(prepack_product.prepack_parent_elmis_product_id, self.bulk_product)
         self.assertEqual(prepack_product.pack_unit_qty, 30)
+
+    def test_prepack_locations_include_top_level_mirror_location(self):
+        mirror_location = self.env["stock.location"].create(
+            {
+                "name": "Top-level eLMIS Mirror Location",
+                "usage": "internal",
+                "company_id": self.env.company.id,
+            }
+        )
+        self.env["ir.config_parameter"].sudo().set_param(
+            "lesotho_elmis_integration.mirror_location_ids",
+            str(mirror_location.id),
+        )
+
+        result = self.env["bahmni.prepack.batch"].fetch_prepack_locations()
+
+        self.assertEqual(result["default_location_id"], mirror_location.id)
+        self.assertIn(mirror_location.id, [item["id"] for item in result["locations"]])
+        self.assertIn(self.stock_location.id, [item["id"] for item in result["locations"]])
+
+    def test_bulk_inventory_excludes_expired_lots(self):
+        expired_lot = self.env["stock.lot"].create(
+            {
+                "name": "LOT-TDF-EXPIRED",
+                "product_id": self.bulk_product.id,
+                "company_id": self.env.company.id,
+                "expiration_date": fields.Datetime.now() - timedelta(days=1),
+            }
+        )
+        valid_lot = self.env["stock.lot"].create(
+            {
+                "name": "LOT-TDF-VALID",
+                "product_id": self.bulk_product.id,
+                "company_id": self.env.company.id,
+                "expiration_date": fields.Datetime.now() + timedelta(days=30),
+            }
+        )
+        self.env["stock.quant"]._update_available_quantity(
+            self.bulk_product,
+            self.stock_location,
+            10.0,
+            lot_id=expired_lot,
+        )
+        self.env["stock.quant"]._update_available_quantity(
+            self.bulk_product,
+            self.stock_location,
+            10.0,
+            lot_id=valid_lot,
+        )
+
+        inventory = self.env["bahmni.prepack.batch"].fetch_bulk_inventory(
+            location_src_id=self.stock_location.id,
+        )
+        lot_ids = {item["lot_id"] for item in inventory}
+
+        self.assertNotIn(expired_lot.id, lot_ids)
+        self.assertIn(valid_lot.id, lot_ids)
+
+    def test_packaging_materials_only_include_packaging_category(self):
+        packaging_category = self.env.ref(
+            "lesotho_prepack_batch.product_category_packaging_materials"
+        )
+        packaging_material = self._create_product("Test Pill Bag")
+        packaging_material.categ_id = packaging_category
+
+        materials = self.env["bahmni.prepack.batch"].fetch_packaging_materials(
+            location_id=self.stock_location.id,
+        )
+        material_ids = {item["id"] for item in materials}
+
+        self.assertIn(packaging_material.id, material_ids)
+        self.assertNotIn(self.bulk_product.id, material_ids)
 
     def test_create_prepack_product_rejects_bulk_product_without_elmis_mapping(self):
         with self.assertRaises(UserError):

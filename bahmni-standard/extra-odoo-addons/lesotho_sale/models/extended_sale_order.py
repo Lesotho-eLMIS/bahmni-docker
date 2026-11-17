@@ -1,4 +1,6 @@
 import logging
+import math
+import re
 
 from odoo import _, api, fields, models
 from odoo.exceptions import UserError
@@ -585,6 +587,7 @@ class ExtendedSaleOrder(models.Model):
                             "batch_number": component.batch_number or "",
                             "expiry_date": self._get_dispensing_component_expiry(component),
                             "directions": line._get_dosage_instruction_text(),
+                            "directions_sesotho": line._get_dosage_instruction_text_sesotho(),
                         }
                     )
                 continue
@@ -608,9 +611,15 @@ class ExtendedSaleOrder(models.Model):
                     "batch_number": line.dispensing_batch_number or "",
                     "expiry_date": self._get_dispensing_line_expiry(line),
                     "directions": line._get_dosage_instruction_text(),
+                    "directions_sesotho": line._get_dosage_instruction_text_sesotho(),
                 }
             )
         return label_items
+
+    def _format_prescription_label_quantity(self, value):
+        self.ensure_one()
+        number = float(value or 0.0)
+        return str(int(number)) if number.is_integer() else format(number, ".15g")
 
     def _prepare_label_report_action(self):
         self.ensure_one()
@@ -907,6 +916,13 @@ class ExtendedSaleOrder(models.Model):
             )
 
         if self.state in ("draft", "sent"):
+            source_location = internal_lines[:1]._get_dispensing_source_location()
+            if (
+                source_location
+                and "location_id" in self._fields
+                and self.location_id != source_location
+            ):
+                self.location_id = source_location
             self.with_context(prescription_serving=True).action_confirm()
 
         self._check_dispensing_stock_traceability(
@@ -1198,7 +1214,7 @@ class ExtendedSaleOrder(models.Model):
         ]
 
     @api.model
-    def get_prescription_create_form_options(self):
+    def get_prescription_create_form_options(self, patient_id=None):
         partners = self.env["res.partner"].with_context(active_test=False).search(
             [("is_patient", "=", True)],
             order="name, id",
@@ -1210,6 +1226,12 @@ class ExtendedSaleOrder(models.Model):
                 order="name, id",
                 limit=500,
             )
+
+        if patient_id:
+            selected_patient = self.env["res.partner"].browse(int(patient_id)).exists()
+            selected_patient.check_access_rights("read")
+            selected_patient.check_access_rule("read")
+            partners |= selected_patient
 
         sex_labels = dict(self.env["res.partner"]._fields["sex"].selection)
 
@@ -1248,6 +1270,7 @@ class ExtendedSaleOrder(models.Model):
                 }
                 for partner in partners
             ],
+            "quantity_rules": self._get_prescription_quantity_rules(),
             "products": self._get_dispensing_product_options(),
             "direction_options": self._get_prescription_direction_options(
                 self.env["sale.order.line"]
@@ -1283,14 +1306,14 @@ class ExtendedSaleOrder(models.Model):
 
         order = self.create(order_vals)
         line_model = self.env["sale.order.line"].with_context(skip_prescription_init=True)
-        for line_payload in lines_payload:
+        for item_number, line_payload in enumerate(lines_payload, 1):
             product = self.env["product.product"].browse(
                 int(line_payload.get("product_id") or 0)
             ).exists()
             if not product:
                 raise UserError(_("Every prescribed item must have a product."))
 
-            prescribed_qty = self._get_ui_prescribed_quantity(line_payload)
+            prescribed_qty = self._get_ui_prescribed_quantity(line_payload, item_number=item_number)
             if float_compare(prescribed_qty, 0.0, precision_digits=6) <= 0:
                 raise UserError(_("Every prescribed item must have a prescribed quantity greater than zero."))
 
@@ -1325,69 +1348,97 @@ class ExtendedSaleOrder(models.Model):
             "action": order.action_open_prescription_dispense_page(),
         }
 
-    def _get_ui_prescribed_quantity(self, line_payload):
-        try:
-            dose = float(line_payload.get("dose") or 0.0)
-            duration = float(line_payload.get("duration") or 0.0)
-        except (TypeError, ValueError):
-            return 0.0
-        frequency = self._get_ui_frequency_multiplier(line_payload.get("frequency"))
-        duration_multiplier = self._get_ui_duration_unit_multiplier(
-            line_payload.get("duration_unit")
-        )
-        return dose * frequency * duration * duration_multiplier
+    @api.model
+    def _get_prescription_quantity_rules(self):
+        # Rates per day; months retain the existing 30-day duration convention.
+        groups = [
+            (("immediately", "immediate", "stat", "once only", "single dose"), 1),
+            (("once a day", "once daily", "daily", "od", "qd", "o.d.", "q.d.", "q24h"), 1),
+            (("twice a day", "twice daily", "bid", "bd", "b.i.d.", "b.d.", "q12h"), 2),
+            (("thrice a day", "three times a day", "three times daily", "tid", "tds", "t.i.d.", "t.d.s.", "q8h"), 3),
+            (("four times a day", "four times daily", "qid", "qds", "q.i.d.", "q.d.s.", "q6h"), 4),
+            (("five times a day", "five times daily"), 5),
+            (("every hour",), 24),
+            (("every 2 hours",), 12),
+            (("every 3 hours",), 8),
+            (("every 4 hours",), 6),
+            (("every 6 hours",), 4),
+            (("every 8 hours",), 3),
+            (("every 12 hours",), 2),
+            (("on alternate days", "every other day"), 1 / 2),
+            (("once a week",), 1 / 7),
+            (("twice a week",), 2 / 7),
+            (("thrice a week", "three times a week"), 3 / 7),
+            (("every 2 weeks",), 1 / 14),
+            (("every 3 weeks",), 1 / 21),
+            (("once a month",), 1 / 30),
+            (("four days a week",), 4 / 7),
+            (("five days a week",), 5 / 7),
+            (("six days a week",), 6 / 7),
+        ]
+        return {
+            "frequencies": {label: rate for labels, rate in groups for label in labels},
+            "single_frequencies": list(groups[0][0]),
+            "duration_units": {
+                "hour": 1 / 24, "hours": 1 / 24,
+                "day": 1, "days": 1,
+                "week": 7, "weeks": 7,
+                "month": 30, "months": 30,
+                "year": 365, "years": 365,
+            },
+        }
+
+    def _get_ui_prescribed_quantity(self, line_payload, item_number=1):
+        def invalid(message):
+            raise UserError(_("Prescribed item %s: %s") % (item_number, message))
+
+        def positive_number(key, label):
+            value = line_payload.get(key)
+            if value in (None, ""):
+                invalid(_("Enter a %s.") % label)
+            try:
+                number = float(value)
+            except (TypeError, ValueError):
+                invalid(_("%s must be a number greater than zero.") % label.capitalize())
+            if not math.isfinite(number) or number <= 0:
+                invalid(_("%s must be a number greater than zero.") % label.capitalize())
+            return number
+
+        dose = positive_number("dose", "dose")
+        frequency_value = line_payload.get("frequency")
+        if not str(frequency_value or "").strip():
+            invalid(_("Select a frequency."))
+        frequency = self._get_ui_frequency_multiplier(frequency_value)
+        if not frequency:
+            invalid(_("Frequency '%s' is not supported for automatic quantity calculation. Select a supported frequency.") % frequency_value)
+        normalized_frequency = " ".join(str(frequency_value).strip().lower().split())
+        if normalized_frequency in self._get_prescription_quantity_rules()["single_frequencies"]:
+            return dose
+        duration = positive_number("duration", "duration")
+        duration_value = line_payload.get("duration_unit")
+        if not str(duration_value or "").strip():
+            invalid(_("Select a duration unit."))
+        duration_multiplier = self._get_ui_duration_unit_multiplier(duration_value)
+        if not duration_multiplier:
+            invalid(_("Duration unit '%s' is not supported for automatic quantity calculation.") % duration_value)
+        quantity = dose * frequency * duration * duration_multiplier
+        if not math.isfinite(quantity) or quantity <= 0:
+            invalid(_("The calculated quantity must be a finite number greater than zero. Review dose and duration."))
+        return quantity
 
     def _get_ui_frequency_multiplier(self, value):
-        frequency = (value or "").strip().lower()
-        if not frequency:
+        frequency = " ".join(str(value or "").strip().lower().split())
+        known_rate = self._get_prescription_quantity_rules()["frequencies"].get(frequency)
+        if known_rate is not None:
+            return known_rate
+        if not re.fullmatch(r"\+?(?:[0-9]+\.?[0-9]*|\.[0-9]+)(?:e[+-]?[0-9]+)?", frequency):
             return 0.0
-        try:
-            return float(frequency)
-        except ValueError:
-            pass
-        if (
-            "immediate" in frequency
-            or "stat" in frequency
-            or "once" in frequency
-            or "daily" in frequency
-            or frequency in ("od", "qd")
-            or "q24h" in frequency
-        ):
-            return 1.0
-        if (
-            "twice" in frequency
-            or "bid" in frequency
-            or "bd" in frequency
-            or "q12h" in frequency
-        ):
-            return 2.0
-        if (
-            "three" in frequency
-            or "tid" in frequency
-            or "tds" in frequency
-            or "q8h" in frequency
-        ):
-            return 3.0
-        if (
-            "four" in frequency
-            or "qid" in frequency
-            or "qds" in frequency
-            or "q6h" in frequency
-        ):
-            return 4.0
-        return 0.0
+        numeric = float(frequency)
+        return numeric if math.isfinite(numeric) and numeric > 0 else 0.0
 
     def _get_ui_duration_unit_multiplier(self, value):
-        unit = (value or "").strip().lower()
-        if "hour" in unit:
-            return 1.0 / 24.0
-        if "week" in unit:
-            return 7.0
-        if "month" in unit:
-            return 30.0
-        if "year" in unit:
-            return 365.0
-        return 1.0
+        unit = " ".join(str(value or "").strip().lower().split())
+        return self._get_prescription_quantity_rules()["duration_units"].get(unit, 0.0)
 
     def _get_prescription_care_setting_options(self):
         options = []

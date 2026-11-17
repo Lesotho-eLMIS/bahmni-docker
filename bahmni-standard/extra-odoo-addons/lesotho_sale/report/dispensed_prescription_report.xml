@@ -6,10 +6,10 @@
         <field name="page_width">100</field>
         <field name="page_height">70</field>
         <field name="orientation">Portrait</field>
-        <field name="margin_top">3</field>
-        <field name="margin_bottom">3</field>
-        <field name="margin_left">3</field>
-        <field name="margin_right">3</field>
+        <field name="margin_top">2</field>
+        <field name="margin_bottom">2</field>
+        <field name="margin_left">2</field>
+        <field name="margin_right">2</field>
         <field name="header_line" eval="False"/>
         <field name="header_spacing">0</field>
         <field name="dpi">90</field>
@@ -28,71 +28,139 @@
     <template id="report_prescription_labels">
         <t t-call="web.html_container">
             <style>
+                @page {
+                    size: 100mm 70mm;
+                    margin: 2mm;
+                }
+
                 .o_prescription_label_page {
-                    font-family: "Courier New", Courier, monospace;
+                    width: 96mm;
+                    height: 66mm;
+                    padding: 0;
+                    margin: 0;
+                    font-family: Arial, sans-serif;
                     color: #111;
-                    page-break-after: always;
+                    page-break-inside: avoid;
                 }
 
                 .o_prescription_label {
-                    padding: 3mm;
-                    border: 1px solid #111;
+                    width: 94mm;
+                    height: 64mm;
+                    padding: 2.5mm 3.5mm;
+                    border: 1.2mm solid #129bd3;
+                    border-radius: 4mm;
+                    box-sizing: border-box;
+                    overflow: hidden;
+                }
+
+                .o_prescription_label h3 {
+                    margin: 0 0 1.2mm;
+                    padding-bottom: 0.8mm;
+                    border-bottom: 0.3mm solid #111;
+                    font-size: 11px;
+                    font-weight: 800;
+                    line-height: 1.1;
+                    text-align: center;
+                    text-transform: uppercase;
                 }
 
                 .o_prescription_label_facility {
-                    font-size: 12px;
-                    font-weight: 700;
-                    text-transform: uppercase;
+                    margin-bottom: 0.6mm;
+                    font-size: 8px;
+                    font-weight: 800;
                     line-height: 1.15;
+                    white-space: nowrap;
                 }
 
                 .o_prescription_label_address {
-                    font-size: 9px;
+                    font-size: 7px;
+                    font-weight: 700;
+                    line-height: 1.1;
+                }
+
+                .o_prescription_label_product {
+                    margin: 1mm 0;
+                    font-size: 8.5px;
                     font-weight: 700;
                     line-height: 1.2;
                 }
 
-                .o_prescription_label_separator {
-                    border-top: 1px solid #111;
-                    margin: 4px 0;
+                .o_prescription_label_product_name {
+                    display: inline-block;
+                    width: 70mm;
+                    vertical-align: top;
                 }
 
-                .o_prescription_label_product {
-                    display: flex;
-                    justify-content: space-between;
-                    gap: 12px;
-                    font-size: 12px;
-                    font-weight: 700;
-                    margin-bottom: 4px;
+                .o_prescription_label_quantity {
+                    display: inline-block;
+                    width: 15mm;
+                    text-align: right;
+                    vertical-align: top;
+                    white-space: nowrap;
                 }
 
                 .o_prescription_label_directions {
-                    min-height: 12mm;
-                    font-size: 11px;
+                    min-height: 20mm;
+                    margin-bottom: 1mm;
+                    padding: 1mm 1.5mm;
+                    background: #eef8fc;
+                    border-left: 1mm solid #129bd3;
+                    font-size: 8px;
                     font-weight: 700;
-                    line-height: 1.4;
-                    text-transform: uppercase;
-                    white-space: pre-line;
-                    margin-bottom: 3px;
+                    line-height: 1.25;
                 }
 
-                .o_prescription_label_directions strong {
-                    display: block;
-                    margin-bottom: 1px;
+                .o_prescription_label_directions_title {
+                    margin-bottom: 0.6mm;
+                    font-size: 8.5px;
+                    font-weight: 800;
+                    text-transform: uppercase;
+                }
+
+                .o_prescription_label_direction {
+                    margin-bottom: 0.5mm;
+                }
+
+                .o_prescription_label_language {
+                    display: inline-block;
+                    min-width: 13mm;
+                    font-weight: 800;
                 }
 
                 .o_prescription_label_meta {
-                    font-size: 9px;
+                    display: table;
+                    width: 100%;
+                    font-size: 7.5px;
                     font-weight: 700;
-                    line-height: 1.35;
-                    margin-bottom: 3px;
+                    line-height: 1.2;
+                }
+
+                .o_prescription_label_meta > div {
+                    display: table-cell;
+                    width: 50%;
                 }
 
                 .o_prescription_label_footer {
-                    margin-top: 2px;
-                    font-size: 10px;
+                    margin-top: 1mm;
+                    padding-top: 0.8mm;
+                    border-top: 0.2mm solid #777;
+                    font-size: 7.5px;
                     font-weight: 700;
-                    line-height: 1.3;
+                    line-height: 1.2;
+                }
+
+                .o_prescription_label_footer_row {
+                    display: table;
+                    width: 100%;
+                }
+
+                .o_prescription_label_footer_row > span {
+                    display: table-cell;
+                    width: 50%;
+                }
+
+                .o_prescription_label_footer_row > span:last-child {
+                    text-align: right;
                 }
             </style>
             <t t-foreach="docs" t-as="doc">
@@ -100,9 +168,11 @@
                 <t t-set="facility_address_lines" t-value="doc._get_prescription_label_address_lines()"/>
                 <t t-set="dispenser_name" t-value="env.user.display_name or ''"/>
                 <t t-foreach="doc._get_dispensing_label_items()" t-as="label_item">
-                    <div class="page o_prescription_label_page">
+                    <div class="page o_prescription_label_page" t-att-style="'page-break-after: auto;' if label_item_last else 'page-break-after: always;'">
                         <div class="o_prescription_label">
+                            <h3>Prescription Label</h3>
                             <div class="o_prescription_label_facility">
+                                <strong>Facility:</strong>
                                 <t t-esc="facility_name"/>
                             </div>
                             <t t-foreach="facility_address_lines" t-as="address_line">
@@ -110,19 +180,24 @@
                                     <t t-esc="address_line"/>
                                 </div>
                             </t>
-                            <div class="o_prescription_label_separator"/>
-
                             <div class="o_prescription_label_product">
-                                <span><t t-esc="label_item.get('product_name') or ''"/></span>
-                                <span>
-                                    <t t-esc="label_item.get('quantity') or 0"/>
+                                <span class="o_prescription_label_product_name"><t t-esc="label_item.get('product_name') or ''"/></span>
+                                <span class="o_prescription_label_quantity">
+                                    <t t-esc="doc._format_prescription_label_quantity(label_item.get('quantity'))"/>
                                     <t t-esc="label_item.get('uom_name') or ''"/>
                                 </span>
                             </div>
 
                             <div class="o_prescription_label_directions">
-                                <strong>Dosage Instructions</strong>
-                                <t t-esc="label_item.get('directions') or ''"/>
+                                <div class="o_prescription_label_directions_title">Instructions / Litaelo</div>
+                                <div class="o_prescription_label_direction">
+                                    <span class="o_prescription_label_language">English:</span>
+                                    <span t-esc="label_item.get('directions') or ''"/>
+                                </div>
+                                <div class="o_prescription_label_direction">
+                                    <span class="o_prescription_label_language">Sesotho:</span>
+                                    <span t-esc="label_item.get('directions_sesotho') or ''"/>
+                                </div>
                             </div>
 
                             <div class="o_prescription_label_meta">
@@ -137,21 +212,12 @@
                             </div>
 
                             <div class="o_prescription_label_footer">
-                                <div>
-                                    <strong>Rx:</strong>
-                                    <span t-esc="doc.name"/>
-                                    <t t-if="doc.provider_name">
-                                        <span> - </span>
-                                        <span t-esc="doc.provider_name"/>
-                                    </t>
+                                <div class="o_prescription_label_footer_row">
+                                    <span><strong>Rx:</strong> <t t-esc="doc.name"/></span>
+                                    <span><strong>Patient:</strong> <t t-esc="doc.partner_id.display_name"/></span>
                                 </div>
-                                <div>
-                                    <strong>Patient:</strong>
-                                    <span t-esc="doc.partner_id.display_name"/>
-                                </div>
-                                <div>
-                                    <strong>Dispensed By:</strong>
-                                    <span t-esc="dispenser_name"/>
+                                <div class="o_prescription_label_footer_row">
+                                    <span><strong>Dispensed By:</strong> <t t-esc="dispenser_name"/></span>
                                 </div>
                             </div>
                         </div>

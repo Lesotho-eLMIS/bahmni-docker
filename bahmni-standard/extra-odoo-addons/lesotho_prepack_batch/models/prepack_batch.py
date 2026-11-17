@@ -138,6 +138,28 @@ class BahmniPrepackBatch(models.Model):
 
     @api.model
     def _default_location_src_id(self):
+        params = self.env["ir.config_parameter"].sudo()
+        configured_location_ids = params.get_param(
+            "lesotho_elmis_integration.mirror_location_ids"
+        ) or params.get_param("lesotho_elmis_integration.mirror_location_id")
+        if configured_location_ids:
+            location_ids = [
+                int(location_id)
+                for location_id in configured_location_ids.split(",")
+                if location_id.strip().isdigit()
+            ]
+            locations = self.env["stock.location"].browse(location_ids).exists()
+            locations = locations.filtered(
+                lambda location: location.active
+                and location.usage == "internal"
+                and (
+                    not location.company_id
+                    or location.company_id == self.env.company
+                )
+            )
+            if locations:
+                return locations[:1].id
+
         picking_type_id = self._default_picking_type_id()
         if picking_type_id:
             return (
@@ -164,15 +186,12 @@ class BahmniPrepackBatch(models.Model):
         default_location_id = self._default_location_src_id()
         domain = [
             ("usage", "=", "internal"),
+            ("active", "=", True),
             "|",
             ("company_id", "=", False),
             ("company_id", "=", self.env.company.id),
         ]
-        if default_location_id:
-            domain.append(("id", "child_of", default_location_id))
         locations = self.env["stock.location"].search(domain, order="complete_name, id")
-        if default_location_id and default_location_id not in locations.ids:
-            locations |= self.env["stock.location"].browse(default_location_id)
         return {
             "default_location_id": default_location_id,
             "locations": [
@@ -190,6 +209,11 @@ class BahmniPrepackBatch(models.Model):
         domain = [
             ("quantity", ">", 0),
             ("product_id.detailed_type", "=", "product"),
+            "|",
+            ("lot_id", "=", False),
+            "|",
+            ("lot_id.expiration_date", "=", False),
+            ("lot_id.expiration_date", ">", fields.Datetime.now()),
         ]
         if not include_prepacks:
             domain.append(("product_id.is_prepack", "=", False))
@@ -246,9 +270,13 @@ class BahmniPrepackBatch(models.Model):
     @api.model
     def fetch_packaging_materials(self, location_id=False):
         """Fetch products available for packaging material selection."""
+        packaging_category = self.env.ref(
+            "lesotho_prepack_batch.product_category_packaging_materials"
+        )
         product_domain = [
             ("active", "=", True),
             ("detailed_type", "in", ["product", "consu"]),
+            ("categ_id", "child_of", packaging_category.id),
         ]
         if "company_id" in self.env["product.product"]._fields:
             product_domain.extend(
@@ -951,7 +979,15 @@ class BahmniPrepackBatchLine(models.Model):
     packaging_material_id = fields.Many2one(
         "product.product",
         string="Packaging Material",
-        domain="[('detailed_type', 'in', ('product', 'consu'))]",
+        domain=lambda self: [
+            (
+                "categ_id",
+                "child_of",
+                self.env.ref(
+                    "lesotho_prepack_batch.product_category_packaging_materials"
+                ).id,
+            )
+        ],
     )
     packaging_material_qty = fields.Integer(
         string="Packaging Material Qty",
